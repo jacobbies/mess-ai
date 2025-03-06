@@ -8,6 +8,7 @@ import os
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 import matplotlib.pyplot as plt
+from IPython.display import Audio
 
 # Base class for audio processing
 class AudioProcessor:
@@ -350,6 +351,68 @@ class Recording:
         print("The actual implementation would depend on the specific format of the dataset.")
         
         return self.get_note_events()
+
+    def play_audio(self, sample_rate='44', start_time=0, duration=None):
+        """
+        Play audio using IPython.display.Audio
+        
+        Parameters:
+        -----------
+        sample_rate : str
+            '44' or '22' to specify which sample rate to play
+        start_time : float
+            Start time in seconds
+        duration : float, optional
+            Duration to play in seconds. If None, plays to the end.
+            
+        Returns:
+        --------
+        IPython.display.Audio
+            Audio player widget
+        """
+        # Select the audio data based on sample rate
+        if sample_rate == '44' and self.audio_44 is not None:
+            audio = self.audio_44
+            sr = self.sr_44
+        elif sample_rate == '22' and self.audio_22 is not None:
+            audio = self.audio_22
+            sr = self.sr_22
+        elif self.audio_44 is not None:
+            audio = self.audio_44
+            sr = self.sr_44
+            sample_rate = '44'  # Default to 44kHz if available
+        elif self.audio_22 is not None:
+            audio = self.audio_22
+            sr = self.sr_22
+            sample_rate = '22'  # Fall back to 22kHz
+        else:
+            raise ValueError("No audio data loaded. Call load_audio() first.")
+        
+        # Convert to mono if stereo
+        if len(audio.shape) > 1 and audio.shape[1] > 1:
+            audio = np.mean(audio, axis=1)
+        
+        # Convert to float if needed
+        if audio.dtype == np.int16:
+            audio = audio.astype(np.float32) / 32768.0
+        elif audio.dtype == np.int32:
+            audio = audio.astype(np.float32) / 2147483648.0
+        
+        # Calculate start and end samples
+        start_sample = int(start_time * sr)
+        if duration is not None:
+            end_sample = start_sample + int(duration * sr)
+            end_sample = min(end_sample, len(audio))
+        else:
+            end_sample = len(audio)
+        
+        # Extract the segment to play
+        audio_segment = audio[start_sample:end_sample]
+        
+        self.processing_history.append(f"Played {sample_rate}kHz audio from {start_time}s to {start_time + (end_sample - start_sample) / sr}s")
+        
+        # Return the Audio widget
+        return Audio(data=audio_segment, rate=sr)
 
 # Dataset manager class
 class SaarlandMusicDataset:

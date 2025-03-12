@@ -9,6 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 import matplotlib.pyplot as plt
 from IPython.display import Audio
+from feature_extraction import AudioFeatureExtractor
 
 # Base class for audio processing
 class AudioProcessor:
@@ -206,6 +207,7 @@ class Recording:
         self.audio_processor = AudioProcessor()
         self.midi_processor = MidiProcessor()
         self.visualizer = MusicVisualizer()
+        self.feature_extractor = AudioFeatureExtractor()
         
         # Processing history
         self.processing_history = []
@@ -449,6 +451,108 @@ class Recording:
         
         # Return the Audio widget
         return Audio(data=audio_segment, rate=sr)
+    
+    def extract_advanced_features(self, feature_types=None, sample_rate='44', **kwargs):
+        """
+        Extract audio features using the AudioFeatureExtractor
+        
+        Parameters:
+        -----------
+        feature_types : str or list, optional
+            Type(s) of features to extract. If None, extracts all features.
+        sample_rate : str
+            '44' or '22' to specify which sample rate to use
+        **kwargs : dict
+            Additional parameters to pass to the feature extraction methods
+            
+        Returns:
+        --------
+        features : dict or ndarray
+            Extracted features
+        """
+        # Select the audio data based on sample rate
+        if sample_rate == '44' and self.audio_44 is not None:
+            audio = self.audio_44
+            sr = self.sr_44
+        elif sample_rate == '22' and self.audio_22 is not None:
+            audio = self.audio_22
+            sr = self.sr_22
+        else:
+            raise ValueError(f"No audio data loaded for {sample_rate}kHz. Call load_audio() first.")
+        
+        # Update feature extractor sample rate to match audio
+        self.feature_extractor.sample_rate = sr
+        
+        # Extract features
+        if feature_types is None:
+            # Extract all features
+            features = self.feature_extractor.extract_all_features(audio)
+            self.processing_history.append(f"Extracted all advanced features from {sample_rate}kHz audio")
+        elif isinstance(feature_types, str):
+            # Extract a single feature type
+            if feature_types == 'mfcc':
+                features = self.feature_extractor.extract_mfcc(audio, **kwargs)
+            elif feature_types == 'mel_spectrogram':
+                features = self.feature_extractor.extract_mel_spectrogram(audio, **kwargs)
+            elif feature_types == 'chroma':
+                features = self.feature_extractor.extract_chroma(audio, **kwargs)
+            elif feature_types == 'spectral_contrast':
+                features = self.feature_extractor.extract_spectral_contrast(audio, **kwargs)
+            elif feature_types == 'onset_strength':
+                features = self.feature_extractor.extract_onset_strength(audio, **kwargs)
+            elif feature_types == 'tempogram':
+                features = self.feature_extractor.extract_tempogram(audio, **kwargs)
+            else:
+                raise ValueError(f"Unknown feature type: {feature_types}")
+            self.processing_history.append(f"Extracted {feature_types} features from {sample_rate}kHz audio")
+        else:
+            # Extract multiple feature types
+            features = {}
+            for feature_type in feature_types:
+                if feature_type == 'mfcc':
+                    features['mfcc'] = self.feature_extractor.extract_mfcc(audio, **kwargs)
+                elif feature_type == 'mel_spectrogram':
+                    features['mel_spectrogram'] = self.feature_extractor.extract_mel_spectrogram(audio, **kwargs)
+                elif feature_type == 'chroma':
+                    features['chroma'] = self.feature_extractor.extract_chroma(audio, **kwargs)
+                elif feature_type == 'spectral_contrast':
+                    features['spectral_contrast'] = self.feature_extractor.extract_spectral_contrast(audio, **kwargs)
+                elif feature_type == 'onset_strength':
+                    features['onset_strength'] = self.feature_extractor.extract_onset_strength(audio, **kwargs)
+                elif feature_type == 'tempogram':
+                    features['tempogram'] = self.feature_extractor.extract_tempogram(audio, **kwargs)
+                else:
+                    raise ValueError(f"Unknown feature type: {feature_type}")
+            self.processing_history.append(f"Extracted multiple advanced features from {sample_rate}kHz audio")
+        
+        return features
+    
+    def visualize_advanced_features(self, features=None, feature_type=None, sample_rate='44', **kwargs):
+        """
+        Visualize audio features
+        
+        Parameters:
+        -----------
+        features : dict or ndarray, optional
+            Features to visualize. If None, extracts features first.
+        feature_type : str, optional
+            Type of feature to extract if features is None
+        sample_rate : str
+            '44' or '22' to specify which sample rate to use
+        **kwargs : dict
+            Additional parameters to pass to the feature extraction or visualization methods
+            
+        Returns:
+        --------
+        fig : Figure
+            Matplotlib figure
+        """
+        # Extract features if not provided
+        if features is None:
+            features = self.extract_advanced_features(feature_type, sample_rate, **kwargs)
+        
+        # Visualize features
+        return self.feature_extractor.visualize_features(features, feature_type, **kwargs)
 
 # Dataset manager class
 class SaarlandMusicDataset:
@@ -574,4 +678,25 @@ class SaarlandMusicDataset:
         print(f"Recordings with CSV annotations: {with_csv} ({with_csv/total*100:.1f}%)")
         print(f"Recordings with WAV-MIDI: {with_wav_midi} ({with_wav_midi/total*100:.1f}%)")
         print(f"Recordings with all data types: {with_all} ({with_all/total*100:.1f}%)")
+    
+    # This method will be used once we create the dataset_generation.py file
+    def create_model_dataset(self, output_dir='./model_datasets'):
+        """
+        Create a dataset generator for model training
+        
+        Parameters:
+        -----------
+        output_dir : str
+            Directory to save generated datasets
+            
+        Returns:
+        --------
+        generator : AudioModelDatasetGenerator
+            Dataset generator object
+        """
+        # Uncomment this when dataset_generation.py is created
+        # return AudioModelDatasetGenerator(self, output_dir)
+        
+        print("Dataset generator not available yet. Please create dataset_generation.py first.")
+        return None
     

@@ -140,6 +140,42 @@ class MusicVisualizer:
 
 # Main class for Saarland Music Dataset recordings
 class Recording:
+    """
+    Represents a single recording from the Saarland Music Dataset
+    
+    This class provides methods for loading, processing, and analyzing
+    audio recordings and their associated MIDI and annotation data.
+    
+    Attributes:
+    -----------
+    recording_id : str
+        Unique identifier for the recording
+    base_path : str
+        Path to the dataset directory
+    audio_22 : ndarray
+        22kHz audio data
+    audio_44 : ndarray
+        44kHz audio data
+    midi_data : PrettyMIDI
+        MIDI data for the recording
+    csv_data : DataFrame
+        CSV annotation data
+    wav_midi : ndarray
+        WAV-MIDI aligned audio
+    
+    Methods:
+    --------
+    load_audio(sample_rate='both')
+        Load audio data from WAV files
+    load_midi()
+        Load MIDI data
+    load_csv()
+        Load CSV annotation data
+    load_wav_midi()
+        Load WAV-MIDI aligned audio
+    load_all()
+        Load all available data for this recording
+    """
     def __init__(self, recording_id, base_path=None):
         """
         Initialize a recording from the Saarland Music Dataset v2
@@ -152,7 +188,7 @@ class Recording:
             Base path to the dataset directory
         """
         self.recording_id = recording_id
-        self.base_path = base_path or os.getcwd()
+        self.base_path = base_path
         
         # Data containers
         self.audio_22 = None

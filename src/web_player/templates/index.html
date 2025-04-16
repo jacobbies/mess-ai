@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Music Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Music Player</h1>
+        <audio id="audio-player" controls style="width: 100%; margin-bottom: 20px;">
+            <source id="audio-source" src="" type="audio/wav">
+            Your browser does not support the audio element.
+        </audio>
+        <div class="player-controls">
+            <div class="file-list">
+                <h2>Available Files</h2>
+                <ul>
+                    {% if wav_files %}
+                        {% for file in wav_files %}
+                        <li>
+                            <button type="button" onclick="playFile('{{ file }}')">Play</button>
+                            <span>{{ file }}</span>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li>No WAV files found.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        <div id="status-message"></div>
+    </div>
+
+    <script>
+        function playFile(filename) {
+            var audio = document.getElementById('audio-player');
+            var source = document.getElementById('audio-source');
+            source.src = '/audio/' + filename;
+            audio.load();
+            audio.play();
+            $('#status-message').text('Playing: ' + filename);
+        }
+    </script>
+</body>
+</html>

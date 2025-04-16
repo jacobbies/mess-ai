@@ -65,4 +65,3 @@ Instead of training a contrastive model from scratch, this step follows a **two-
 ---
 
 This README outlines the first technical step in building an AI-powered **expressive music similarity retrieval system**.
-

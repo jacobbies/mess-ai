@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Recommendation System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .track-list {
+            height: 400px;
+            overflow-y: auto;
+        }
+        .track-item {
+            cursor: pointer;
+            padding: 8px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .track-item:hover {
+            background-color: #f8f9fa;
+        }
+        .track-item.active {
+            background-color: #e9ecef;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .waveform-container {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="mb-4">Music Explorer</h1>
+        
+        <div class="row">
+            <!-- Track List Column -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Available Tracks</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="track-list list-group list-group-flush">
+                            {% for file in wav_files %}
+                            <div class="track-item" data-track="{{ file }}">
+                                {{ file }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Player Column -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 id="currentTrackTitle">Select a track to play</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Audio Player -->
+                        <audio id="audioPlayer" controls class="w-100 mb-3" style="display: none;"></audio>
+                        
+                        <!-- Player Controls -->
+                        <div class="controls">
+                            <button id="nextButton" class="btn btn-primary" disabled>Skip/Next</button>
+                            <button id="getRecommendationsBtn" class="btn btn-success" disabled>Get Recommendations</button>
+                        </div>
+                        
+                        <!-- Waveform Display -->
+                        <div class="waveform-container">
+                            <img id="waveformImage" style="display: none; max-width: 100%;" alt="Waveform visualization">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recommendations -->
+                <div class="card mt-4" id="recommendationsCard" style="display: none;">
+                    <div class="card-header">
+                        <h5>Recommended Tracks</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="recommendationsList" class="list-group list-group-flush">
+                            <!-- Recommendations will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const trackItems = document.querySelectorAll('.track-item');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const waveformImage = document.getElementById('waveformImage');
+            const currentTrackTitle = document.getElementById('currentTrackTitle');
+            const recommendationsCard = document.getElementById('recommendationsCard');
+            const recommendationsList = document.getElementById('recommendationsList');
+            const nextButton = document.getElementById('nextButton');
+            const getRecommendationsBtn = document.getElementById('getRecommendationsBtn');
+            
+            let currentTrack = null;
+            
+            // Add click event to track items
+            trackItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    playTrack(this.getAttribute('data-track'));
+                });
+            });
+            
+            // Function to play a track
+            function playTrack(track) {
+                currentTrack = track;
+                
+                // Set active class
+                trackItems.forEach(t => t.classList.remove('active'));
+                document.querySelector(`.track-item[data-track="${track}"]`)?.classList.add('active');
+                
+                // Update player
+                currentTrackTitle.textContent = track;
+                audioPlayer.src = `/audio/${track}`;
+                audioPlayer.style.display = 'block';
+                
+                // Show waveform
+                waveformImage.src = `/waveform/${track}`;
+                waveformImage.style.display = 'block';
+                
+                // Enable buttons
+                nextButton.disabled = false;
+                getRecommendationsBtn.disabled = false;
+                
+                // Record play feedback
+                sendFeedback(track, "play");
+            }
+            
+            // Skip/Next button
+            nextButton.addEventListener('click', function() {
+                if (currentTrack) {
+                    // Record skip feedback
+                    sendFeedback(currentTrack, "skip");
+                    
+                    // Get recommendations and play the first one
+                    getRecommendations(currentTrack, true);
+                }
+            });
+            
+            // Get recommendations button
+            getRecommendationsBtn.addEventListener('click', function() {
+                if (currentTrack) {
+                    getRecommendations(currentTrack, false);
+                }
+            });
+            
+            // Function to get recommendations
+            function getRecommendations(track, autoPlay = false) {
+                fetch(`/recommend/${track}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Clear previous recommendations
+                        recommendationsList.innerHTML = '';
+                        
+                        // Add new recommendations
+                        data.recommendations.forEach(rec => {
+                            const recItem = document.createElement('a');
+                            recItem.className = 'list-group-item list-group-item-action';
+                            recItem.textContent = rec;
+                            recItem.href = '#';
+                            recItem.addEventListener('click', function(e) {
+                                e.preventDefault();
+                                playTrack(rec);
+                            });
+                            recommendationsList.appendChild(recItem);
+                        });
+                        
+                        // Show recommendations section
+                        recommendationsCard.style.display = 'block';
+                        
+                        // Auto-play first recommendation if requested
+                        if (autoPlay && data.recommendations.length > 0) {
+                            playTrack(data.recommendations[0]);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching recommendations:', error);
+                    });
+            }
+
+            // Auto-play when track is loaded
+            audioPlayer.addEventListener('loadedmetadata', function() {
+                audioPlayer.play();
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,18 +1,17 @@
+import io
 import os
-import sounddevice as sd
 import soundfile as sf
 import matplotlib.pyplot as plt
+import numpy as np
 from pathlib import Path
-import threading
 
-class MusicPlayer:
+class MusicLibrary:
     def __init__(self, wav_dir='data/smd/wav-44'):
         self.wav_dir = Path(wav_dir)
-        self.current_file = None
+        self.current_file = None #path
         self.data = None
         self.sample_rate = 44100
         self.is_playing = False
-        self._play_thread = None
         
     def list_files(self):
         """List all WAV files in the directory"""
@@ -20,58 +19,39 @@ class MusicPlayer:
     
     def load_file(self, file_path):
         """Load a WAV file"""
-        self.current_file = file_path
+        self.current_file = Path(file_path)
         self.data, self.sample_rate = sf.read(file_path)
         return self.data, self.sample_rate
     
-    def play(self):
-        """Play the loaded audio file in a separate thread"""
-        if self.data is not None and not self.is_playing:
-            self._play_thread = threading.Thread(target=self._play_audio)
-            self.is_playing = True
-            self._play_thread.start()
-        else:
-            print("No audio file loaded or already playing")
-    
-    def _play_audio(self):
-        """Internal method to play audio"""
-        sd.play(self.data, self.sample_rate)
-        sd.wait()
-        self.is_playing = False
-    
-    def stop(self):
-        """Stop the currently playing audio"""
-        if self.is_playing:
-            sd.stop()
-            self.is_playing = False
-            if self._play_thread is not None:
-                self._play_thread.join()
-    
-    def plot_waveform(self):
+    def plot_waveform(self, save_to_buffer=False):
         """Plot the waveform of the loaded audio"""
         if self.data is not None:
+
+            duration = len(self.data) / self.sample_rate
+            time = np.linspace(0, duration, len(self.data))
             plt.figure(figsize=(10, 4))
-            plt.plot(self.data)
-            plt.title(f'Waveform: {self.current_file.name}')
-            plt.xlabel('Sample')
+            plt.plot(time,self.data)
+            plt.title(f'Waveform: {self.current_file.name if self.current_file else ""}')
+            plt.xlabel('Time (s)')
             plt.ylabel('Amplitude')
-            plt.show()
+            plt.grid(True, alpha=0.3)
+            
+            if save_to_buffer:
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png')
+                plt.close()
+                buf.seek(0)
+                return buf
+            else:
+                plt.show()
+                return None
         else:
             print("No audio file loaded")
+            return None
 
 if __name__ == "__main__":
-    # Create an instance of the MusicPlayer
-    player = MusicPlayer()
-    
-    # List available WAV files
-    wav_files = player.list_files()
+    library = MusicLibrary()
+    wav_files = library.list_files()
     print("Available WAV files:")
     for i, file in enumerate(wav_files):
         print(f"{i+1}. {file.name}")
-    
-    # Example usage with play and stop:
-    #player.load_file(wav_files[0])  # Load first file
-    #player.play()  # Start playing
-    
-    # You can now stop the playback at any time with:
-    # player.stop() 

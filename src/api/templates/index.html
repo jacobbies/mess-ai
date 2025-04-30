@@ -186,21 +186,7 @@
                         console.error('Error fetching recommendations:', error);
                     });
             }
-            
-            // Function to send feedback
-            function sendFeedback(filename, feedbackType) {
-                fetch(`/feedback/${filename}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({"feedback_type": feedbackType})
-                })
-                .then(response => response.json())
-                .then(data => console.log("Feedback sent", data))
-                .catch(error => console.error("Error sending feedback", error));
-            }
-            
+
             // Auto-play when track is loaded
             audioPlayer.addEventListener('loadedmetadata', function() {
                 audioPlayer.play();

@@ -54,9 +54,9 @@ jupyter notebook notebooks/
 - Dataset structure and loading utilities
 
 **Incomplete/Planned:**
-- Core similarity search functionality (`find_similar_tracks` method not implemented)
 - Deep learning model training pipeline (using MERT pretrained model, eventual finetuning of this model w dataset)
 - Feature extraction integration with ML models
+- Core similarity search functionality (`find_similar_tracks` method not implemented)
 - Comprehensive testing infrastructure
 - More loading utilities
 - Setup Docker 

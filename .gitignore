@@ -1,4 +1,13 @@
 .venv/
-data/
 __pycache__/
+
+# Data files - exclude large datasets but keep structure
+data/smd/
+data/processed/
+data/models/
+
+# Keep documentation and metadata
+!data/reason.md
+!data/processed/.gitkeep
+!data/models/.gitkeep
 

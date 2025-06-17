@@ -26,19 +26,17 @@ jupyter notebook notebooks/
 **Key architectural components:**
 
 - **MusicLibrary** (`src/mess_ai/audio/player.py`) - Core audio file management with soundfile integration, waveform visualization, and metadata tracking
-- **FastAPI Server** (`src/api/app.py`) - Web API with endpoints for audio serving, waveform generation, and similarity search (recommendation endpoint currently non-functional)
-- **AudioFeatureExtractor** (`misc/feature_extraction.py`) - Comprehensive audio feature extraction using librosa (MFCC, mel spectrograms, chroma, spectral contrast, onset strength, tempograms)
-- **SaarlandMusicDataset** (`misc/music_dataset_utils.py`) - Advanced multi-modal dataset manager supporting audio, MIDI, CSV annotations, and synthesized audio with visualization capabilities
-- **AudioModelDatasetGenerator** (`misc/dataset_generation.py`) - ML dataset preparation toolkit for classification and sequence modeling (incomplete implementation)
+- **FastAPI Server** (`src/api/app.py`) - Web API with endpoints for audio serving, waveform generation, and similarity search (recommendation endpoint currently non-functional)  
 - **MusicRecommender** (`src/mess_ai/models/recommender.py`) - Recommendation system skeleton (find_similar_tracks method not implemented)
+- **FeatureExtractor** (`src/mess_ai/features/extractor.py`) - Feature extraction module (currently empty)
 - **Web Interface** (`src/api/templates/index.html`) - Bootstrap 5-based responsive music player with track selection, waveform display, and recommendation UI
+- **CSS Styling** (`src/api/static/css/style.css`) - Basic CSS styling for the web interface
 
 **Data flow:**
-1. SMD audio files (WAV at 22kHz/44kHz, MIDI, synthesized audio) stored in `/data/smd/`
-2. AudioFeatureExtractor processes audio into feature representations  
-3. Dataset utilities manage multi-modal data loading and preprocessing
-4. FastAPI serves audio files, generates waveforms, and provides API endpoints
-5. Web frontend provides interactive music player with similarity search interface (similarity functionality pending implementation)
+1. SMD audio files (WAV at 44kHz) stored in `/data/smd/wav-44/`
+2. MusicLibrary loads and manages audio files with waveform visualization
+3. FastAPI serves audio files, generates waveforms, and provides API endpoints
+4. Web frontend provides interactive music player with similarity search interface (similarity functionality pending implementation)
 
 ## Technical Stack
 
@@ -61,6 +59,9 @@ jupyter notebook notebooks/
 - Feature extraction integration with ML models
 - Comprehensive testing infrastructure
 - More loading utilities
+- Setup Docker 
+- integrate AWS s3
+- Redo file System
 
 ## Dataset Structure
 

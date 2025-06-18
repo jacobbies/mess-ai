@@ -69,7 +69,13 @@
                         </div>
                         
                         <!-- Waveform Display -->
-                        <div class="waveform-container">
+                        <div class="waveform-container mt-3">
+                            <button id="showWaveformBtn" class="btn btn-outline-primary mb-3" style="display: none;">
+                                <i class="fas fa-chart-line"></i> Show Waveform
+                            </button>
+                            <div id="waveformLoading" class="text-muted text-center" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Loading waveform...
+                            </div>
                             <img id="waveformImage" style="display: none; max-width: 100%;" alt="Waveform visualization">
                         </div>
                     </div>
@@ -100,6 +106,7 @@
             const recommendationsList = document.getElementById('recommendationsList');
             const nextButton = document.getElementById('nextButton');
             const getRecommendationsBtn = document.getElementById('getRecommendationsBtn');
+            const showWaveformBtn = document.getElementById('showWaveformBtn');
             
             let currentTrack = null;
             
@@ -123,9 +130,21 @@
                 audioPlayer.src = `/audio/${track}`;
                 audioPlayer.style.display = 'block';
                 
-                // Show waveform
-                waveformImage.src = `/waveform/${track}`;
-                waveformImage.style.display = 'block';
+                // Show waveform button and hide previous waveform
+                const showWaveformBtn = document.getElementById('showWaveformBtn');
+                const waveformImage = document.getElementById('waveformImage');
+                const waveformLoading = document.getElementById('waveformLoading');
+                
+                showWaveformBtn.style.display = 'block';
+                waveformImage.style.display = 'none';
+                waveformLoading.style.display = 'none';
+                
+                // Preload waveform in background
+                preloadWaveform(track);
+                
+                // Hide recommendations from previous track
+                recommendationsCard.style.display = 'none';
+                recommendationsList.innerHTML = '';
                 
                 // Enable buttons
                 nextButton.disabled = false;
@@ -133,6 +152,19 @@
                 
                 // Record play feedback
                 sendFeedback(track, "play");
+            }
+            
+            // Function to preload waveform in background
+            function preloadWaveform(track) {
+                const img = new Image();
+                img.onload = function() {
+                    // Waveform is ready, store it
+                    document.getElementById('waveformImage').src = this.src;
+                };
+                img.onerror = function() {
+                    console.error('Failed to load waveform for:', track);
+                };
+                img.src = `/waveform/${track}`;
             }
             
             // Skip/Next button
@@ -153,6 +185,35 @@
                 }
             });
             
+            // Show waveform button
+            showWaveformBtn.addEventListener('click', function() {
+                const waveformImage = document.getElementById('waveformImage');
+                const waveformLoading = document.getElementById('waveformLoading');
+                
+                if (waveformImage.src && waveformImage.src !== window.location.href) {
+                    // Waveform is already loaded, just show it
+                    waveformImage.style.display = 'block';
+                    showWaveformBtn.style.display = 'none';
+                } else if (currentTrack) {
+                    // Show loading and fetch waveform
+                    waveformLoading.style.display = 'block';
+                    showWaveformBtn.disabled = true;
+                    
+                    const img = new Image();
+                    img.onload = function() {
+                        waveformImage.src = this.src;
+                        waveformImage.style.display = 'block';
+                        waveformLoading.style.display = 'none';
+                        showWaveformBtn.style.display = 'none';
+                    };
+                    img.onerror = function() {
+                        waveformLoading.textContent = 'Failed to load waveform';
+                        showWaveformBtn.disabled = false;
+                    };
+                    img.src = `/waveform/${currentTrack}`;
+                }
+            });
+            
             // Function to get recommendations
             function getRecommendations(track, autoPlay = false) {
                 fetch(`/recommend/${track}`)
@@ -164,12 +225,15 @@
                         // Add new recommendations
                         data.recommendations.forEach(rec => {
                             const recItem = document.createElement('a');
-                            recItem.className = 'list-group-item list-group-item-action';
-                            recItem.textContent = rec;
+                            recItem.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                            recItem.innerHTML = `
+                                <span>${rec.display_name}</span>
+                                <small class="text-muted">${(rec.similarity_score * 100).toFixed(1)}%</small>
+                            `;
                             recItem.href = '#';
                             recItem.addEventListener('click', function(e) {
                                 e.preventDefault();
-                                playTrack(rec);
+                                playTrack(rec.track_name + '.wav');
                             });
                             recommendationsList.appendChild(recItem);
                         });
@@ -179,7 +243,7 @@
                         
                         // Auto-play first recommendation if requested
                         if (autoPlay && data.recommendations.length > 0) {
-                            playTrack(data.recommendations[0]);
+                            playTrack(data.recommendations[0].track_name + '.wav');
                         }
                     })
                     .catch(error => {

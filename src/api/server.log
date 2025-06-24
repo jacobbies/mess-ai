@@ -1,0 +1,308 @@
+INFO:     Will watch for changes in these directories: ['/Users/jacobbieschke/mess-ai/src/api']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [76579] using StatReload
+INFO:     Started server process [76581]
+INFO:     Waiting for application startup.
+INFO:main:Starting Music Similarity API...
+INFO:main:Loaded metadata for 50 tracks
+INFO:main:Audio library initialized
+INFO:root:Loading 50 feature files...
+INFO:root:Loaded features for 50 tracks
+INFO:root:Feature dimensionality: 9984
+INFO:root:Loading cached FAISS index...
+INFO:root:Loaded FAISS index from /Users/jacobbieschke/mess-ai/data/processed/cache/faiss/aggregated_index.faiss with 50 tracks
+INFO:root:Loaded cached FAISS index for aggregated features
+INFO:root:Music recommender initialized with FAISS search engine
+INFO:main:Music recommender initialized successfully with FAISS
+INFO:core.dependencies:Initializing services...
+INFO:core.services.metadata_service:MetadataService initialized with 50 tracks
+INFO:core.services.recommendation_service:RecommendationService initialized with 50 tracks
+INFO:core.services.audio_service:AudioService initialized with wav_dir: /Users/jacobbieschke/mess-ai/data/smd/wav-44
+INFO:core.dependencies:All services initialized successfully
+INFO:main:API startup complete
+INFO:     Application startup complete.
+INFO:     127.0.0.1:61934 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61947 - "GET /tracks HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 3 recommendations for Bach_BWV1041_1-SMD
+ERROR:root:Error searching for similar tracks to 'Bach_BWV1041_1-SMD': Track 'Bach_BWV1041_1-SMD' not found. Available tracks include: ['Bach_BWV849-01_001_20090916-SMD', 'Bach_BWV849-02_001_20090916-SMD', 'Bach_BWV871-01_002_20090916-SMD', 'Bach_BWV871-02_002_20090916-SMD', 'Bach_BWV875-01_002_20090916-SMD']
+ERROR:root:Error finding similar tracks for 'Bach_BWV1041_1-SMD': Track 'Bach_BWV1041_1-SMD' not found. Available tracks include: ['Bach_BWV849-01_001_20090916-SMD', 'Bach_BWV849-02_001_20090916-SMD', 'Bach_BWV871-01_002_20090916-SMD', 'Bach_BWV871-02_002_20090916-SMD', 'Bach_BWV875-01_002_20090916-SMD']
+INFO:     127.0.0.1:61954 - "GET /recommend/Bach_BWV1041_1-SMD?top_k=3 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61963 - "GET /tracks HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 3 recommendations for Bach_BWV849-01_001_20090916-SMD
+INFO:     127.0.0.1:61970 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?top_k=3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /tracks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /tracks HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:main:API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [76581]
+INFO:     Started server process [78157]
+INFO:     Waiting for application startup.
+INFO:main:Starting Music Similarity API...
+INFO:main:Loaded metadata for 50 tracks
+INFO:main:Audio library initialized
+INFO:root:Loading 50 feature files...
+INFO:root:Loaded features for 50 tracks
+INFO:root:Feature dimensionality: 9984
+INFO:root:Loading cached FAISS index...
+INFO:root:Loaded FAISS index from /Users/jacobbieschke/mess-ai/data/processed/cache/faiss/aggregated_index.faiss with 50 tracks
+INFO:root:Loaded cached FAISS index for aggregated features
+INFO:root:Music recommender initialized with FAISS search engine
+INFO:main:Music recommender initialized successfully with FAISS
+INFO:core.dependencies:Initializing services...
+INFO:core.services.metadata_service:MetadataService initialized with 50 tracks
+INFO:core.services.recommendation_service:RecommendationService initialized with 50 tracks
+INFO:core.services.audio_service:AudioService initialized with wav_dir: /Users/jacobbieschke/mess-ai/data/smd/wav-44
+INFO:core.dependencies:All services initialized successfully
+INFO:main:API startup complete
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:main:API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [78157]
+INFO:     Started server process [78167]
+INFO:     Waiting for application startup.
+INFO:main:Starting Music Similarity API...
+INFO:main:Loaded metadata for 50 tracks
+INFO:main:Audio library initialized
+INFO:root:Loading 50 feature files...
+INFO:root:Loaded features for 50 tracks
+INFO:root:Feature dimensionality: 9984
+INFO:root:Loading cached FAISS index...
+INFO:root:Loaded FAISS index from /Users/jacobbieschke/mess-ai/data/processed/cache/faiss/aggregated_index.faiss with 50 tracks
+INFO:root:Loaded cached FAISS index for aggregated features
+INFO:root:Music recommender initialized with FAISS search engine
+INFO:main:Music recommender initialized successfully with FAISS
+INFO:core.dependencies:Initializing services...
+INFO:core.services.metadata_service:MetadataService initialized with 50 tracks
+INFO:core.services.recommendation_service:RecommendationService initialized with 50 tracks
+INFO:core.services.audio_service:AudioService initialized with wav_dir: /Users/jacobbieschke/mess-ai/data/smd/wav-44
+INFO:core.dependencies:All services initialized successfully
+INFO:main:API startup complete
+INFO:     Application startup complete.
+INFO:     127.0.0.1:62089 - "GET /tracks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62103 - "HEAD /audio/Bach_BWV849-01_001_20090916-SMD.wav HTTP/1.1" 405 Method Not Allowed
+INFO:core.services.recommendation_service:Getting 2 recommendations for Bach_BWV849-01_001_20090916-SMD
+INFO:     127.0.0.1:62110 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?top_k=2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62123 - "GET /audio/Bach_BWV849-01_001_20090916-SMD.wav HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62166 - "HEAD /waveform/Bach_BWV849-01_001_20090916-SMD.wav HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:62181 - "GET /waveform/Bach_BWV849-01_001_20090916-SMD.wav HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 5 recommendations for Bach_BWV849-01_001_20090916-SMD
+INFO:     127.0.0.1:62196 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?top_k=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /tracks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:0 - "GET /tracks HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'routers/recommendations.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:main:API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [78167]
+INFO:     Started server process [84899]
+INFO:     Waiting for application startup.
+INFO:main:Starting Music Similarity API...
+INFO:main:Loaded metadata for 50 tracks
+INFO:main:Audio library initialized
+INFO:root:Loading 50 feature files...
+INFO:root:Loaded features for 50 tracks
+INFO:root:Feature dimensionality: 9984
+INFO:root:Loading cached FAISS index...
+INFO:root:Loaded FAISS index from /Users/jacobbieschke/mess-ai/data/processed/cache/faiss/aggregated_index.faiss with 50 tracks
+INFO:root:Loaded cached FAISS index for aggregated features
+INFO:root:Music recommender initialized with FAISS search engine
+INFO:main:Music recommender initialized successfully with FAISS
+INFO:core.dependencies:Initializing services...
+INFO:core.services.metadata_service:MetadataService initialized with 50 tracks
+INFO:core.services.recommendation_service:RecommendationService initialized with 50 tracks
+INFO:core.services.audio_service:AudioService initialized with wav_dir: /Users/jacobbieschke/mess-ai/data/smd/wav-44
+INFO:core.dependencies:All services initialized successfully
+INFO:main:API startup complete
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:main:API shutdown complete
+INFO:     Application shutdown complete.
+INFO:     Finished server process [84899]
+INFO:     Started server process [84959]
+INFO:     Waiting for application startup.
+INFO:main:Starting Music Similarity API...
+INFO:main:Loaded metadata for 50 tracks
+INFO:main:Audio library initialized
+INFO:root:Loading 50 feature files...
+INFO:root:Loaded features for 50 tracks
+INFO:root:Feature dimensionality: 9984
+INFO:root:Loading cached FAISS index...
+INFO:root:Loaded FAISS index from /Users/jacobbieschke/mess-ai/data/processed/cache/faiss/aggregated_index.faiss with 50 tracks
+INFO:root:Loaded cached FAISS index for aggregated features
+INFO:root:Music recommender initialized with FAISS search engine
+INFO:root:Loaded 50 feature vectors into cache
+INFO:main:Diverse music recommender initialized successfully with FAISS
+INFO:core.dependencies:Initializing services...
+INFO:core.services.metadata_service:MetadataService initialized with 50 tracks
+INFO:core.services.recommendation_service:RecommendationService initialized with 50 tracks
+INFO:core.services.audio_service:AudioService initialized with wav_dir: /Users/jacobbieschke/mess-ai/data/smd/wav-44
+INFO:core.dependencies:All services initialized successfully
+INFO:main:API startup complete
+INFO:     Application startup complete.
+INFO:     127.0.0.1:49405 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD/compare?top_k=3 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 324, in jsonable_encoder
+    data = dict(obj)
+           ^^^^^^^^^
+TypeError: 'numpy.float32' object is not iterable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 329, in jsonable_encoder
+    data = vars(obj)
+           ^^^^^^^^^
+TypeError: vars() argument must have __dict__ attribute
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/applications.py", line 112, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 714, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 734, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/routing.py", line 327, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/routing.py", line 201, in serialize_response
+    return jsonable_encoder(response_content)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 332, in jsonable_encoder
+    raise ValueError(errors) from e
+ValueError: [TypeError("'numpy.float32' object is not iterable"), TypeError('vars() argument must have __dict__ attribute')]
+INFO:     127.0.0.1:49554 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD/compare?top_k=3 HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 324, in jsonable_encoder
+    data = dict(obj)
+           ^^^^^^^^^
+TypeError: 'numpy.float32' object is not iterable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 329, in jsonable_encoder
+    data = vars(obj)
+           ^^^^^^^^^
+TypeError: vars() argument must have __dict__ attribute
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/applications.py", line 112, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 187, in __call__
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 714, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 734, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/starlette/routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/routing.py", line 327, in app
+    content = await serialize_response(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/routing.py", line 201, in serialize_response
+    return jsonable_encoder(response_content)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 289, in jsonable_encoder
+    encoded_value = jsonable_encoder(
+                    ^^^^^^^^^^^^^^^^^
+  File "/Users/jacobbieschke/mess-ai/.venv/lib/python3.11/site-packages/fastapi/encoders.py", line 332, in jsonable_encoder
+    raise ValueError(errors) from e
+ValueError: [TypeError("'numpy.float32' object is not iterable"), TypeError('vars() argument must have __dict__ attribute')]
+INFO:core.services.recommendation_service:Getting 5 recommendations for Bach_BWV849-01_001_20090916-SMD using diverse strategy
+INFO:     127.0.0.1:49657 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?strategy=diverse&top_k=5 HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 5 recommendations for Bach_BWV849-01_001_20090916-SMD using exploration strategy
+INFO:     127.0.0.1:49677 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?strategy=exploration&top_k=5 HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 3 recommendations for Bach_BWV849-01_001_20090916-SMD using similar strategy
+INFO:     127.0.0.1:49705 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?strategy=similar&top_k=3 HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 3 recommendations for Bach_BWV849-01_001_20090916-SMD using balanced strategy
+INFO:     127.0.0.1:49707 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?strategy=balanced&top_k=3 HTTP/1.1" 200 OK
+INFO:core.services.recommendation_service:Getting 3 recommendations for Bach_BWV849-01_001_20090916-SMD using complementary strategy
+INFO:     127.0.0.1:49709 - "GET /recommend/Bach_BWV849-01_001_20090916-SMD?strategy=complementary&top_k=3 HTTP/1.1" 200 OK

@@ -16,6 +16,7 @@ function App() {
   
   const [tracks, setTracks] = useState<TrackMetadata[]>([]);
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
   const [currentTrackMetadata, setCurrentTrackMetadata] = useState<TrackMetadata | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [referenceTrack, setReferenceTrack] = useState<string>('');
@@ -58,22 +59,30 @@ function App() {
     const metadata = tracks.find(t => t.track_id === trackId || t.filename === trackId);
     if (metadata) {
       setCurrentTrack(metadata.filename);
+      setCurrentTrackId(metadata.track_id);
       setCurrentTrackMetadata(metadata);
     } else {
       // Fallback for tracks without metadata
       setCurrentTrack(trackId.endsWith('.wav') ? trackId : `${trackId}.wav`);
+      setCurrentTrackId(trackId);
       setCurrentTrackMetadata(null);
     }
   };
 
-  const handleRecommendationsRequest = async (trackName: string) => {
+  const handleRecommendationsRequest = async (trackId: string) => {
     try {
       setIsLoadingRecommendations(true);
       setError(null);
-      // Remove .wav extension before sending to API
-      const cleanTrackName = trackName.replace('.wav', '');
-      setReferenceTrack(cleanTrackName);
-      const response = await apiClient.getRecommendations(cleanTrackName, 5);
+      
+      // For recommendations, we need to use the filename with -SMD suffix
+      // Find the metadata for this track to get the proper filename
+      const metadata = tracks.find(t => t.track_id === trackId);
+      const trackNameForRecommendations = metadata 
+        ? metadata.filename.replace('.wav', '') 
+        : trackId;
+      
+      setReferenceTrack(trackNameForRecommendations);
+      const response = await apiClient.getRecommendations(trackNameForRecommendations, 5);
       setRecommendations(response.recommendations);
       setReferenceMetadata(response.reference_metadata);
     } catch (error) {
@@ -182,6 +191,7 @@ function App() {
           >
             <MusicPlayer
               currentTrack={currentTrack}
+              currentTrackId={currentTrackId}
               currentTrackMetadata={currentTrackMetadata}
               onRecommendationsRequest={handleRecommendationsRequest}
             />

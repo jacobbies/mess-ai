@@ -241,8 +241,11 @@ class MetadataProcessor:
         
         for _, row in df.iterrows():
             track_data = row.to_dict()
-            # Handle NaN values
-            track_data = {k: v if pd.notna(v) else None for k, v in track_data.items()}
+            # Handle NaN values - special handling for lists/arrays
+            track_data = {
+                k: v if (isinstance(v, list) or not pd.isna(v)) else None 
+                for k, v in track_data.items()
+            }
             
             # Convert recording_date string back to date
             if track_data.get('recording_date'):
@@ -252,6 +255,12 @@ class MetadataProcessor:
                     ).date()
                 except:
                     track_data['recording_date'] = None
+            
+            # Ensure string fields are strings
+            string_fields = ['performer_id', 'movement']
+            for field in string_fields:
+                if track_data.get(field) is not None:
+                    track_data[field] = str(track_data[field])
             
             metadata = TrackMetadata(**track_data)
             metadata_dict[metadata.track_id] = metadata

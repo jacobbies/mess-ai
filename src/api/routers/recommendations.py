@@ -1,0 +1,77 @@
+"""
+Music recommendation API routes.
+"""
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional
+import logging
+
+from core.dependencies import RecommendationServiceDep
+from core.services.recommendation_service import RecommendationService
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/recommend", tags=["recommendations"])
+
+
+@router.get("/{track_name}")
+async def get_recommendations(
+    track_name: str, 
+    top_k: int = Query(5, ge=1, le=50, description="Number of recommendations to return"),
+    strategy: Optional[str] = Query(
+        "similar",
+        description="Recommendation strategy: similar (default), balanced, diverse, complementary, exploration"
+    ),
+    recommendation_service: RecommendationService = RecommendationServiceDep
+):
+    """
+    Get music recommendations based on MERT feature similarity with metadata.
+    
+    Strategies:
+    - **similar**: Traditional similarity-based recommendations (highest cosine similarity)
+    - **balanced**: Balanced relevance and diversity using MMR (λ=0.7)
+    - **diverse**: More diverse recommendations using MMR (λ=0.5)
+    - **complementary**: Moderately similar tracks (0.5-0.75 similarity range)
+    - **exploration**: Discovery-oriented recommendations (around 0.6 similarity)
+    """
+    try:
+        if not recommendation_service.is_available():
+            raise HTTPException(status_code=503, detail="Recommender not available - features not loaded")
+        
+        # Validate strategy
+        valid_strategies = ["similar", "balanced", "diverse", "complementary", "exploration"]
+        if strategy not in valid_strategies:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid strategy. Must be one of: {', '.join(valid_strategies)}"
+            )
+        
+        return recommendation_service.get_recommendations(track_name, top_k, strategy=strategy)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Recommendation error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{track_name}/compare")
+async def compare_recommendation_strategies(
+    track_name: str,
+    top_k: int = Query(5, ge=1, le=20, description="Number of recommendations per strategy"),
+    recommendation_service: RecommendationService = RecommendationServiceDep
+):
+    """
+    Compare different recommendation strategies for a given track.
+    
+    Returns recommendations from all available strategies along with diversity metrics.
+    """
+    try:
+        if not recommendation_service.is_available():
+            raise HTTPException(status_code=503, detail="Recommender not available - features not loaded")
+        
+        return recommendation_service.compare_strategies(track_name, top_k)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Strategy comparison error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

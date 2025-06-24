@@ -9,13 +9,15 @@ import { TrackMetadata } from '../lib/api';
 
 interface MusicPlayerProps {
   currentTrack: string | null;
+  currentTrackId: string | null;
   currentTrackMetadata: TrackMetadata | null;
   onTrackEnd?: () => void;
-  onRecommendationsRequest?: (trackName: string) => void;
+  onRecommendationsRequest?: (trackId: string) => void;
 }
 
 const MusicPlayer: React.FC<MusicPlayerProps> = ({
   currentTrack,
+  currentTrackId,
   currentTrackMetadata,
   onTrackEnd,
   onRecommendationsRequest,
@@ -102,8 +104,8 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({
   };
 
   const handleFindSimilar = () => {
-    if (currentTrack) {
-      onRecommendationsRequest?.(currentTrack);
+    if (currentTrackId) {
+      onRecommendationsRequest?.(currentTrackId);
     }
   };
 
@@ -215,7 +217,7 @@ const MusicPlayer: React.FC<MusicPlayerProps> = ({
         <div className="mt-6 text-center">
           <Button
             onClick={handleFindSimilar}
-            disabled={!currentTrack}
+            disabled={!currentTrackId}
             variant="outline"
             className="w-full sm:w-auto"
           >

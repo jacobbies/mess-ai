@@ -5,9 +5,12 @@ __pycache__/
 data/smd/
 data/processed/
 data/models/
+data/maestro/
 
 # Keep documentation and metadata
 !data/reason.md
 !data/processed/.gitkeep
 !data/models/.gitkeep
+
+
 

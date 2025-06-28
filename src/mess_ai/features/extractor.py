@@ -36,6 +36,9 @@ class FeatureExtractor:
             self.device = 'cpu'
         self.cache_dir = cache_dir
         
+        # Default output directory
+        self.output_dir = Path(__file__).parent.parent.parent.parent / "data" / "processed" / "features"
+        
         # MERT requires 24kHz audio
         self.target_sample_rate = 24000
         self.segment_duration = 5.0  # 5-second segments
@@ -180,13 +183,15 @@ class FeatureExtractor:
             logging.error(f"Error extracting MERT features: {e}")
             raise
     
-    def extract_track_features(self, audio_path, output_dir=None):
+    def extract_track_features(self, audio_path, output_dir=None, track_id=None, dataset=None):
         """
         Extract features for a single track.
         
         Args:
             audio_path: Path to audio file
             output_dir: Directory to save features (optional)
+            track_id: Custom track ID for file naming (optional)
+            dataset: Dataset name for organizing features (optional)
             
         Returns:
             dict with 'raw', 'segments', 'aggregated' features
@@ -218,7 +223,7 @@ class FeatureExtractor:
             
             # Save features if output directory provided
             if output_dir:
-                self._save_features(results, audio_path, output_dir)
+                self._save_features(results, audio_path, output_dir, track_id, dataset)
             
             return results
             
@@ -226,10 +231,16 @@ class FeatureExtractor:
             logging.error(f"Error extracting track features for {audio_path}: {e}")
             raise
     
-    def _save_features(self, features, audio_path, output_dir):
+    def _save_features(self, features, audio_path, output_dir, track_id=None, dataset=None):
         """Save extracted features to disk."""
         output_dir = Path(output_dir)
-        filename = Path(audio_path).stem
+        
+        # Use custom track_id or fallback to filename
+        filename = track_id if track_id else Path(audio_path).stem
+        
+        # Add dataset subdirectory if specified
+        if dataset:
+            output_dir = output_dir / dataset
         
         # Save to respective directories
         for feature_type, data in features.items():

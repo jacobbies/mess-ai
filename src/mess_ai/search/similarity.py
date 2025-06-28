@@ -61,16 +61,42 @@ class SimilaritySearchEngine:
             raise
     
     def _load_features(self):
-        """Load all precomputed features into memory."""
-        feature_path = self.features_dir / self.feature_type
-        if not feature_path.exists():
-            raise FileNotFoundError(f"Features directory not found: {feature_path}")
+        """Load all precomputed features from all datasets."""
+        total_files = 0
         
+        # Check for dataset subdirectories (maestro, smd, etc.)
+        dataset_dirs = [d for d in self.features_dir.iterdir() if d.is_dir()]
+        
+        if dataset_dirs:
+            # Load from dataset subdirectories
+            for dataset_dir in sorted(dataset_dirs):
+                feature_path = dataset_dir / self.feature_type
+                if feature_path.exists():
+                    self._load_dataset_features(dataset_dir.name, feature_path)
+                    total_files += len(list(feature_path.glob("*.npy")))
+        
+        # Also check for features directly in the main directory (for backward compatibility)
+        main_feature_path = self.features_dir / self.feature_type
+        if main_feature_path.exists():
+            self._load_dataset_features("smd", main_feature_path)  # Assume SMD for main directory
+            total_files += len(list(main_feature_path.glob("*.npy")))
+        
+        if not self.features:
+            raise FileNotFoundError(f"No feature files found in {self.features_dir}")
+        
+        logging.info(f"Loaded features for {len(self.track_names)} tracks from {len(dataset_dirs)} datasets")
+        if self.track_names:
+            sample_features = next(iter(self.features.values()))
+            logging.info(f"Feature dimensionality: {sample_features.shape[0]}")
+    
+    def _load_dataset_features(self, dataset_name: str, feature_path: Path):
+        """Load features from a specific dataset directory."""
         feature_files = list(feature_path.glob("*.npy"))
         if not feature_files:
-            raise FileNotFoundError(f"No feature files found in {feature_path}")
+            logging.warning(f"No feature files found in {feature_path}")
+            return
         
-        logging.info(f"Loading {len(feature_files)} feature files...")
+        logging.info(f"Loading {len(feature_files)} feature files from {dataset_name} dataset...")
         
         for feature_file in sorted(feature_files):  # Sort for consistent ordering
             track_name = feature_file.stem  # Remove .npy extension
@@ -87,11 +113,10 @@ class SimilaritySearchEngine:
                 # Shape: (num_segments, 13, time_steps, 768) -> mean over time and segments
                 features = np.mean(features, axis=(0, 2)).flatten()
             
-            self.features[track_name] = features
-            self.track_names.append(track_name)
-        
-        logging.info(f"Loaded features for {len(self.track_names)} tracks")
-        logging.info(f"Feature dimensionality: {features.shape[0]}")
+            # Store with dataset prefix for clarity
+            full_track_name = f"{dataset_name}:{track_name}" if dataset_name != "smd" else track_name
+            self.features[full_track_name] = features
+            self.track_names.append(full_track_name)
     
     def _build_index(self):
         """Build FAISS index from loaded features."""

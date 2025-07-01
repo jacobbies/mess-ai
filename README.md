@@ -1,128 +1,133 @@
-# mess-ai 🎵
+# mess-ai: AI-Powered Music Similarity Search
 
-A deep learning-powered music similarity search system that finds musically similar classical pieces using state-of-the-art MERT (Music Understanding Model) embeddings.
+A production-ready system for discovering musical similarity using deep learning.
+
+## 🏗️ Project Structure
+
+```
+mess-ai/
+├── src/                    # 🎯 Backend Microservice (Self-contained)
+│   ├── api/               # FastAPI application
+│   ├── core/              # Configuration & dependencies
+│   ├── mess_ai/           # ML & audio processing
+│   ├── Dockerfile         # Container definition
+│   ├── requirements.txt   # Dependencies
+│   ├── docker-compose.yml # Development setup
+│   └── deploy.sh          # Deployment script
+│
+├── frontend/               # React web application (separate deployment)
+├── data/                   # Datasets & processed features (not in containers)
+├── notebooks/              # Research & experimentation
+├── scripts/                # Utilities & data processing
+└── docs/                   # Documentation
+```
+
+## 🎯 Components
+
+### Backend Microservice (`src/`)
+**Self-contained FastAPI service** with everything needed for production deployment:
+- MERT-based music similarity search
+- FAISS high-performance indexing  
+- Multi-dataset support (SMD, Maestro)
+- AWS integration (S3, RDS, CloudFront)
+- Production-ready containerization
+
+[**→ See Backend README**](src/README.md)
+
+### Frontend Application (`frontend/`)
+React-based web interface for music discovery:
+- Interactive music player
+- Real-time similarity search
+- Waveform visualization
+- Responsive design
+
+### Data Processing (`scripts/`, `notebooks/`)
+Tools for dataset processing and feature extraction:
+- MERT feature extraction pipeline
+- Multi-dataset metadata processing  
+- FAISS index optimization
+- Research notebooks
 
 ## 🚀 Quick Start
 
-1. **Install dependencies:**
+### Backend Development
 ```bash
-pip install -r requirements.txt
+cd src
+docker-compose up -d
+# API at http://localhost:8000
 ```
 
-2. **Start the web server:**
+### Backend Production  
 ```bash
-cd src/api && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd src
+./deploy.sh production
 ```
 
-3. **Open your browser** to `http://localhost:8000`
-
-## ✨ Features
-
-### 🎼 Music Player
-- Interactive web-based music player
-- Real-time waveform visualization (on-demand)
-- Support for 50 classical music tracks from SMD dataset
-
-### 🔍 AI-Powered Similarity Search
-- **FAISS-powered search** with MERT transformer embeddings (13 layers, 768 dimensions)
-- **Lightning-fast queries** - sub-millisecond search across precomputed features
-- **50-100x speedup** over brute force similarity calculation
-- **Real-time recommendations** with similarity percentage scores
-- **User-controlled discovery** - click "Get Recommendations" when ready
-
-### 🎯 Smart UI
-- Background waveform loading with caching
-- Clickable recommendations with seamless playback
-- Responsive Bootstrap 5 interface
-- Loading states and error handling
-
-## 🏗️ Architecture
-
-### Backend
-- **FastAPI** modular architecture with dependency injection
-- **FAISS IndexFlatIP** for high-performance similarity search
-- **MusicRecommender** with FAISS integration and caching
-- **FeatureExtractor** for MERT embedding generation
-- **Apple Silicon (MPS)** acceleration support
-
-### ML Pipeline
-- **MERT-v1-95M** transformer model for music understanding
-- **Multi-scale features**: raw, segments, and aggregated representations
-- **Hierarchical storage**: 150 .npy files organized by feature type
-- **Background processing**: ~2.6 minutes to process full dataset
-
-### Data Organization
-```
-data/
-├── smd/wav-44/          # 50 classical recordings (44kHz WAV)
-├── processed/features/   # MERT embeddings (94GB total)
-│   ├── raw/             # Full temporal features
-│   ├── segments/        # Time-averaged segments  
-│   └── aggregated/      # Track-level vectors
-└── models/              # Training checkpoints (future)
+### Frontend Development
+```bash
+cd frontend
+npm install && npm start
+# App at http://localhost:3000
 ```
 
-## 🎹 Dataset
+## 🎵 Architecture
 
-**Saarland Music Dataset (SMD)**: 50 classical recordings featuring:
-- Bach, Beethoven, Chopin, Mozart, Brahms, and more
-- High-quality WAV files at 44kHz sample rate
-- Performance annotations and metadata
-- MIDI representations for symbolic analysis
+**mess-ai** uses a microservice architecture optimized for music AI:
 
-## 🛠️ Tech Stack
+1. **Feature Extraction**: MERT transformer processes audio → 768-dim embeddings
+2. **Similarity Search**: FAISS IndexFlatIP provides sub-millisecond queries  
+3. **Multi-Dataset**: Unified interface for SMD (50 tracks) + Maestro (1,276 tracks)
+4. **Hybrid Storage**: Local features for speed + S3/CDN for audio streaming
+5. **Production Ready**: Containerized, scalable, AWS-optimized
 
-### Core Technologies
-- **Backend**: Python 3.11+, FastAPI, PyTorch 2.6+
-- **ML**: Transformers (Hugging Face), MERT, scikit-learn
-- **Audio**: librosa, torchaudio, soundfile
-- **Frontend**: HTML5, Bootstrap 5, Vanilla JavaScript
+## 📊 Performance
 
-### Performance
-- **Apple Silicon**: MPS acceleration on M3 Pro
-- **Processing Speed**: 3.1s average per track
-- **Memory Efficient**: Smart caching and background loading
-- **Real-time Search**: Sub-second similarity calculations
+- **Feature Extraction**: 2.6 minutes for full dataset (M3 Pro + MPS)
+- **Search Latency**: <1ms similarity queries via FAISS
+- **Throughput**: 4 Gunicorn workers handle concurrent requests
+- **Storage**: 94GB features + 241GB audio (hybrid local/cloud strategy)
 
-## 📊 Project Status
+## 🔧 Technology Stack
 
-### ✅ Completed (Production Ready)
-- [x] **MERT Feature Extraction Pipeline** - Complete with MPS acceleration, 2.6min processing
-- [x] **FAISS Similarity Search System** - High-performance IndexFlatIP with sub-millisecond queries
-- [x] **Modular FastAPI Architecture** - Dependency injection, service layer, router separation
-- [x] **Web Interface** - Interactive player with lightning-fast AI recommendations
-- [x] **API Endpoints** - `/recommend/{track}`, `/tracks`, `/audio/{track}`, `/waveform/{track}`
-- [x] **Smart Caching** - FAISS index persistence, instant startup, optimized performance
-- [x] **Apple Silicon Optimization** - MPS acceleration with CPU fallback
+- **Backend**: Python 3.11, FastAPI, PyTorch, FAISS, PostgreSQL
+- **Frontend**: React, TypeScript, Tailwind CSS
+- **ML**: MERT-v1-95M, Wav2Vec2, transformers
+- **Infrastructure**: Docker, AWS (EC2, RDS, S3, CloudFront)
+- **Audio**: librosa, soundfile, torchaudio
 
-### 🚧 In Progress
-- [ ] Model fine-tuning on SMD dataset
-- [ ] Alternative similarity metrics (Euclidean, Manhattan)
-- [ ] Advanced recommendation algorithms
+## 🎯 Deployment Strategy
 
-### 📋 Planned
-- [ ] Docker containerization
-- [ ] AWS S3 integration for cloud storage
-- [ ] Expanded dataset support
-- [ ] User preference learning
-- [ ] Comprehensive testing suite
+### Phase 1: MVP (0-50 users)
+- Backend microservice on single EC2 instance  
+- Frontend on S3 + CloudFront
+- PostgreSQL RDS
+- Local EBS storage for features
 
-## 🚀 Performance Metrics
+### Phase 2: Growth (50-200 users)
+- Auto Scaling Groups
+- Load balancer
+- S3 hybrid storage
+- Caching layer
 
-- **Feature Extraction**: 2.6 minutes for 50 tracks (M3 Pro with MPS)
-- **FAISS Similarity Search**: Sub-millisecond queries (50-100x speedup)
-- **Index Size**: ~2MB FAISS index vs ~2GB feature cache
-- **Storage**: 94GB precomputed features, optimized memory usage
-- **Accuracy**: MERT state-of-the-art music understanding with exact cosine similarity
+### Phase 3: Scale (200-500 users)  
+- Multi-AZ deployment
+- ElastiCache
+- Advanced monitoring
+- Performance optimization
 
-## 🤝 Contributing
+## 🎵 Supported Datasets
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- **SMD (Saarland Music Dataset)**: 50 classical recordings, curated for research
+- **MAESTRO v3.0**: 1,276 piano performances, competition-grade recordings
+- **Extensible**: Architecture supports adding new datasets
 
-## 📄 License
+## 🔒 Production Features
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+- **Security**: Non-root containers, environment-based config, CORS protection
+- **Monitoring**: Structured logging, health checks, metrics ready  
+- **Scalability**: Horizontal scaling, resource limits, performance tuning
+- **Reliability**: Health checks, restart policies, graceful shutdown
+
+---
+
+**Built for production music AI at scale** 🎵 ✨

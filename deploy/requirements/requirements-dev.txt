@@ -1,0 +1,16 @@
+# Development dependencies for backend microservice
+
+# Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Code Quality
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+mypy==1.13.0
+
+# Development Tools
+python-dotenv==1.0.1
+debugpy==1.8.13

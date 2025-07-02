@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Running the web server:**
 ```bash
-cd src/api && python -m uvicorn app:app --reload --host 0.0.0.0 --port 8000
+cd backend && python -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Installing dependencies:**
 ```bash
-pip install -r requirements.txt
+pip install -r deploy/requirements/requirements.txt
 ```
 
 **Running Jupyter notebooks:**
@@ -23,7 +23,7 @@ jupyter notebook notebooks/
 ```bash
 # Run from notebooks/test_feature_extraction.ipynb
 # OR programmatically:
-from src.mess_ai.features.extractor import extract_features
+from pipeline.mess_ai.features.extractor import extract_features
 extract_features()  # ~2.6 minutes on M3 Pro
 ```
 
@@ -33,12 +33,12 @@ extract_features()  # ~2.6 minutes on M3 Pro
 
 **Key architectural components:**
 
-- **FeatureExtractor** (`src/mess_ai/features/extractor.py`) - Complete MERT-based feature extraction with Apple Silicon MPS support, multi-scale output generation (raw/segments/aggregated)
-- **FAISS Search Engine** (`src/mess_ai/search/`) - High-performance similarity search using FAISS IndexFlatIP with sub-millisecond queries, index caching, and 50-100x speed improvement over brute force
-- **MusicRecommender** (`src/mess_ai/models/recommender.py`) - Production similarity search interface powered by FAISS, maintains API compatibility while delivering lightning-fast performance
-- **FastAPI Server** (`src/api/app.py`) - Web API with endpoints for audio serving (`/audio/{track}`), waveform generation (`/waveform/{track}`), and FAISS-powered recommendations (`/recommend/{track}`, `/tracks`)
-- **MusicLibrary** (`src/mess_ai/audio/player.py`) - Core audio file management with soundfile integration and matplotlib waveform visualization
-- **Web Interface** (`src/api/templates/index.html`) - Bootstrap 5-based responsive music player with background waveform loading, clickable similarity search, and user-controlled recommendation discovery
+- **FeatureExtractor** (`pipeline/mess_ai/features/extractor.py`) - Complete MERT-based feature extraction with Apple Silicon MPS support, multi-scale output generation (raw/segments/aggregated)
+- **FAISS Search Engine** (`pipeline/mess_ai/search/`) - High-performance similarity search using FAISS IndexFlatIP with sub-millisecond queries, index caching, and 50-100x speed improvement over brute force
+- **MusicRecommender** (`pipeline/mess_ai/models/recommender.py`) - Production similarity search interface powered by FAISS, maintains API compatibility while delivering lightning-fast performance
+- **FastAPI Server** (`backend/api/main.py`) - Web API with endpoints for audio serving (`/audio/{track}`), waveform generation (`/waveform/{track}`), and FAISS-powered recommendations (`/recommend/{track}`, `/tracks`)
+- **MusicLibrary** (`pipeline/mess_ai/audio/player.py`) - Core audio file management with soundfile integration and matplotlib waveform visualization
+- **Web Interface** (`backend/api/templates/index.html`) - Bootstrap 5-based responsive music player with background waveform loading, clickable similarity search, and user-controlled recommendation discovery
 
 **Data flow:**
 1. SMD audio files (WAV at 44kHz) stored in `/data/smd/wav-44/` → **50 tracks ready**

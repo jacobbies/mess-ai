@@ -1,0 +1,15 @@
+# Production-specific dependencies for backend microservice
+
+# Production WSGI server
+gunicorn==23.0.0
+
+# Structured logging
+structlog==24.4.0
+python-json-logger==2.0.7
+
+# Security
+python-multipart==0.0.17
+cryptography==43.0.3
+
+# Monitoring & Health
+prometheus-client==0.21.0

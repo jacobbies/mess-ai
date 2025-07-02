@@ -1,0 +1,38 @@
+# Backend microservice - only exclude what's not needed for the service
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.coverage
+*.egg-info/
+
+# Environment files (except production template)
+.env*
+!.env.production
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Development and testing
+tests/
+test_*
+*_test.py
+
+# Git
+.git/
+.gitignore

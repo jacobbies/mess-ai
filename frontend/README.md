@@ -1,88 +1,58 @@
-# Getting Started with Create React App
+# mess-ai Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React-based web interface for music similarity search.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Interactive music player
+- Real-time similarity search
+- Waveform visualization
+- Responsive design with Tailwind CSS
 
-### `npm start`
+## Development
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+```bash
+# Install dependencies
+npm install
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+# Start development server
+npm start
 
-### `npm test`
+# Build for production
+npm run build
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## API Integration
 
-### `npm run build`
+Configure the backend API URL:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```javascript
+// In development
+const API_URL = 'http://localhost:8000'
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+// In production
+const API_URL = 'https://your-api-domain.com'
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Deployment
 
-### `npm run eject`
+This frontend is designed to be deployed separately from the backend:
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+- **Development**: Local dev server (`npm start`)
+- **Production**: Static files on S3 + CloudFront CDN
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Architecture
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+The frontend communicates with the backend microservice via REST API endpoints:
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+- `GET /tracks` - List available tracks
+- `GET /recommend/{track_id}` - Get similar tracks
+- `GET /audio/{track_id}` - Stream audio
+- `GET /waveform/{track_id}` - Get waveform data
 
-## Learn More
+## Technology Stack
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-
-Perfect! I've created a complete modern React frontend
-   with:
-
-  ✅ Tech Stack:
-  - React + TypeScript
-  - Tailwind CSS with ShadCN design system
-  - Framer Motion for animations
-  - Lucide React icons
-  - Axios for API calls
-
-  ✅ Features:
-  - Modern SaaS Design: Clean card-based layout with
-  hover transitions
-  - Dark Mode: Toggle with system preference detection
-  - Mobile Responsive: Grid layout that adapts to screen
-   size
-  - Music Player: Audio controls with seek bar and
-  volume
-  - Waveform Visualization: Displays pre-generated
-  waveforms
-  - AI Recommendations: Shows similar tracks with
-  similarity scores
-  - Track Browser: Scrollable list of all available
-  tracks
-
-  ✅ Components:
-  - MusicPlayer - Full-featured audio player
-  - TrackList - Browse and select tracks
-  - RecommendationList - AI-powered similar tracks
-  - Waveform - Visual audio representation
-  - Button & Card - ShadCN UI components
-
-  ✅ Integration:
-  - Connects to your FastAPI backend on port 8000
-  - Uses all existing API endpoints (/tracks,
-  /recommend, /audio, /waveform)
-  - Proxy configured for development
-
-  To run: npm start in the frontend directory and ensure
-   your FastAPI server is running on port 8000.
+- React 18
+- TypeScript
+- Tailwind CSS
+- Modern async/await patterns

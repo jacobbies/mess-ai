@@ -55,16 +55,14 @@ tmp/
 temp/
 
 # Data directories (large datasets)
-data/maestro/
-data/smd/wav-44/
-data/processed/features/
-data/processed/waveforms/
-data/processed/cache/
-data/models/
-
-# Keep structure files
+data/
 !data/.gitkeep
+!data/README.md
+
+# Keep only documentation and structure files
+!data/processed/
 !data/processed/.gitkeep
+!data/processed/metadata/
 !data/processed/metadata/.gitkeep
 
 # Node modules (frontend)

@@ -92,9 +92,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware for frontend integration
+# Include "null" origin for file:// URLs (local HTML files)
+allowed_origins = settings.ALLOWED_ORIGINS + ["null"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -156,7 +156,7 @@ class UnifiedMusicRecommender:
         if not self._base_recommender:
             raise RuntimeError("Base recommender not initialized")
         
-        return self._base_recommender.recommend(track_id, n_recommendations)
+        return self._base_recommender.find_similar_tracks(track_id, n_recommendations)
     
     def _diverse_recommendations(
         self, 

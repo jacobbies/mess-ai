@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY deploy/requirements/requirements.txt deploy/requirements/requirements-production.txt ./
+COPY requirements.txt deploy/requirements/requirements-production.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt -r requirements-production.txt \
     && rm -rf ~/.cache/pip

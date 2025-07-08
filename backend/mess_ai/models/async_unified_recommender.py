@@ -305,15 +305,25 @@ class AsyncUnifiedMusicRecommender:
         loop = asyncio.get_event_loop()
         
         # Run sync recommendation in thread pool
-        sync_results = await loop.run_in_executor(
-            self._executor,
-            self._sync_recommender.recommend,
-            request.track_id,
-            request.n_recommendations * 2,  # Get extra for filtering
-            strategy,
-            mode,
-            **kwargs
-        )
+        if hasattr(self._sync_recommender, 'recommend'):
+            sync_results = await loop.run_in_executor(
+                self._executor,
+                self._sync_recommender.recommend,
+                request.track_id,
+                request.n_recommendations * 2,  # Get extra for filtering
+                strategy,
+                mode,
+                **kwargs
+            )
+        else:
+            # Fallback to find_similar_tracks for base recommender
+            sync_results = await loop.run_in_executor(
+                self._executor,
+                self._sync_recommender.find_similar_tracks,
+                request.track_id,
+                request.n_recommendations * 2,  # Get extra for filtering
+                True  # exclude_self
+            )
         
         # Convert to RecommendationResult objects
         results = []

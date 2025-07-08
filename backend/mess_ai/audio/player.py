@@ -22,12 +22,8 @@ class MusicLibrary:
         """
         # Import settings here to avoid circular imports
         if settings is None:
-            try:
-                from core.config import settings as default_settings
-                settings = default_settings
-            except ImportError:
-                logger.warning("Could not import settings, using defaults")
-                settings = None
+            from ...core.config import settings as default_settings
+            settings = default_settings
         
         self.settings = settings
         

@@ -13,7 +13,7 @@ services:
       - DATA_ROOT_DIR=/data
     volumes:
       - ../../backend:/app/backend
-      - backend_data:/data
+      - ../../data:/data
     ports:
       - "8000:8000"
     healthcheck:
@@ -22,5 +22,4 @@ services:
       timeout: 10s
       retries: 3
 
-volumes:
-  backend_data:
+# No volumes needed - using bind mounts

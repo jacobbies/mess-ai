@@ -5,8 +5,8 @@ Handles all recommendation-related business logic with async support.
 from typing import Dict, List, Optional, Any
 import logging
 
-from ...mess_ai.models.metadata import TrackMetadata
-from ...mess_ai.models.async_unified_recommender import (
+from mess_ai.models.metadata import TrackMetadata
+from mess_ai.models.async_unified_recommender import (
     AsyncUnifiedMusicRecommender, 
     RecommendationResult,
     RecommendationRequest

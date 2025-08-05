@@ -4,9 +4,9 @@ Metadata and system information API routes.
 from fastapi import APIRouter
 import logging
 
-from ...core.config import settings
-from ...core.dependencies import MetadataServiceDep
-from ...core.services.metadata_service import MetadataService
+from core.config import settings
+from core.dependencies import MetadataServiceDep
+from core.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["metadata"])

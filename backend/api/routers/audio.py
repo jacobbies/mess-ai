@@ -5,9 +5,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 import logging
 
-from ...core.config import settings
-from ...core.dependencies import AudioServiceDep
-from ...core.services.audio_service import AudioService
+from core.config import settings
+from core.dependencies import AudioServiceDep
+from core.services.audio_service import AudioService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["media"])

@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 import logging
 
-from ...core.dependencies import RecommendationServiceDep
-from ...core.services.async_recommendation_service import AsyncRecommendationService
+from core.dependencies import RecommendationServiceDep
+from core.services.async_recommendation_service import AsyncRecommendationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recommend", tags=["recommendations"])

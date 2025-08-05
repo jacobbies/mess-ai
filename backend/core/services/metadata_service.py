@@ -5,7 +5,7 @@ Handles all metadata-related business logic.
 from typing import Dict, List, Optional
 import logging
 
-from ...mess_ai.models.metadata import TrackMetadata
+from mess_ai.models.metadata import TrackMetadata
 
 logger = logging.getLogger(__name__)
 

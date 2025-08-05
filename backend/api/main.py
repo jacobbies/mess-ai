@@ -9,11 +9,11 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 
-from ..core import settings
-from ..core.dependencies import initialize_services
-from ..mess_ai.audio import MusicLibrary
-from ..mess_ai.models import AsyncUnifiedMusicRecommender, TrackMetadata
-from ..mess_ai.datasets import DatasetFactory
+from core import settings
+from core.dependencies import initialize_services
+from mess_ai.audio import MusicLibrary
+from mess_ai.models import AsyncUnifiedMusicRecommender, TrackMetadata
+from mess_ai.datasets import DatasetFactory
 
 # Import routers
 from .routers import tracks_router, recommendations_router, audio_router, metadata_router, health_router
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
         logger.info("Async unified music recommender initialized successfully")
         
         # Log available strategies
-        strategies = recommender._sync_recommender.get_available_strategies()
+        strategies = ["similarity", "diverse", "popular", "random", "hybrid"]
         logger.info(f"Available recommendation strategies: {strategies}")
     except Exception as e:
         logger.error(f"Failed to initialize async unified recommender: {e}")

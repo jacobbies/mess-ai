@@ -11,7 +11,7 @@ from .services.async_recommendation_service import AsyncRecommendationService
 from .services.audio_service import AudioService
 from .services.health_service import HealthService
 from .config import settings
-from ..mess_ai.models.metadata import TrackMetadata
+from mess_ai.models.metadata import TrackMetadata
 
 logger = logging.getLogger(__name__)
 

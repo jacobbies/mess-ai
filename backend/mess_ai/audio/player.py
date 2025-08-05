@@ -22,7 +22,7 @@ class MusicLibrary:
         """
         # Import settings here to avoid circular imports
         if settings is None:
-            from ...core.config import settings as default_settings
+            from core.config import settings as default_settings
             settings = default_settings
         
         self.settings = settings

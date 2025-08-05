@@ -1,0 +1,22 @@
+# Core API Framework
+fastapi==0.115.11
+uvicorn==0.34.1
+pydantic==2.10.6
+
+# Machine Learning & Audio Processing
+torch==2.6.0
+torchaudio==2.6.0
+transformers>=4.38
+numpy==2.1.3
+faiss-cpu
+
+# Audio Processing Libraries
+soundfile==0.13.1
+librosa==0.10.2.post1
+
+# Data Processing
+pandas==2.2.3
+
+# Utilities
+tqdm==4.67.1
+requests==2.32.3

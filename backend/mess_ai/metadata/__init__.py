@@ -1,3 +1,0 @@
-"""
-Metadata processing and parsing
-"""

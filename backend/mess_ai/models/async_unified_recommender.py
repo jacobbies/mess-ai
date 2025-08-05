@@ -16,8 +16,25 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 import random
 
-from .unified_recommender import UnifiedMusicRecommender, RecommendationStrategy, RecommendationMode
 from ..search.similarity import SimilaritySearchEngine
+
+# Enums previously defined in unified_recommender
+class RecommendationStrategy(Enum):
+    """Available recommendation strategies."""
+    SIMILARITY = "similarity"          # Basic cosine similarity
+    DIVERSE = "diverse"               # Diverse recommendations (MMR, cluster-based)
+    POPULAR = "popular"               # Popularity-based
+    RANDOM = "random"                 # Random recommendations
+    HYBRID = "hybrid"                 # Combination of strategies
+
+
+class RecommendationMode(Enum):
+    """Recommendation modes for diverse strategies."""
+    MMR = "mmr"                      # Maximal Marginal Relevance
+    CLUSTER = "cluster"              # Cluster-based diversity
+    NOVELTY = "novelty"              # Novel/less popular items
+    SERENDIPITY = "serendipity"      # Unexpected but relevant
+    CONTRAST = "contrast"            # Deliberately different
 
 
 @dataclass
@@ -177,8 +194,8 @@ class AsyncUnifiedMusicRecommender:
         self.features_dir = Path(features_dir)
         self.logger = logging.getLogger(__name__)
         
-        # Initialize sync recommender
-        self._sync_recommender = UnifiedMusicRecommender(features_dir=features_dir, **kwargs)
+        # Initialize similarity search engine
+        self._similarity_engine = SimilaritySearchEngine(features_dir=features_dir, **kwargs)
         
         # Initialize cache
         self.cache = RecommendationCache(
@@ -304,26 +321,14 @@ class AsyncUnifiedMusicRecommender:
         """Execute recommendation in thread pool."""
         loop = asyncio.get_event_loop()
         
-        # Run sync recommendation in thread pool
-        if hasattr(self._sync_recommender, 'recommend'):
-            sync_results = await loop.run_in_executor(
-                self._executor,
-                self._sync_recommender.recommend,
-                request.track_id,
-                request.n_recommendations * 2,  # Get extra for filtering
-                strategy,
-                mode,
-                **kwargs
-            )
-        else:
-            # Fallback to find_similar_tracks for base recommender
-            sync_results = await loop.run_in_executor(
-                self._executor,
-                self._sync_recommender.find_similar_tracks,
-                request.track_id,
-                request.n_recommendations * 2,  # Get extra for filtering
-                True  # exclude_self
-            )
+        # Run similarity search in thread pool
+        sync_results = await loop.run_in_executor(
+            self._executor,
+            self._similarity_engine.search,
+            request.track_id,
+            request.n_recommendations * 2,  # Get extra for filtering
+            True  # exclude_self
+        )
         
         # Convert to RecommendationResult objects
         results = []
@@ -456,7 +461,7 @@ class AsyncUnifiedMusicRecommender:
         metrics = {
             "total_requests": self._request_count,
             "avg_computation_time_ms": avg_computation_time,
-            "available_strategies": self._sync_recommender.get_available_strategies(),
+            "available_strategies": ["similarity", "diverse", "popular", "random", "hybrid"],
             "popularity_tracked_tracks": len(self._popularity_scores),
             "total_interactions": sum(self._interaction_counts.values())
         }

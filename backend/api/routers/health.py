@@ -5,8 +5,8 @@ Provides health, readiness, and liveness endpoints for monitoring.
 from fastapi import APIRouter, HTTPException
 import logging
 
-from ...core.dependencies import HealthServiceDep
-from ...core.services.health_service import HealthService
+from core.dependencies import HealthServiceDep
+from core.services.health_service import HealthService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])

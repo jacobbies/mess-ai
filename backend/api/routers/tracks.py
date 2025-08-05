@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 import logging
 
-from ...core.dependencies import MetadataServiceDep
-from ...core.services.metadata_service import MetadataService
+from core.dependencies import MetadataServiceDep
+from core.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tracks", tags=["tracks"])

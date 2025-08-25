@@ -2,7 +2,6 @@
 Application configuration settings.
 """
 import os
-import torch
 from pathlib import Path
 from typing import Optional
 from functools import lru_cache
@@ -37,7 +36,6 @@ class Settings:
     DB_PASSWORD: str = os.getenv('DB_PASSWORD') or 'password'
     
     # External URLs (for production S3/CDN)
-    WAVEFORM_BASE_URL: Optional[str] = os.getenv('WAVEFORM_BASE_URL')
     AUDIO_BASE_URL: Optional[str] = os.getenv('AUDIO_BASE_URL')
     
     # Storage Configuration (flexible for different deployment strategies)
@@ -80,13 +78,6 @@ class Settings:
             return Path(features_path)
         return self.data_dir / "processed" / "features"
     
-    @property
-    def waveforms_dir(self) -> Path:
-        """Get the waveforms directory."""
-        waveforms_path = os.getenv('WAVEFORMS_DIR', '')
-        if waveforms_path:
-            return Path(waveforms_path)
-        return self.data_dir / "processed" / "waveforms"
     
     @property
     def metadata_dir(self) -> Path:
@@ -119,39 +110,6 @@ class Settings:
     MAX_MEMORY_GB: int = int(os.getenv('MAX_MEMORY_GB') or '8')
     CACHE_SIZE_MB: int = int(os.getenv('CACHE_SIZE_MB') or '1024')
     
-    # Pipeline Configuration
-    MERT_MODEL_NAME: str = os.getenv('MERT_MODEL_NAME', 'm-a-p/MERT-v1-95M')
-    MERT_CACHE_DIR: Optional[str] = os.getenv('MERT_CACHE_DIR')
-    MERT_TARGET_SAMPLE_RATE: int = int(os.getenv('MERT_SAMPLE_RATE', '24000'))
-    MERT_SEGMENT_DURATION: float = float(os.getenv('MERT_SEGMENT_DURATION', '5.0'))
-    MERT_OVERLAP_RATIO: float = float(os.getenv('MERT_OVERLAP_RATIO', '0.5'))
-    MERT_BATCH_SIZE: int = int(os.getenv('MERT_BATCH_SIZE', '8'))
-    MERT_MAX_WORKERS: int = int(os.getenv('MERT_MAX_WORKERS', '4'))
-    MERT_MEMORY_EFFICIENT: bool = os.getenv('MERT_MEMORY_EFFICIENT', 'false').lower() == 'true'
-    MERT_CHECKPOINT_INTERVAL: int = int(os.getenv('MERT_CHECKPOINT_INTERVAL', '10'))
-    MERT_VERBOSE: bool = os.getenv('MERT_VERBOSE', 'true').lower() == 'true'
-    
-    @property
-    def mert_device(self) -> str:
-        """Get optimal device for MERT processing with environment override."""
-        env_device = os.getenv('MERT_DEVICE')
-        if env_device:
-            return env_device
-        
-        # Auto-detect best available device
-        if torch.backends.mps.is_available():
-            return 'mps'
-        elif torch.cuda.is_available():
-            return 'cuda'
-        else:
-            return 'cpu'
-    
-    @property
-    def mert_cache_dir(self) -> Optional[Path]:
-        """Get the MERT model cache directory."""
-        if self.MERT_CACHE_DIR:
-            return Path(self.MERT_CACHE_DIR)
-        return None
     
     @property
     def is_production(self) -> bool:

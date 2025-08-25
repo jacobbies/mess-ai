@@ -11,12 +11,11 @@ from typing import Dict
 
 from core import settings
 from core.dependencies import initialize_services
-from mess_ai.audio import MusicLibrary
-from mess_ai.models import AsyncUnifiedMusicRecommender, TrackMetadata
-from mess_ai.datasets import DatasetFactory
+from models.responses import TrackMetadata
+from services.pipeline_client import get_pipeline_client
 
 # Import routers
-from .routers import tracks_router, recommendations_router, audio_router, metadata_router, health_router
+from .routers import tracks_router, recommendations_router, audio_router, metadata_router, health_router, query_router
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL))
@@ -37,39 +36,30 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Music Similarity API...")
     
-    # Initialize dataset
-    try:
-        dataset = DatasetFactory.create_dataset(settings.DATASET_TYPE, settings.data_dir)
-        metadata_dict = dataset.load_metadata()
-        logger.info(f"Loaded {dataset.name} with {len(metadata_dict)} tracks")
-    except Exception as e:
-        logger.error(f"Failed to load dataset: {e}")
-        metadata_dict = {}
-        dataset = None
+    # Initialize metadata (simplified - will be loaded from pipeline later)
+    # For now, just initialize empty
+    metadata_dict = {}
+    logger.info("Backend API starting - metadata will be loaded from pipeline service")
     
-    # Initialize audio library
-    try:
-        wav_dir = dataset.get_wav_dir() if dataset else settings.wav_dir
-        library = MusicLibrary(wav_dir=str(wav_dir))
-        logger.info("Audio library initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize audio library: {e}")
+    # Audio service will be initialized via dependency injection
+    library = None
     
-    # Initialize async unified recommender
-    try:
-        features_dir = dataset.get_features_dir() if dataset else settings.features_dir
-        recommender = AsyncUnifiedMusicRecommender(
-            features_dir=str(features_dir),
-            enable_cache=True
-        )
-        logger.info("Async unified music recommender initialized successfully")
-        
-        # Log available strategies
-        strategies = ["similarity", "diverse", "popular", "random", "hybrid"]
-        logger.info(f"Available recommendation strategies: {strategies}")
-    except Exception as e:
-        logger.error(f"Failed to initialize async unified recommender: {e}")
-        recommender = None
+    # Initialize async unified recommender - TODO: Move to pipeline service
+    # try:
+    #     features_dir = dataset.get_features_dir() if dataset else settings.features_dir
+    #     recommender = AsyncUnifiedMusicRecommender(
+    #         features_dir=str(features_dir),
+    #         enable_cache=True
+    #     )
+    #     logger.info("Async unified music recommender initialized successfully")
+    #     
+    #     # Log available strategies
+    #     strategies = ["similarity", "diverse", "popular", "random", "hybrid"]
+    #     logger.info(f"Available recommendation strategies: {strategies}")
+    # except Exception as e:
+    #     logger.error(f"Failed to initialize async unified recommender: {e}")
+    #     recommender = None
+    recommender = None  # Temporarily disabled - will use pipeline service
     
     # Initialize services with dependency injection
     initialize_services(metadata_dict, library, recommender)
@@ -108,11 +98,12 @@ app.include_router(metadata_router)  # Metadata endpoints
 app.include_router(tracks_router)
 app.include_router(recommendations_router)
 app.include_router(audio_router)
+app.include_router(query_router)  # Natural language query endpoints
 
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(
-        "backend.api.main:app", 
+        "api.main:app", 
         host=settings.HOST, 
         port=settings.PORT, 
         reload=True

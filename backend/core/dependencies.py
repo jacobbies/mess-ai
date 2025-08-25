@@ -8,10 +8,10 @@ import logging
 
 from .services.metadata_service import MetadataService
 from .services.async_recommendation_service import AsyncRecommendationService
-from .services.audio_service import AudioService
+from services.audio_service import AudioService
 from .services.health_service import HealthService
 from .config import settings
-from mess_ai.models.metadata import TrackMetadata
+from models.responses import TrackMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def initialize_services(
     # Initialize services
     _metadata_service = MetadataService(metadata_dict)
     _recommendation_service = AsyncRecommendationService(recommender, metadata_dict)
-    _audio_service = AudioService(library, settings.wav_dir, settings.waveforms_dir)
+    _audio_service = AudioService(settings.wav_dir)
     
     # Initialize health service with references to other services for health checks
     _health_service = HealthService(

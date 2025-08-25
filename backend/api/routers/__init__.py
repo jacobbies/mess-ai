@@ -4,11 +4,13 @@ from .recommendations import router as recommendations_router
 from .audio import router as audio_router
 from .metadata import router as metadata_router
 from .health import router as health_router
+from .query import router as query_router
 
 __all__ = [
     "tracks_router",
     "recommendations_router", 
     "audio_router",
     "metadata_router",
-    "health_router"
+    "health_router",
+    "query_router"
 ]

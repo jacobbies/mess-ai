@@ -5,12 +5,13 @@ Handles all recommendation-related business logic with async support.
 from typing import Dict, List, Optional, Any
 import logging
 
-from mess_ai.models.metadata import TrackMetadata
-from mess_ai.models.async_unified_recommender import (
-    AsyncUnifiedMusicRecommender, 
-    RecommendationResult,
-    RecommendationRequest
-)
+from models.responses import TrackMetadata
+# TODO: Import from pipeline service via REST API
+# These will be replaced with REST API calls to pipeline service
+from typing import Any
+# Temporary type aliases until pipeline service is connected
+RecommendationResult = Dict[str, Any]
+RecommendationRequest = Dict[str, Any]
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 class AsyncRecommendationService:
     """Async service for music recommendation and similarity search."""
     
-    def __init__(self, recommender: AsyncUnifiedMusicRecommender, metadata_dict: Dict[str, TrackMetadata]):
+    def __init__(self, recommender: Optional[Any], metadata_dict: Dict[str, TrackMetadata]):
         """Initialize with async recommender engine and metadata."""
         self.recommender = recommender
         self.metadata_dict = metadata_dict

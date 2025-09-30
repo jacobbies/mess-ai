@@ -18,7 +18,7 @@ class MusicalAspectTargets:
     def __init__(self, sample_rate: int = 24000):
         self.sample_rate = sample_rate
     
-    def generate_all_targets(self, audio_path: str) -> Dict[str, np.ndarray]:
+    def generate_all_targets(self, audio_path: str) -> Dict[str, Dict[str, np.ndarray]]:
         """Generate all proxy targets for a given audio file."""
         # Load audio
         audio, sr = torchaudio.load(audio_path)
@@ -294,9 +294,12 @@ def create_target_dataset(audio_dir: str, output_dir: str):
         try:
             targets = target_generator.generate_all_targets(str(audio_file))
             
-            # Save targets
+            # Save targets (flatten nested dict structure)
             target_file = output_dir / f"{audio_file.stem}_targets.npz"
-            np.savez_compressed(target_file, **targets)
+            flattened = {}
+            for category, category_data in targets.items():
+                flattened[category] = category_data
+            np.savez_compressed(target_file, **flattened)
             
             print(f"Saved targets to {target_file}")
             

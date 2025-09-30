@@ -42,7 +42,6 @@ mess-ai/
 **Independent Scaling**: ML service runs on GPU instances, web service on CPU
 **Clean Separation**: Different update cycles, dependencies, and responsibilities  
 **Service Communication**: Simple HTTP API between services
-**Development Focus**: ML engineers work on pipeline, web engineers on backend/frontend
 
 ## Usage
 
@@ -57,4 +56,4 @@ cd backend && python -m api.main
 cd frontend && npm start
 ```
 
-The pipeline service loads the empirically validated MERT layer mappings and provides intelligent music similarity search through both direct recommendations and natural language queries.
+The pipeline service loads the empirically validated MERT layer mappings and provides music similarity search through both direct recommendations and natural language queries.

@@ -1,192 +1,270 @@
-# CLAUDE.md - Global Project Instructions
+# CLAUDE.md - ML Development Environment
 
-This file provides system-wide guidance for the MESS-AI project. For service-specific instructions, see the corresponding local CLAUDE.md files.
+## Project Overview
 
-## Cross-Service Documentation
-- **Backend**: See `backend/CLAUDE.local.md` for FastAPI, database, and API implementation
-- **Frontend**: See `frontend/CLAUDE.local.md` for React, TypeScript, and UI patterns
-- **Pipeline**: See `pipeline/CLAUDE.local.md` for ML processing, MERT features, and analysis
-- **Deployment**: See `deploy/CLAUDE.local.md` for Docker, CI/CD, and production deployment
-- **Scripts**: See `scripts/CLAUDE.local.md` for automation, testing, and data processing
+**MESS-AI** is a local ML development environment for music similarity research using MERT (Music Understanding Model with Large-Scale Self-Supervised Training) embeddings.
+
+### Purpose
+This repo is optimized for **local ML experimentation** on Apple Silicon (M3 Pro), NOT for production deployment. Production API lives on EC2.
+
+### Core Focus
+- Feature extraction from audio using MERT
+- Layer discovery and validation (finding which layers encode which musical aspects)
+- Similarity search algorithm development
+- Dataset preprocessing and analysis
+- Research experimentation via Jupyter notebooks
+
+## Project Structure
+
+```
+mess-ai/
+├── pipeline/              # Core ML library
+│   ├── extraction/       # MERT feature extraction
+│   ├── probing/          # Layer discovery & validation
+│   ├── query/            # Recommendation engine
+│   ├── search/           # FAISS similarity search
+│   ├── datasets/         # Dataset loaders (SMD, MAESTRO)
+│   ├── metadata/         # Metadata processing
+│   └── marble/           # External multi-task learning framework
+├── scripts/              # CLI workflow automation
+│   ├── extract_features.py
+│   ├── demo_recommendations.py
+│   ├── run_probing.py
+│   └── evaluate_similarity.py
+├── notebooks/            # Jupyter experimentation
+├── data/                 # Audio files & extracted features
+│   ├── smd/             # Saarland Music Dataset
+│   ├── maestro/         # MAESTRO Dataset
+│   └── processed/       # Pre-extracted MERT embeddings (~94GB)
+└── docs/                # Research documentation
+```
+
+## Key Scientific Discoveries
+
+Through systematic layer discovery experiments, we've validated:
+
+- **Layer 0**: Spectral brightness (R² = 0.944)
+- **Layer 1**: Timbral texture (R² = 0.922)
+- **Layer 2**: Acoustic structure (R² = 0.933)
+
+These specializations replace naive feature averaging and enable evidence-based similarity search.
 
 ## Development Workflow
 
-### Quick Start
+### 1. Feature Extraction
 ```bash
-# Start full development environment
-./scripts/dev.sh
+# Extract MERT embeddings from audio
+python scripts/extract_features.py --dataset smd
 
-# Or start services individually:
-# Backend: docker-compose -f deploy/docker-compose.yml up
-# Frontend: cd frontend && npm start
+# Output: data/processed/features/aggregated/*.npy
+# Format: [13 layers, 768 dims] per track
 ```
 
-### Project Structure
-```
-mess-ai/
-├── backend/           # FastAPI server, API endpoints, database
-├── frontend/          # React application, UI components
-├── pipeline/          # ML processing, MERT features, analysis
-├── deploy/            # Docker configuration, CI/CD
-├── scripts/           # Automation, testing, data processing
-├── data/              # Audio files, features, metadata
-└── docs/              # Documentation and examples
+### 2. Layer Discovery
+```bash
+# Run probing experiments to validate layer specializations
+python scripts/run_probing.py
+
+# Output: pipeline/probing/layer_discovery_results.json
+# Contains R² scores for layer/proxy target pairs
 ```
 
-## System Architecture
+### 3. Similarity Search
+```bash
+# Test recommendations using validated layers
+python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 
-**MESS-AI** is a production-ready music similarity search system that uses MERT embeddings to find musically similar classical pieces across multiple datasets.
-
-### Core Data Flow
-```
-Audio Files → MERT Feature Extraction → FAISS Similarity Search → Web API → React UI
-```
-
-1. **Audio Processing**: WAV files at 44kHz processed through MERT-v1-95M transformer
-2. **Feature Storage**: Multi-scale embeddings cached as .npy files (94GB total)
-3. **Similarity Search**: FAISS IndexFlatIP provides sub-millisecond queries
-4. **API Layer**: FastAPI serves audio, metadata, and recommendations
-5. **User Interface**: React frontend with real-time similarity search
-
-### Service Communication
-- **Frontend ↔ Backend**: REST API with JSON responses
-- **Backend ↔ Data**: File-based storage with FAISS indices
-- **Development**: Docker networking between services
-- **Production**: Load balancer with multiple backend instances
-
-## Cross-Service Data Models
-
-### TrackMetadata Interface
-```typescript
-interface TrackMetadata {
-  track_id: string;
-  title: string;
-  composer: string;
-  composer_full: string;
-  era?: string;
-  form?: string;
-  key_signature?: string;
-  opus?: string;
-  movement?: string;
-  filename: string;
-  tags: string[];
-  recording_date?: string;
-}
+# Uses LayerBasedRecommender with empirically validated mappings
 ```
 
-### API Response Formats
-```typescript
-interface RecommendationResponse {
-  reference_track: string;
-  recommendations: Recommendation[];
-  total_tracks: number;
-  reference_metadata?: TrackMetadata;
-}
+### 4. Experimentation
+```bash
+# Launch Jupyter for exploration
+jupyter notebook notebooks/
 
-interface TracksResponse {
-  tracks: TrackMetadata[];
-  count: number;
-  filters?: FilterOptions;
-}
+# Suggested notebooks:
+# - layer_discovery_analysis.ipynb
+# - similarity_benchmarks.ipynb
+# - feature_visualization.ipynb
 ```
 
-## Shared Development Standards
+## Core Components
 
-### Code Quality
-- **Python**: Black formatting, type hints, pytest testing
-- **TypeScript**: Strict mode, ESLint, React Testing Library
-- **Docker**: Multi-stage builds, non-root users, health checks
-- **Git**: Conventional commits, feature branches, PR reviews
+### Pipeline Library
 
-### Environment Management
-- **Development**: Hot reload, debug logging, test data
-- **Staging**: Production-like, integration testing
-- **Production**: Optimized builds, monitoring, scaling
+The `pipeline/` directory is a Python library (not a service) with these modules:
 
-### Testing Strategy
-- **Unit Tests**: Component/function level testing
-- **Integration Tests**: Cross-service communication
-- **End-to-End Tests**: Full user workflows
-- **Performance Tests**: ML pipeline benchmarks
+**extraction/**
+- `extractor.py`: MERT feature extraction from audio
+- `config.py`: Extraction configuration (sample rate, segment duration, etc.)
 
-## Technical Stack
+**probing/**
+- `layer_discovery.py`: Systematic discovery of layer specializations
+- `proxy_targets.py`: Musical aspect proxy targets for validation
+- `layer_discovery_results.json`: Empirical validation results
 
-- **Backend:** Python 3.11+, FastAPI, PyTorch 2.6+, transformers 4.38+, FAISS
-- **Frontend:** React 19, TypeScript, TailwindCSS, Framer Motion
-- **Audio:** soundfile, librosa, torchaudio with Apple Silicon acceleration
-- **ML:** MERT-v1-95M transformer, Wav2Vec2FeatureExtractor, FAISS IndexFlatIP
-- **Storage:** NumPy .npy files, FAISS indices with disk caching
-- **Deployment:** Docker, Docker Compose, multi-stage builds
+**query/**
+- `layer_based_recommender.py`: Recommendation engine using validated layers
+- `intelligent_query_engine.py`: Natural language query processing
 
-## Development Status
+**search/**
+- `faiss_index.py`: FAISS index wrapper for similarity search
+- `similarity.py`: Similarity computation (cosine, euclidean, etc.)
+- `diverse_similarity.py`: Diverse recommendation algorithms
+- `cache.py`: Feature caching utilities
 
-**✅ Completed (Production Ready):**
-- **MERT Feature Extraction Pipeline** - Complete with MPS acceleration, 2.6min processing time
-- **FAISS Similarity Search System** - High-performance IndexFlatIP with sub-millisecond queries, 50-100x speedup
-- **React Frontend** - Interactive player with AI recommendations and waveform visualization
-- **API Endpoints** - `/recommend/{track}`, `/tracks`, `/audio/{track}`, `/waveform/{track}` powered by FAISS
-- **Docker Development Environment** - Full-stack containerization with hot reload
-- **Apple Silicon Optimization** - MPS acceleration with CPU fallback, optimized FAISS performance
-- **Smart Caching** - FAISS index persistence, instant startup, user-controlled recommendations
+**datasets/**
+- `base.py`: Base dataset class
+- `smd.py`: Saarland Music Dataset loader
+- `maestro.py`: MAESTRO dataset loader
+- `factory.py`: Dataset factory pattern
 
-**🚧 In Progress:**
-- Model fine-tuning on SMD dataset for domain-specific similarity
-- Advanced FAISS indices (IVF, HNSW) for even larger datasets
-- CI/CD pipeline integration with GitHub Actions
+**metadata/**
+- `processor.py`: Metadata extraction and processing
+- `maestro_csv_parser.py`: MAESTRO CSV parsing
 
-**📋 Planned:**
-- AWS S3 integration for cloud storage
-- Expanded dataset support beyond classical music
-- User preference learning and personalization
-- Comprehensive testing suite with automated deployment
+**marble/**
+- External multi-task learning framework (1000+ files)
+- Used for reference, may be separated in future refactors
+
+## Data Flow
+
+```
+Audio Files (.wav)
+    ↓
+MERT Feature Extraction (extractor.py)
+    ↓
+Embeddings [13 layers, 768 dims]
+    ↓
+Layer Discovery (probing/)
+    ↓
+Validated Layer Mappings
+    ↓
+Similarity Search (FAISS)
+    ↓
+Recommendations
+```
 
 ## Dataset Structure
 
-The Saarland Music Dataset is organized with processed features:
-
 ```
 data/
-├── smd/                    # Original SMD dataset
+├── smd/                    # Saarland Music Dataset
 │   ├── wav-44/            # 50 audio files at 44kHz (MERT compatible)
 │   ├── csv/               # Performance annotations
 │   └── midi/              # Symbolic representations
+├── maestro/               # MAESTRO Dataset
 ├── processed/features/     # MERT embeddings (94GB total)
-│   ├── raw/               # Full temporal features [segments, 13, time, 768] 
+│   ├── raw/               # Full temporal features [segments, 13, time, 768]
 │   ├── segments/          # Time-averaged [segments, 13, 768]
 │   └── aggregated/        # Track-level [13, 768] - used for similarity search
 └── models/                # Future training checkpoints
 ```
 
-## Cross-Service Integration Points
+## Performance Characteristics
 
-### API Contract Standards
-- **Error Responses**: Consistent HTTP status codes and error message formats
-- **Data Validation**: Pydantic models for request/response validation
-- **Rate Limiting**: Protect ML inference endpoints from overload
-- **Health Checks**: All services must implement `/health` endpoints
+- **Feature Extraction**: ~2.6 minutes for 50-track dataset (M3 Pro)
+- **Similarity Search**: <1ms per query (FAISS IndexFlatIP)
+- **Layer Discovery**: ~10-15 minutes full validation
+- **Dataset Size**: ~94GB processed features (SMD + MAESTRO)
 
-### Performance Requirements
-- **FAISS Queries**: Sub-millisecond response times for similarity search
-- **Feature Extraction**: ~2.6 minutes for full dataset processing on M3 Pro
-- **API Response Times**: <100ms for metadata queries, <500ms for recommendations
-- **Frontend Loading**: <2s initial load, <1s for track switching
+## Tech Stack
 
-### Security Standards
-- **CORS Configuration**: Properly configured origins for frontend access
-- **Input Validation**: All user inputs sanitized and validated
-- **File Access**: Secure audio file serving with proper headers
-- **Error Handling**: No sensitive information in error messages
+- **ML Framework**: PyTorch 2.6+ (MPS acceleration on Apple Silicon)
+- **Transformers**: Hugging Face transformers 4.38+ (MERT model)
+- **Audio**: librosa, soundfile (optimized for M3)
+- **Search**: FAISS (CPU version, sub-millisecond queries)
+- **Scientific**: scikit-learn, numpy, pandas
+- **Development**: Jupyter, matplotlib, seaborn
 
-## Development Best Practices
+## Best Practices
 
-### Git Workflow
-- **Feature Branches**: Create branches for new features
-- **Conventional Commits**: Use semantic commit messages
-- **Pull Requests**: All changes go through PR review process
-- **Testing**: All PRs must pass automated tests
+### Code Organization
+- Keep pipeline/ as a clean Python library (no API/service code)
+- Use scripts/ for CLI automation and batch processing
+- Use notebooks/ for exploration and visualization
+- Document discoveries in docs/
 
-### Documentation Standards
-- **API Documentation**: OpenAPI/Swagger specs for all endpoints
-- **Code Comments**: Document complex algorithms and business logic
-- **README Updates**: Keep service documentation current
-- **CLAUDE.md Files**: Update local instructions as patterns evolve
+### Development Patterns
+- Run experiments in notebooks first
+- Productionize proven code into pipeline/ modules
+- Use scripts/ for repeatable workflows
+- Sync validated features/models to EC2 for production
+
+### Data Management
+- Keep raw audio in data/{dataset}/wav-44/
+- Store processed features in data/processed/features/
+- Never commit large binary files (use .gitignore)
+- Document feature extraction parameters
+
+### Research Workflow
+1. **Explore** in Jupyter notebooks
+2. **Validate** with probing experiments
+3. **Productionize** proven code into pipeline/
+4. **Sync** to EC2/S3 for production use
+
+## Local to Production Sync
+
+This repo handles:
+- Feature extraction (compute-intensive, needs M3 Pro)
+- Layer discovery experiments
+- Algorithm development
+- Dataset preprocessing
+
+Production EC2 handles:
+- REST API serving
+- Web interface
+- Audio streaming
+- Public-facing queries
+
+**Sync artifacts**: Processed features, validated models, research findings
+
+## Common Tasks
+
+### Extract features from new audio
+```bash
+# Add audio to data/{dataset}/wav-44/
+python scripts/extract_features.py --dataset {dataset}
+```
+
+### Validate new layer hypothesis
+```python
+# Add proxy target to pipeline/probing/proxy_targets.py
+# Run discovery
+python scripts/run_probing.py
+```
+
+### Test new similarity metric
+```python
+# Update pipeline/search/similarity.py
+# Benchmark
+python scripts/evaluate_similarity.py
+```
+
+### Experiment with recommendations
+```bash
+# Direct Python usage
+python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
+
+# Or in Jupyter for visualization
+```
+
+## Development Status
+
+**🚧 In Progress:**
+- Model fine-tuning on SMD dataset for domain-specific similarity
+- Advanced FAISS indices (IVF, HNSW) for even larger datasets
+- Expanded proxy target validation
+
+**📋 Planned:**
+- Multi-modal fusion (audio + score + metadata)
+- User preference learning
+- Expanded dataset support beyond classical music
+
+## Notes for Claude
+
+- This is an ML research environment, NOT a production service
+- No backend/API code should exist in this repo
+- Focus on experimentation, validation, and discovery
+- Keep code clean, modular, and well-documented
+- Prioritize scientific rigor over speed-to-market

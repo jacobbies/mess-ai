@@ -1,71 +1,201 @@
-# MESS-AI: Intelligent Music Similarity Search
+# MESS-AI: ML Development for Music Similarity Search
 
-A production-ready music recommendation system using empirically validated MERT layer specializations and natural language queries for classical music discovery.
+Local ML development environment for MERT-based music similarity research using empirically validated layer specializations.
 
 ## What Makes This Different
 
 Unlike systems using arbitrary feature combinations, we **systematically discovered** which MERT layers encode specific musical aspects through rigorous cross-validation:
 
 - **Layer 0**: Spectral brightness (R² = 0.944) - Best for timbral similarity
-- **Layer 1**: Timbral texture (R² = 0.922) - Instrumental characteristics  
+- **Layer 1**: Timbral texture (R² = 0.922) - Instrumental characteristics
 - **Layer 2**: Acoustic structure (R² = 0.933) - Resonance patterns
 
 This replaces simple feature averaging (which causes 90%+ similarity between all tracks) with evidence-based recommendations.
 
 ## Quick Start
 
+### Setup Environment
+
+**Requirements:**
+- Python 3.11.14 (managed via pyenv)
+- UV package manager (faster than pip)
+
 ```bash
-# Start ML Pipeline Service (port 8001)  
-cd pipeline && python api/main.py
+# Install pyenv (if not already installed)
+brew install pyenv
 
-# Start Backend API Service (port 8000)
-cd backend && python -m api.main
+# Install Python 3.11.14
+pyenv install 3.11.14
 
-# Access: http://localhost:8000/docs
+# Install UV (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install dependencies (fast!)
+uv pip install -r requirements.txt
 ```
 
-## Architecture
+### Run ML Workflows
+
+```bash
+# Extract MERT features from audio
+python scripts/extract_features.py --dataset smd
+
+# Get recommendations
+python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect spectral_brightness
+
+# Run layer discovery experiments
+python scripts/run_probing.py
+
+# Benchmark similarity metrics
+python scripts/evaluate_similarity.py
+```
+
+## Project Structure
 
 ```
 mess-ai/
-├── backend/     # Web API service (port 8000)
-├── pipeline/    # ML processing service (port 8001)
-└── data/        # Audio files and MERT features
+├── pipeline/              # Core ML library
+│   ├── extraction/       # MERT feature extraction
+│   ├── probing/          # Layer discovery & validation
+│   ├── query/            # Recommendation engine
+│   ├── search/           # FAISS similarity search
+│   ├── datasets/         # Dataset loaders (SMD, MAESTRO)
+│   └── metadata/         # Metadata processing
+├── scripts/              # Workflow automation
+│   ├── extract_features.py
+│   ├── demo_recommendations.py
+│   ├── run_probing.py
+│   └── evaluate_similarity.py
+├── notebooks/            # Jupyter experimentation
+├── data/                 # Audio files & features
+│   ├── smd/             # Saarland Music Dataset
+│   ├── maestro/         # MAESTRO Dataset
+│   └── processed/       # Extracted MERT embeddings
+└── docs/                # Documentation
 ```
 
-**Services:**
-- **Backend**: REST API, metadata, audio streaming
-- **Pipeline**: MERT processing, layer-based recommendations, natural language queries
+## Usage Examples
 
-## Key Features
+### Feature Extraction
 
-- **Natural Language Queries**: "Find tracks with bright, sparkling timbre"
-- **Evidence-Based Search**: Uses validated layer specializations, not guesswork
-- **Sub-millisecond Search**: FAISS-powered similarity with proper layer mappings
-- **Service Architecture**: Independent scaling for ML vs web workloads
+Extract MERT embeddings from audio files:
 
-## API Examples
+```python
+from pipeline.extraction.extractor import FeatureExtractor
 
-```bash
-# Natural language query
-curl -X POST http://localhost:8000/query/ \
-  -d '{"query": "Find pieces with warm timbral texture"}'
+extractor = FeatureExtractor()
+features = extractor.extract("path/to/audio.wav")
 
-# Direct recommendations
-curl -X POST http://localhost:8001/recommend \
-  -d '{"track_id": "Beethoven_Op027No1-01", "n_recommendations": 5}'
+# features contains:
+# - 'raw': Full temporal [segments, 13, time, 768]
+# - 'segments': Time-averaged [segments, 13, 768]
+# - 'aggregated': Track-level [13, 768]
 ```
+
+### Layer-Based Recommendations
+
+Get recommendations using validated MERT layers:
+
+```python
+from pipeline.query.layer_based_recommender import LayerBasedRecommender
+
+recommender = LayerBasedRecommender()
+
+# Find tracks with similar spectral brightness
+results = recommender.recommend(
+    reference_track="Beethoven_Op027No1-01",
+    aspect="spectral_brightness",
+    n_recommendations=5
+)
+
+for rec in results['recommendations']:
+    print(f"{rec['track_id']}: {rec['similarity']:.4f}")
+```
+
+### Layer Discovery
+
+Discover which MERT layers encode specific musical aspects:
+
+```python
+from pipeline.probing.layer_discovery import LayerDiscovery
+
+discovery = LayerDiscovery()
+results = discovery.run_full_discovery()
+
+# Prints R² scores for each layer/proxy target pair
+# Identifies best layers for each musical aspect
+```
+
+## Datasets
+
+### Saarland Music Dataset (SMD)
+- 50 classical piano pieces at 44kHz
+- Pre-extracted MERT features (~94GB)
+- Used for layer discovery validation
+
+### MAESTRO Dataset
+- Larger dataset for expanded experiments
+- Classical piano performances
 
 ## Tech Stack
 
-- **ML**: PyTorch 2.6+, transformers 4.38+, scikit-learn, FAISS
-- **Backend**: Python 3.11+, FastAPI, httpx
-- **Audio**: librosa, soundfile, Apple Silicon optimization
+- **Python**: 3.11.14 (via pyenv)
+- **Package Manager**: UV (10-100x faster than pip)
+- **ML**: PyTorch 2.6+, transformers 4.38+, scikit-learn
+- **Search**: FAISS (sub-millisecond similarity queries)
+- **Audio**: librosa, soundfile (Apple Silicon optimized)
+- **Development**: Jupyter, matplotlib, seaborn
 
 ## Performance
 
-- **Similarity Search**: <1ms per query
-- **Feature Extraction**: ~2.6 minutes for 50-track dataset (M3 Pro)  
-- **API Response**: <100ms metadata, <500ms recommendations
+- **Similarity Search**: <1ms per query (FAISS IndexFlatIP)
+- **Feature Extraction**: ~2.6 minutes for 50-track dataset (M3 Pro)
+- **Layer Discovery**: ~10-15 minutes full validation
 
-Built with scientific rigor for music discovery and AI-powered recommendations.
+## Workflow: Local to Production
+
+This repo is optimized for **local ML development** on Apple Silicon (M3 Pro). The typical workflow:
+
+1. **Local Development** (this repo)
+   - Experiment with layer discovery
+   - Test new similarity metrics
+   - Extract features from datasets
+   - Run probing experiments
+
+2. **Sync to Production**
+   - Push processed features to EC2/S3
+   - Deploy validated models to production API
+   - Share research findings
+
+## Research Focus
+
+Current areas of exploration:
+
+- **Layer Specialization**: Systematic discovery of MERT layer functions
+- **Proxy Target Validation**: Cross-validation of musical aspect mappings
+- **Similarity Metrics**: Comparing cosine, euclidean, dot product
+- **FAISS Optimization**: Testing IVF, HNSW indices for larger datasets
+- **Model Fine-tuning**: Domain-specific training on SMD dataset
+
+## Contributing
+
+This is a personal research environment. For production API, see the EC2 deployment.
+
+## Citation
+
+If you use the layer discovery methodology or validated MERT layer mappings:
+
+```
+MESS-AI: Empirically Validated MERT Layer Specializations
+Layer 0: Spectral Brightness (R² = 0.944)
+Layer 1: Timbral Texture (R² = 0.922)
+Layer 2: Acoustic Structure (R² = 0.933)
+```
+
+Built with scientific rigor for music similarity research.

@@ -24,7 +24,7 @@ class LayerBasedRecommender:
     
     def __init__(self):
         self.data_dir = Path("/Users/jacobbieschke/mess-ai/data")
-        self.features_dir = self.data_dir / "processed" / "features" / "raw"
+        self.features_dir = self.data_dir / "processed" / "features" / "aggregated"
         
         # Load validated layer mappings
         self.layer_mappings = self._load_validated_layers()
@@ -89,27 +89,27 @@ class LayerBasedRecommender:
     
     def _load_all_features(self):
         """Load MERT features for all tracks."""
-        
+
         feature_files = list(self.features_dir.glob("*.npy"))
-        
+
         for feature_file in feature_files:
             track_name = feature_file.stem
-            
+
             try:
-                # Load raw features: [segments, layers, time, features]
-                raw_features = np.load(feature_file)
-                
-                # Extract layer-specific features (average over segments and time)
+                # Load aggregated features: [layers, features] = [13, 768]
+                aggregated_features = np.load(feature_file)
+
+                # Extract layer-specific features
                 layer_features = {}
                 for layer in range(13):
-                    layer_features[layer] = raw_features[:, layer, :, :].mean(axis=(0, 1))
-                
+                    layer_features[layer] = aggregated_features[layer, :]
+
                 self.track_features[track_name] = layer_features
                 self.track_names.append(track_name)
-                
+
             except Exception as e:
                 logger.warning(f"Error loading features for {track_name}: {e}")
-        
+
         logger.info(f"Successfully loaded features for {len(self.track_names)} tracks")
     
     def recommend_by_aspect(

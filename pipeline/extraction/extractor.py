@@ -275,7 +275,6 @@ class FeatureExtractor:
         logging.info(f"Feature extraction complete. Results saved to {output_dir}")
 
 
-# Convenience function for easy usage
 def extract_features(audio_dir="data/smd/wav-44", output_dir="data/processed/features"):
     """
     Extract MERT features for SMD dataset.

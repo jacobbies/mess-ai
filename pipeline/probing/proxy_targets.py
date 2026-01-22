@@ -1,12 +1,15 @@
 """
 Proxy target generators for musical aspects in classical music.
 These create ground-truth labels for probing MERT's learned representations.
+
+Targets: rhythm, harmony, timbre, articulation, dynamics, phrasing 
+
 """
 
 import numpy as np
 import librosa
 import scipy.signal
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Union
 import torch
 import torchaudio
 from pathlib import Path
@@ -87,13 +90,23 @@ class MusicalAspectTargets:
             n_chroma=12
         )
         
-        # Key estimation
-        try:
-            key = librosa.key.key_to_degrees(
-                librosa.key.estimate_key(chroma)
-            )
-        except:
-            key = np.zeros(12)  # Fallback
+        # Key estimation (template-based matching with major/minor profiles)
+        # Major and minor key profiles (Krumhansl-Schmuckler)
+        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+
+        # Average chroma over time
+        chroma_mean = np.mean(chroma, axis=1)
+
+        # Correlate with all major/minor keys
+        correlations = []
+        for shift in range(12):
+            major_corr = np.corrcoef(chroma_mean, np.roll(major_profile, shift))[0, 1]
+            minor_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, shift))[0, 1]
+            correlations.extend([major_corr, minor_corr])
+
+        # Best matching key profile
+        key = np.array(correlations)
         
         # Harmonic change rate (how fast chroma changes)
         chroma_diff = np.diff(chroma, axis=1)
@@ -277,7 +290,9 @@ class MusicalAspectTargets:
         }
 
 
-def create_target_dataset(audio_dir: str, output_dir: str):
+###
+
+def create_target_dataset(audio_dir: Union[str, Path], output_dir: Union[str, Path]):
     """Create proxy target dataset for all audio files."""
     audio_dir = Path(audio_dir)
     output_dir = Path(output_dir)

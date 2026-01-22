@@ -1,6 +1,8 @@
 """
 MERT Layer Discovery System
 Systematically discover what each MERT layer encodes for music similarity.
+
+Targets of rhythm, harmony, timbre, articulation, dynamics, phrasing 
 """
 
 import sys
@@ -15,7 +17,7 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import cross_val_score, KFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 import logging
 import json
 
@@ -52,41 +54,42 @@ class LayerDiscoverySystem:
             'rhythmic_density': 'onset_density'
         }
     
-    def load_mert_features(self, audio_files: List[str]) -> Dict[int, np.ndarray]:
+    def load_mert_features(self, audio_files: List[str]) -> Tuple[Dict[int, np.ndarray], List[str]]:
         """Load MERT features for all layers."""
-        all_features = {layer: [] for layer in range(13)}
-        successful_files = []
-        
+        all_features: Dict[int, List[Any]] = {layer: [] for layer in range(13)}
+        successful_files: List[str] = []
+
         for audio_file in audio_files:
             audio_name = Path(audio_file).stem
             feature_file = self.features_dir / f"{audio_name}.npy"
-            
+
             if feature_file.exists():
                 raw_features = np.load(feature_file)
-                
+
                 # Extract each layer and average across segments and time
                 for layer in range(13):
                     layer_features = raw_features[:, layer, :, :].mean(axis=(0, 1))
                     all_features[layer].append(layer_features)
-                
+
                 successful_files.append(audio_file)
-        
+
         # Convert to numpy arrays
+        features_dict: Dict[int, np.ndarray] = {}
         for layer in range(13):
-            all_features[layer] = np.array(all_features[layer])
-        
+            features_dict[layer] = np.array(all_features[layer])
+
         logger.info(f"Loaded features for {len(successful_files)} files")
-        return all_features, successful_files
+        return features_dict, successful_files
     
-    def load_targets(self, audio_files: List[str]) -> Dict[str, np.ndarray]:
+    def load_targets(self, audio_files: List[str]) -> Tuple[Dict[str, np.ndarray], List[str]]:
         """Load proxy targets for testing."""
-        targets = {
+        targets: Dict[str, List[Any]] = {
             'spectral_centroid': [],
             'tempo': [],
             'dynamic_range': [],
             'harmonic_complexity': []
         }
-        successful_files = []
+        successful_files: List[str] = []
         
         for audio_file in audio_files:
             audio_name = Path(audio_file).stem
@@ -107,15 +110,16 @@ class LayerDiscoverySystem:
                 targets['harmonic_complexity'].append(harmony_data['harmonic_complexity'][0])
                 
                 successful_files.append(audio_file)
-        
+
         # Convert to numpy arrays
+        targets_dict: Dict[str, np.ndarray] = {}
         for aspect in targets:
-            targets[aspect] = np.array(targets[aspect])
-        
-        return targets, successful_files
+            targets_dict[aspect] = np.array(targets[aspect])
+
+        return targets_dict, successful_files
     
-    def probe_layer_for_aspect(self, layer_features: np.ndarray, target: np.ndarray, 
-                              aspect_name: str, layer_num: int) -> Dict:
+    def probe_layer_for_aspect(self, layer_features: np.ndarray, target: np.ndarray,
+                              aspect_name: str, layer_num: int) -> Dict[str, Any]:
         """Probe a specific layer for a musical aspect."""
         
         if len(layer_features) < 5:
@@ -144,7 +148,7 @@ class LayerDiscoverySystem:
         except Exception as e:
             return {'r2_mean': -999, 'r2_std': 0, 'status': f'error: {e}'}
     
-    def discover_layer_functions(self, n_samples: int = 30) -> Dict:
+    def discover_layer_functions(self, n_samples: int = 30) -> Dict[str, Any]:
         """Systematically discover what each layer encodes."""
         
         # Get audio files
@@ -210,7 +214,7 @@ class LayerDiscoverySystem:
         
         return results
     
-    def update_validated_layers(self, discovery_results: Dict):
+    def update_validated_layers(self, discovery_results: Dict[str, Any]):
         """Update validated layer mappings based on discovery results."""
         
         for aspect, result in discovery_results.items():
@@ -231,7 +235,7 @@ class LayerDiscoverySystem:
                 
                 logger.info(f"✅ Validated Layer {best_layer} for {aspect} (R² = {best_score:.4f})")
     
-    def save_discovery_results(self, results: Dict, output_path: str = None):
+    def save_discovery_results(self, results: Dict[str, Any], output_path: Optional[str] = None):
         """Save discovery results to file."""
         if output_path is None:
             output_path = "/Users/jacobbieschke/mess-ai/pipeline/probing/layer_discovery_results.json"
@@ -257,9 +261,9 @@ class LayerDiscoverySystem:
         
         logger.info(f"Discovery results saved to {output_path}")
     
-    def get_layer_recommendation_config(self) -> Dict:
+    def get_layer_recommendation_config(self) -> Dict[int, Dict[str, Any]]:
         """Get configuration for layer-based recommendations."""
-        config = {}
+        config: Dict[int, Dict[str, Any]] = {}
         
         for layer, info in self.validated_layers.items():
             if info['confidence'] == 'high':

@@ -56,6 +56,48 @@ python scripts/run_probing.py
 python scripts/evaluate_similarity.py
 ```
 
+## Understanding the Concepts
+
+**New to embeddings and audio ML?** This project includes comprehensive documentation designed for experienced programmers who want to understand the domain from first principles.
+
+### Documentation
+
+- **[docs/CONCEPTS.md](docs/CONCEPTS.md)** - Comprehensive guide covering:
+  - What are embeddings and why they work
+  - MERT architecture and how transformers process audio
+  - Layer specialization and linear probing methodology
+  - Similarity metrics (cosine vs euclidean) and when to use each
+  - Multi-aspect recommendations with weighted layer combinations
+  - FAISS fast similarity search
+  - Audio signal processing basics
+  - Common misconceptions and pitfalls
+
+- **[docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick lookup guide:
+  - Embedding shape cheat sheet
+  - Layer-to-aspect mapping table
+  - Similarity metrics decision tree
+  - FAISS index type selection
+  - Common tasks and command examples
+  - Debugging tips and performance benchmarks
+
+### Hands-On Exploration
+
+```bash
+# Inspect what embeddings look like
+python scripts/inspect_embeddings.py
+# Shows: shapes, statistics, layer specializations, cosine similarities
+
+# Try recommendations
+python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+# Uses validated layers for evidence-based similarity search
+```
+
+**Reading order for newcomers:**
+1. Start with [docs/CONCEPTS.md](docs/CONCEPTS.md) (explains embeddings, MERT, and layer discovery)
+2. Run `scripts/inspect_embeddings.py` to see embeddings hands-on
+3. Use [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) for day-to-day lookups
+4. Experiment with `scripts/demo_recommendations.py` to understand layer-based search
+
 ## Project Structure
 
 ```

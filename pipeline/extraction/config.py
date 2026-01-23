@@ -98,8 +98,33 @@ class PipelineConfig:
     
     @property
     def audio_dir(self) -> Path:
-        return self.data_dir / "smd" / "wav-44"
-    
+        return self.data_dir / "audio" / "smd" / "wav-44"
+
+    @property
+    def aggregated_features_dir(self) -> Path:
+        """Aggregated features directory (track-level embeddings)."""
+        return self.data_dir / "embeddings" / "smd-emb" / "aggregated"
+
+    @property
+    def probing_results_file(self) -> Path:
+        """Layer discovery validation results JSON."""
+        return self.project_root / "pipeline" / "probing" / "layer_discovery_results.json"
+
+    @property
+    def proxy_targets_dir(self) -> Path:
+        """Proxy target storage for validation."""
+        return self.data_dir / "proxy_targets"
+
+    @property
+    def smd_audio_dir(self) -> Path:
+        """SMD dataset audio files."""
+        return self.data_dir / "audio" / "smd" / "wav-44"
+
+    @property
+    def smd_embeddings_dir(self) -> Path:
+        """SMD embeddings directory."""
+        return self.data_dir / "embeddings" / "smd-emb"
+
     @property
     def dataset_type(self) -> str:
         return os.getenv('DATASET_TYPE', 'smd')

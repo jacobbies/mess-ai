@@ -1,15 +1,155 @@
 """
-MERT Layer Discovery System
-Systematically discover what each MERT layer encodes for music similarity.
+MERT Layer Discovery System: Finding What Each Layer Encodes
 
-Targets of rhythm, harmony, timbre, articulation, dynamics, phrasing 
+This module systematically discovers which MERT layers encode specific musical aspects
+using LINEAR PROBING, a standard ML interpretability technique.
+
+Core Question:
+-------------
+"What does each of MERT's 13 layers encode?"
+
+Without systematic investigation, we don't know if Layer 0 encodes brightness, rhythm,
+or something else entirely. Layer discovery answers this question through empirical validation.
+
+What is Linear Probing?
+-----------------------
+Linear probing tests what information is encoded in frozen (non-trainable) embeddings
+by training a simple linear model on top of them.
+
+**The Method**:
+1. Extract MERT features (frozen, no fine-tuning)
+2. Generate ground truth musical descriptors (proxy targets)
+3. For each layer: Train Ridge(layer_features) → musical_descriptor
+4. Measure R² score (how well the linear model predicts the target)
+5. High R² = layer strongly encodes that musical aspect
+
+**Why Linear?**:
+- Simple linear models can only leverage information that's ALREADY in the embeddings
+- If R² is high, the information must be explicitly encoded in that layer
+- Non-linear models could "create" patterns that aren't actually in the embeddings
+
+**Example**:
+    Layer 0 features → Ridge Regression → Spectral Centroid
+    Cross-validated R² = 0.944
+
+    Interpretation: Layer 0 explicitly encodes spectral brightness!
+    We can now use Layer 0 for brightness-based similarity search.
+
+Proxy Targets (Ground Truth):
+-----------------------------
+We generate musical descriptors from audio using librosa and music theory:
+
+**Timbral Aspects** (from librosa spectral analysis):
+- spectral_centroid: "Brightness" - weighted mean of frequencies
+- spectral_rolloff: Frequency cutoff containing 85% of energy
+- zero_crossing_rate: Noisiness/texture measure
+
+**Temporal Aspects** (from onset detection):
+- tempo: Beats per minute
+- onset_density: Note attack rate
+- onset_slopes: Attack sharpness
+
+**Harmonic Aspects** (from chroma/harmony analysis):
+- harmonic_complexity: Richness of harmonic content
+- tonal_centroid: Tonal center
+
+**Dynamic Aspects**:
+- dynamic_range: Loudness variation
+
+Why These Targets?
+------------------
+- **Objective**: Computed algorithmically from audio (no human labeling)
+- **Interpretable**: Clear musical meaning ("brightness", "tempo")
+- **Standard**: Used in Music Information Retrieval research
+- **Diverse**: Cover different musical dimensions (timbre, rhythm, harmony)
+
+R² Score Interpretation:
+-----------------------
+R² = coefficient of determination (1.0 = perfect prediction, 0.0 = no better than mean)
+
+| R² Score | Interpretation | Action |
+|----------|---------------|--------|
+| **0.9 - 1.0** | Excellent | **Use this layer confidently** |
+| **0.8 - 0.9** | Good | Use with awareness |
+| 0.7 - 0.8 | Promising | Experimental use |
+| 0.5 - 0.7 | Weak | Avoid for production |
+| <0.5 | None | Do not use |
+
+Our Validated Results:
+---------------------
+From systematic layer discovery on SMD dataset (50 classical piano tracks):
+
+- **Layer 0**: Spectral brightness (R² = 0.944) ← EXCELLENT
+- **Layer 1**: Timbral texture (R² = 0.922) ← EXCELLENT
+- **Layer 2**: Acoustic structure (R² = 0.933) ← EXCELLENT
+- Layer 7: Phrasing (R² = 0.781) ← Promising
+- Layer 4: Temporal patterns (R² = 0.673) ← Weak
+
+These results are saved to: pipeline/probing/layer_discovery_results.json
+
+Impact on Similarity Search:
+---------------------------
+Instead of naively averaging all layers (which loses specialization):
+
+    # ❌ BAD: Average all layers
+    avg_embedding = features.mean(axis=0)
+
+We use validated layers for specific musical aspects:
+
+    # ✅ GOOD: Use validated layer for brightness
+    brightness_layer = features[0]  # R²=0.944 for brightness
+    similarity = cosine(brightness_layer_A, brightness_layer_B)
+
+Result: More accurate similarity for the musical aspect you care about.
+
+Cross-Validation:
+----------------
+We use 5-fold cross-validation to ensure R² scores generalize:
+- Split data into 5 folds
+- Train on 4 folds, test on 1 fold
+- Repeat 5 times (each fold serves as test once)
+- Report mean R² across folds
+
+This prevents overfitting and validates that patterns are real, not noise.
+
+Why Ridge Regression?
+--------------------
+- **Regularization**: L2 penalty prevents overfitting on small datasets
+- **Stability**: Works well with high-dimensional data (768 features)
+- **Standard**: Used in BERT probing, computer vision interpretability
+- **Fast**: Closed-form solution, no iterative training
+
+Alternative: Logistic regression for classification tasks, MLP for complex patterns.
+We use Ridge because our targets are continuous (spectral centroid, tempo, etc.).
+
+Typical Workflow:
+----------------
+1. Extract MERT features: `scripts/extract_features.py`
+2. Generate proxy targets: `pipeline/probing/proxy_targets.py`
+3. Run layer discovery: `python scripts/run_probing.py`
+4. Analyze results: Check layer_discovery_results.json
+5. Use validated layers: `LayerBasedRecommender` with aspect="spectral_brightness"
+
+Usage:
+------
+    from pipeline.probing.layer_discovery import LayerDiscoverySystem
+
+    discovery = LayerDiscoverySystem()
+    results = discovery.discover_layer_functions(n_samples=50)
+
+    # Results show R² for each (layer, proxy target) pair
+    # Identifies which layers encode which musical aspects
+
+See Also:
+---------
+- docs/CONCEPTS.md - Detailed explanation of embeddings and layer discovery
+- pipeline/probing/proxy_targets.py - Ground truth generation
+- pipeline/query/layer_based_recommender.py - Using validated layers for search
 """
 
 import sys
 from pathlib import Path
-
-# Add paths for imports
-sys.path.append('/Users/jacobbieschke/mess-ai/pipeline')
+from pipeline.extraction.config import pipeline_config
 
 import numpy as np
 import torch
@@ -26,12 +166,29 @@ logger = logging.getLogger(__name__)
 
 
 class LayerDiscoverySystem:
-    """Discover what musical aspects each MERT layer encodes."""
+    """
+    Systematically discover what musical aspects each MERT layer encodes using linear probing.
+
+    This class implements the layer discovery pipeline:
+    1. Load MERT features (13 layers × 768 dims) for a dataset of tracks
+    2. Load proxy targets (ground truth musical descriptors from librosa)
+    3. For each (layer, target) pair: Train Ridge regression + cross-validate
+    4. Report R² scores to identify which layers encode which aspects
+    5. Save validated mappings to layer_discovery_results.json
+
+    The goal: Replace arbitrary feature choices with empirically validated layer selections.
+
+    Example:
+        discovery = LayerDiscoverySystem()
+        results = discovery.discover_layer_functions(n_samples=50)
+        # Results: {'spectral_centroid': {0: {'r2_mean': 0.944, ...}, ...}}
+        # Interpretation: Layer 0 strongly encodes spectral brightness!
+    """
     
     def __init__(self):
-        self.data_dir = Path("/Users/jacobbieschke/mess-ai/data")
-        self.features_dir = self.data_dir / "processed" / "features" / "raw"
-        self.targets_dir = self.data_dir / "processed" / "proxy_targets"
+        self.data_dir = pipeline_config.data_dir
+        self.features_dir = pipeline_config.smd_embeddings_dir / "raw"
+        self.targets_dir = pipeline_config.proxy_targets_dir
         
         # Validated layer mappings (from our experiments)
         self.validated_layers = {
@@ -120,7 +277,57 @@ class LayerDiscoverySystem:
     
     def probe_layer_for_aspect(self, layer_features: np.ndarray, target: np.ndarray,
                               aspect_name: str, layer_num: int) -> Dict[str, Any]:
-        """Probe a specific layer for a musical aspect."""
+        """
+        Probe a specific MERT layer to test if it encodes a musical aspect.
+
+        Linear Probing Process:
+        ----------------------
+        1. **Standardize features**: Zero mean, unit variance (sklearn StandardScaler)
+           - Why? Ridge regression is sensitive to feature scales
+           - Ensures fair comparison across layers
+
+        2. **Train Ridge regression**: layer_features → target
+           - Ridge = Linear regression + L2 regularization
+           - Alpha=1.0 (regularization strength, prevents overfitting)
+           - Frozen embeddings (MERT is NOT fine-tuned)
+
+        3. **Cross-validation**: 5-fold CV to measure generalization
+           - Train on 4 folds, test on 1 fold, repeat 5 times
+           - Report mean R² across folds (how well we predict target)
+
+        4. **Interpret R² score**:
+           - R² ≈ 1.0 → Layer explicitly encodes this aspect (EXCELLENT)
+           - R² ≈ 0.8 → Good correlation (GOOD)
+           - R² < 0.5 → Little/no information about this aspect (POOR)
+
+        Why This Works:
+        --------------
+        - **Simple model**: Ridge can only use information ALREADY in embeddings
+        - **High R²**: Means the information is explicitly encoded, not noise
+        - **Cross-validation**: Ensures the pattern generalizes beyond training data
+
+        Example:
+        -------
+            layer_0_features = [50 tracks, 768 dims]
+            spectral_centroid = [50 values]  # Ground truth brightness
+
+            result = probe_layer_for_aspect(layer_0_features, spectral_centroid, ...)
+            # Returns: {'r2_mean': 0.944, 'r2_std': 0.023, 'status': 'success'}
+            # Interpretation: Layer 0 encodes brightness with R²=0.944 (excellent!)
+
+        Args:
+            layer_features: MERT embeddings for ONE layer [n_tracks, 768]
+            target: Ground truth musical descriptor [n_tracks]
+            aspect_name: Name of the musical aspect being tested (e.g., "spectral_centroid")
+            layer_num: Layer number (0-12) for logging
+
+        Returns:
+            dict with:
+              - 'r2_mean': Mean R² across CV folds (primary metric)
+              - 'r2_std': Standard deviation of R² (stability measure)
+              - 'cv_scores': Individual fold scores (for detailed analysis)
+              - 'status': 'success' or error message
+        """
         
         if len(layer_features) < 5:
             return {'r2_mean': -999, 'r2_std': 0, 'status': 'insufficient_data'}
@@ -152,7 +359,7 @@ class LayerDiscoverySystem:
         """Systematically discover what each layer encodes."""
         
         # Get audio files
-        audio_dir = Path("/Users/jacobbieschke/mess-ai/data/smd/wav-44")
+        audio_dir = pipeline_config.smd_audio_dir
         audio_files = sorted([str(f) for f in audio_dir.glob("*.wav")])[:n_samples]
         
         logger.info(f"Running layer discovery with {len(audio_files)} samples")
@@ -238,7 +445,7 @@ class LayerDiscoverySystem:
     def save_discovery_results(self, results: Dict[str, Any], output_path: Optional[str] = None):
         """Save discovery results to file."""
         if output_path is None:
-            output_path = "/Users/jacobbieschke/mess-ai/pipeline/probing/layer_discovery_results.json"
+            output_path = str(pipeline_config.probing_results_file)
         
         output_data = {
             'validated_layers': self.validated_layers,

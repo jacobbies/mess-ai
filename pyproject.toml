@@ -23,6 +23,7 @@ dependencies = [
 
     # Audio Processing
     "soundfile",
+    "librosa",  # Music Information Retrieval features for layer validation
 
     # Similarity Search
     "faiss-cpu",
@@ -41,4 +42,12 @@ dependencies = [
     # Hugging Face
     "huggingface-hub",
     "tokenizers",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter",
+    "matplotlib",
+    "seaborn",
+    "ipywidgets",
 ]

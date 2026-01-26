@@ -26,10 +26,6 @@ Key Concepts:
   - Too long: Excessive memory, diminishing returns
   - 5 seconds: Captures local patterns, manageable memory
 
-**Why Wav2Vec2FeatureExtractor?**: Despite the name, this is just a generic audio preprocessor
-  used by HuggingFace for all audio models. It's not speech-specific - MERT uses it too.
-  The processor handles: loading audio → numpy arrays → normalization → proper tensor format.
-
 **Output Formats**:
   - raw: [segments, 13 layers, time_steps, 768 dims] - Full temporal resolution
   - segments: [segments, 13 layers, 768 dims] - Time-averaged per segment

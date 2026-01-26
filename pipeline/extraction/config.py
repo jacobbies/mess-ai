@@ -1,9 +1,6 @@
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional
-
-# Pipeline has its own config, independent from backend
-import os
-from pathlib import Path as PathType
 
 
 class PipelineConfig:
@@ -96,14 +93,63 @@ class PipelineConfig:
     def output_dir(self) -> Path:
         return self.data_dir / "processed" / "features"
     
+    # Dataset-agnostic path methods
+    def get_audio_dir(self, dataset: str = "smd") -> Path:
+        """
+        Get audio directory for a specific dataset.
+
+        Args:
+            dataset: Dataset name ('smd' or 'maestro')
+
+        Returns:
+            Path to audio directory
+        """
+        if dataset == "smd":
+            return self.data_dir / "audio" / "smd" / "wav-44"
+        elif dataset == "maestro":
+            return self.data_dir / "audio" / "maestro"
+        else:
+            raise ValueError(f"Unknown dataset: {dataset}")
+
+    def get_embeddings_dir(self, dataset: str = "smd") -> Path:
+        """
+        Get embeddings directory for a specific dataset.
+
+        Args:
+            dataset: Dataset name ('smd' or 'maestro')
+
+        Returns:
+            Path to embeddings directory
+        """
+        if dataset == "smd":
+            return self.data_dir / "embeddings" / "smd-emb"
+        elif dataset == "maestro":
+            return self.data_dir / "embeddings" / "maestro-emb"
+        else:
+            raise ValueError(f"Unknown dataset: {dataset}")
+
+    def get_aggregated_features_dir(self, dataset: str = "smd") -> Path:
+        """
+        Get aggregated features directory for a specific dataset.
+
+        Args:
+            dataset: Dataset name ('smd' or 'maestro')
+
+        Returns:
+            Path to aggregated features directory (track-level embeddings)
+        """
+        return self.get_embeddings_dir(dataset) / "aggregated"
+
+    # Legacy properties (default to SMD for backward compatibility)
     @property
     def audio_dir(self) -> Path:
-        return self.data_dir / "audio" / "smd" / "wav-44"
+        """Default audio directory (SMD). Use get_audio_dir() for other datasets."""
+        return self.get_audio_dir("smd")
 
     @property
     def aggregated_features_dir(self) -> Path:
-        """Aggregated features directory (track-level embeddings)."""
-        return self.data_dir / "embeddings" / "smd-emb" / "aggregated"
+        """Default aggregated features directory (SMD). Use get_aggregated_features_dir() for other datasets."""
+        return self.get_aggregated_features_dir("smd")
 
     @property
     def probing_results_file(self) -> Path:
@@ -115,15 +161,17 @@ class PipelineConfig:
         """Proxy target storage for validation."""
         return self.data_dir / "proxy_targets"
 
+    # Deprecated: Use get_audio_dir("smd") instead
     @property
     def smd_audio_dir(self) -> Path:
-        """SMD dataset audio files."""
-        return self.data_dir / "audio" / "smd" / "wav-44"
+        """SMD dataset audio files. DEPRECATED: Use get_audio_dir('smd')."""
+        return self.get_audio_dir("smd")
 
+    # Deprecated: Use get_embeddings_dir("smd") instead
     @property
     def smd_embeddings_dir(self) -> Path:
-        """SMD embeddings directory."""
-        return self.data_dir / "embeddings" / "smd-emb"
+        """SMD embeddings directory. DEPRECATED: Use get_embeddings_dir('smd')."""
+        return self.get_embeddings_dir("smd")
 
     @property
     def dataset_type(self) -> str:

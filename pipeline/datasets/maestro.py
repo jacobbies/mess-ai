@@ -2,22 +2,27 @@
 MAESTRO Dataset implementation
 """
 from pathlib import Path
-from typing import List
 from .base import BaseDataset
 
 
 class MAESTRODataset(BaseDataset):
-    """MAESTRO Dataset - Large-scale classical piano performances."""
+    """
+    MAESTRO Dataset - Large-scale classical piano performances.
 
-    def get_audio_files(self) -> List[Path]:
-        """Get list of MAESTRO audio files."""
-        wav_dir = self.data_dir / "maestro" / "wav"
+    Self-contained dataset with its own directory structure:
+    - Audio: data_root/audio/maestro/
+    - Embeddings: data_root/embeddings/maestro-emb/
+    """
 
-        if not wav_dir.exists():
-            return []
+    @property
+    def audio_dir(self) -> Path:
+        """Directory containing MAESTRO audio files."""
+        return self.data_root / "audio" / "maestro"
 
-        # Return sorted list of .wav files
-        return sorted(wav_dir.glob("*.wav"))
+    @property
+    def embeddings_dir(self) -> Path:
+        """Directory for MAESTRO MERT embeddings."""
+        return self.data_root / "embeddings" / "maestro-emb"
 
     @property
     def name(self) -> str:

@@ -85,71 +85,25 @@ class PipelineConfig:
     # Path Configuration (from backend settings)
     # project_root is already set in __init__
     
+    # Path Configuration
+    @property
+    def data_root(self) -> Path:
+        """
+        Root data directory - single source of truth for data location.
+
+        Datasets use this as their default base directory.
+        """
+        return self.project_root / "data"
+
     @property
     def data_dir(self) -> Path:
-        return self.project_root / "data"
-    
+        """Alias for data_root (backward compatibility)."""
+        return self.data_root
+
     @property
     def output_dir(self) -> Path:
-        return self.data_dir / "processed" / "features"
-    
-    # Dataset-agnostic path methods
-    def get_audio_dir(self, dataset: str = "smd") -> Path:
-        """
-        Get audio directory for a specific dataset.
-
-        Args:
-            dataset: Dataset name ('smd' or 'maestro')
-
-        Returns:
-            Path to audio directory
-        """
-        if dataset == "smd":
-            return self.data_dir / "audio" / "smd" / "wav-44"
-        elif dataset == "maestro":
-            return self.data_dir / "audio" / "maestro"
-        else:
-            raise ValueError(f"Unknown dataset: {dataset}")
-
-    def get_embeddings_dir(self, dataset: str = "smd") -> Path:
-        """
-        Get embeddings directory for a specific dataset.
-
-        Args:
-            dataset: Dataset name ('smd' or 'maestro')
-
-        Returns:
-            Path to embeddings directory
-        """
-        if dataset == "smd":
-            return self.data_dir / "embeddings" / "smd-emb"
-        elif dataset == "maestro":
-            return self.data_dir / "embeddings" / "maestro-emb"
-        else:
-            raise ValueError(f"Unknown dataset: {dataset}")
-
-    def get_aggregated_features_dir(self, dataset: str = "smd") -> Path:
-        """
-        Get aggregated features directory for a specific dataset.
-
-        Args:
-            dataset: Dataset name ('smd' or 'maestro')
-
-        Returns:
-            Path to aggregated features directory (track-level embeddings)
-        """
-        return self.get_embeddings_dir(dataset) / "aggregated"
-
-    # Legacy properties (default to SMD for backward compatibility)
-    @property
-    def audio_dir(self) -> Path:
-        """Default audio directory (SMD). Use get_audio_dir() for other datasets."""
-        return self.get_audio_dir("smd")
-
-    @property
-    def aggregated_features_dir(self) -> Path:
-        """Default aggregated features directory (SMD). Use get_aggregated_features_dir() for other datasets."""
-        return self.get_aggregated_features_dir("smd")
+        """Legacy output directory for processed features."""
+        return self.data_root / "processed" / "features"
 
     @property
     def probing_results_file(self) -> Path:
@@ -159,18 +113,70 @@ class PipelineConfig:
     @property
     def proxy_targets_dir(self) -> Path:
         """Proxy target storage for validation."""
-        return self.data_dir / "proxy_targets"
+        return self.data_root / "proxy_targets"
 
-    # Deprecated: Use get_audio_dir("smd") instead
+    # ============================================================================
+    # DEPRECATED METHODS - Use Dataset classes instead
+    # ============================================================================
+    # These methods are kept for backward compatibility with existing code.
+    # New code should instantiate dataset classes directly:
+    #   from pipeline.datasets.factory import DatasetFactory
+    #   dataset = DatasetFactory.get_dataset("maestro")
+    #   audio_dir = dataset.audio_dir
+    # ============================================================================
+
+    def get_audio_dir(self, dataset: str = "smd") -> Path:
+        """
+        DEPRECATED: Use dataset.audio_dir instead.
+
+        Get audio directory for a specific dataset.
+        """
+        if dataset == "smd":
+            return self.data_root / "audio" / "smd" / "wav-44"
+        elif dataset == "maestro":
+            return self.data_root / "audio" / "maestro"
+        else:
+            raise ValueError(f"Unknown dataset: {dataset}")
+
+    def get_embeddings_dir(self, dataset: str = "smd") -> Path:
+        """
+        DEPRECATED: Use dataset.embeddings_dir instead.
+
+        Get embeddings directory for a specific dataset.
+        """
+        if dataset == "smd":
+            return self.data_root / "embeddings" / "smd-emb"
+        elif dataset == "maestro":
+            return self.data_root / "embeddings" / "maestro-emb"
+        else:
+            raise ValueError(f"Unknown dataset: {dataset}")
+
+    def get_aggregated_features_dir(self, dataset: str = "smd") -> Path:
+        """
+        DEPRECATED: Use dataset.aggregated_dir instead.
+
+        Get aggregated features directory for a specific dataset.
+        """
+        return self.get_embeddings_dir(dataset) / "aggregated"
+
     @property
-    def smd_audio_dir(self) -> Path:
-        """SMD dataset audio files. DEPRECATED: Use get_audio_dir('smd')."""
+    def audio_dir(self) -> Path:
+        """DEPRECATED: Use dataset.audio_dir instead. Defaults to SMD."""
         return self.get_audio_dir("smd")
 
-    # Deprecated: Use get_embeddings_dir("smd") instead
+    @property
+    def aggregated_features_dir(self) -> Path:
+        """DEPRECATED: Use dataset.aggregated_dir instead. Defaults to SMD."""
+        return self.get_aggregated_features_dir("smd")
+
+    @property
+    def smd_audio_dir(self) -> Path:
+        """DEPRECATED: Use SMDDataset().audio_dir instead."""
+        return self.get_audio_dir("smd")
+
     @property
     def smd_embeddings_dir(self) -> Path:
-        """SMD embeddings directory. DEPRECATED: Use get_embeddings_dir('smd')."""
+        """DEPRECATED: Use SMDDataset().embeddings_dir instead."""
         return self.get_embeddings_dir("smd")
 
     @property

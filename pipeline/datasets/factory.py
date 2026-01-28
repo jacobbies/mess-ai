@@ -9,57 +9,62 @@ from .maestro import MAESTRODataset
 
 
 class DatasetFactory:
-    """Factory for creating dataset instances."""
+    """
+    Factory for creating dataset instances.
+
+    Uses hybrid approach: datasets default to config.data_root but can be overridden.
+    """
 
     _datasets: Dict[str, Type[BaseDataset]] = {
         'smd': SMDDataset,
         'maestro': MAESTRODataset,
     }
 
-    # Default data directory (can be overridden)
-    _default_data_dir = Path(__file__).parent.parent.parent / "data"
-
     @classmethod
-    def get_dataset(cls, dataset_type: str, data_dir: Optional[Path] = None) -> BaseDataset:
+    def get_dataset(cls, dataset_type: str, data_root: Optional[Path] = None) -> BaseDataset:
         """
-        Get a dataset instance (convenience method).
+        Get a dataset instance.
 
         Args:
             dataset_type: Type of dataset ('smd', 'maestro', etc.)
-            data_dir: Root data directory (defaults to project data dir)
+            data_root: Root data directory (defaults to config.data_root)
 
         Returns:
             Dataset instance
 
         Raises:
             ValueError: If dataset type is not supported
-        """
-        if data_dir is None:
-            data_dir = cls._default_data_dir
 
-        return cls.create_dataset(dataset_type, data_dir)
+        Examples:
+            # Use default config.data_root
+            dataset = DatasetFactory.get_dataset('smd')
 
-    @classmethod
-    def create_dataset(cls, dataset_type: str, data_dir: Path) -> BaseDataset:
-        """
-        Create a dataset instance.
-
-        Args:
-            dataset_type: Type of dataset ('smd', 'maestro', etc.)
-            data_dir: Root data directory
-
-        Returns:
-            Dataset instance
-
-        Raises:
-            ValueError: If dataset type is not supported
+            # Override with custom path
+            dataset = DatasetFactory.get_dataset('maestro', Path('/custom/data'))
         """
         if dataset_type not in cls._datasets:
             available = ', '.join(cls._datasets.keys())
             raise ValueError(f"Unsupported dataset type '{dataset_type}'. Available: {available}")
 
         dataset_class = cls._datasets[dataset_type]
-        return dataset_class(data_dir)
+        return dataset_class(data_root)
+
+    @classmethod
+    def create_dataset(cls, dataset_type: str, data_root: Optional[Path] = None) -> BaseDataset:
+        """
+        Create a dataset instance (alias for get_dataset).
+
+        Args:
+            dataset_type: Type of dataset ('smd', 'maestro', etc.)
+            data_root: Root data directory (defaults to config.data_root)
+
+        Returns:
+            Dataset instance
+
+        Raises:
+            ValueError: If dataset type is not supported
+        """
+        return cls.get_dataset(dataset_type, data_root)
 
     @classmethod
     def get_available_datasets(cls) -> list[str]:

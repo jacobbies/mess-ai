@@ -2,22 +2,27 @@
 Saarland Music Dataset (SMD) implementation
 """
 from pathlib import Path
-from typing import List
 from .base import BaseDataset
 
 
 class SMDDataset(BaseDataset):
-    """Saarland Music Dataset - 50 classical piano pieces at 44kHz."""
+    """
+    Saarland Music Dataset - 50 classical piano pieces at 44kHz.
 
-    def get_audio_files(self) -> List[Path]:
-        """Get list of SMD audio files."""
-        wav_dir = self.data_dir / "smd" / "wav-44"
+    Self-contained dataset with its own directory structure:
+    - Audio: data_root/audio/smd/wav-44/
+    - Embeddings: data_root/embeddings/smd-emb/
+    """
 
-        if not wav_dir.exists():
-            return []
+    @property
+    def audio_dir(self) -> Path:
+        """Directory containing SMD audio files."""
+        return self.data_root / "audio" / "smd" / "wav-44"
 
-        # Return sorted list of .wav files
-        return sorted(wav_dir.glob("*.wav"))
+    @property
+    def embeddings_dir(self) -> Path:
+        """Directory for SMD MERT embeddings."""
+        return self.data_root / "embeddings" / "smd-emb"
 
     @property
     def name(self) -> str:

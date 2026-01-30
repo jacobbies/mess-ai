@@ -149,7 +149,7 @@ Why This Matters:
 
 See Also:
 ---------
-- pipeline/probing/layer_discovery.py - How we discovered layer specializations
+- mess/probing/layer_discovery.py - How we discovered layer specializations
 - docs/CONCEPTS.md - Detailed explanation of embeddings and layer discovery
 - scripts/demo_recommendations.py - Example usage
 """
@@ -199,9 +199,11 @@ class LayerBasedRecommender:
         )
     """
     
-    def __init__(self):
-        self.data_dir = mess_config.data_dir
-        self.features_dir = mess_config.aggregated_features_dir
+    def __init__(self, dataset_name: str = "smd"):
+        from mess.datasets.factory import DatasetFactory
+        self.dataset = DatasetFactory.get_dataset(dataset_name)
+        self.data_dir = self.dataset.data_root
+        self.features_dir = self.dataset.aggregated_dir
         
         # Load validated layer mappings
         self.layer_mappings = self._load_validated_layers()

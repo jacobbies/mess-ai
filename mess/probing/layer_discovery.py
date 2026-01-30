@@ -85,7 +85,7 @@ From systematic layer discovery on SMD dataset (50 classical piano tracks):
 - Layer 7: Phrasing (R² = 0.781) ← Promising
 - Layer 4: Temporal patterns (R² = 0.673) ← Weak
 
-These results are saved to: pipeline/probing/layer_discovery_results.json
+These results are saved to: mess/probing/layer_discovery_results.json
 
 Impact on Similarity Search:
 ---------------------------
@@ -125,7 +125,7 @@ We use Ridge because our targets are continuous (spectral centroid, tempo, etc.)
 Typical Workflow:
 ----------------
 1. Extract MERT features: `scripts/extract_features.py`
-2. Generate proxy targets: `pipeline/probing/proxy_targets.py`
+2. Generate proxy targets: `mess/probing/proxy_targets.py`
 3. Run layer discovery: `python scripts/run_probing.py`
 4. Analyze results: Check layer_discovery_results.json
 5. Use validated layers: `LayerBasedRecommender` with aspect="spectral_brightness"
@@ -143,8 +143,8 @@ Usage:
 See Also:
 ---------
 - docs/CONCEPTS.md - Detailed explanation of embeddings and layer discovery
-- pipeline/probing/proxy_targets.py - Ground truth generation
-- pipeline/query/layer_based_recommender.py - Using validated layers for search
+- mess/probing/proxy_targets.py - Ground truth generation
+- mess/search/layer_based_recommender.py - Using validated layers for search
 """
 
 import sys
@@ -186,8 +186,10 @@ class LayerDiscoverySystem:
     """
     
     def __init__(self):
-        self.data_dir = mess_config.data_dir
-        self.features_dir = mess_config.smd_embeddings_dir / "raw"
+        from mess.datasets.factory import DatasetFactory
+        self.dataset = DatasetFactory.get_dataset("smd")
+        self.data_dir = self.dataset.data_root
+        self.features_dir = self.dataset.embeddings_dir / "raw"
         self.targets_dir = mess_config.proxy_targets_dir
         
         # Validated layer mappings (from our experiments)
@@ -357,9 +359,9 @@ class LayerDiscoverySystem:
     
     def discover_layer_functions(self, n_samples: int = 30) -> Dict[str, Any]:
         """Systematically discover what each layer encodes."""
-        
+
         # Get audio files
-        audio_dir = mess_config.smd_audio_dir
+        audio_dir = self.dataset.audio_dir
         audio_files = sorted([str(f) for f in audio_dir.glob("*.wav")])[:n_samples]
         
         logger.info(f"Running layer discovery with {len(audio_files)} samples")

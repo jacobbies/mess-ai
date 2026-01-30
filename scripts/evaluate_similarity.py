@@ -13,6 +13,8 @@ from pathlib import Path
 
 import numpy as np
 
+from mess.config import mess_config
+from mess.datasets.factory import DatasetFactory
 from mess.search.faiss_index import FAISSIndex
 from mess.search.similarity import SimilarityComputer
 
@@ -50,8 +52,8 @@ def evaluate_similarity_metrics(dataset="smd"):
     logger.info("Evaluating similarity metrics...")
 
     # Load features
-    data_dir = Path("/Users/jacobbieschke/mess-ai/data")
-    features_dir = data_dir / "processed" / "features" / "aggregated"
+    dataset_obj = DatasetFactory.get_dataset(dataset)
+    features_dir = dataset_obj.aggregated_dir
 
     # Get sample tracks
     feature_files = sorted(features_dir.glob("*.npy"))[:10]

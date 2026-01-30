@@ -21,11 +21,8 @@ mess-ai/
 ├── mess/              # Core ML library
 │   ├── extraction/       # MERT feature extraction
 │   ├── probing/          # Layer discovery & validation
-│   ├── query/            # Recommendation engine
-│   ├── search/           # FAISS similarity search
-│   ├── datasets/         # Dataset loaders (SMD, MAESTRO)
-│   ├── metadata/         # Metadata processing
-│   └── marble/           # External multi-task learning framework
+│   ├── search/           # FAISS similarity search & recommendations
+│   └── datasets/         # Dataset loaders (SMD, MAESTRO)
 ├── scripts/              # CLI workflow automation
 │   ├── extract_features.py
 │   ├── demo_recommendations.py
@@ -103,11 +100,8 @@ The `mess/` directory is a Python library (not a service) with these modules:
 - `proxy_targets.py`: Musical aspect proxy targets for validation
 - `layer_discovery_results.json`: Empirical validation results
 
-**query/**
-- `layer_based_recommender.py`: Recommendation engine using validated layers
-- `intelligent_query_engine.py`: Natural language query processing
-
 **search/**
+- `layer_based_recommender.py`: Recommendation engine using validated layers
 - `faiss_index.py`: FAISS index wrapper for similarity search
 - `similarity.py`: Similarity computation (cosine, euclidean, etc.)
 - `diverse_similarity.py`: Diverse recommendation algorithms
@@ -118,14 +112,6 @@ The `mess/` directory is a Python library (not a service) with these modules:
 - `smd.py`: Saarland Music Dataset loader
 - `maestro.py`: MAESTRO dataset loader
 - `factory.py`: Dataset factory pattern
-
-**metadata/**
-- `processor.py`: Metadata extraction and processing
-- `maestro_csv_parser.py`: MAESTRO CSV parsing
-
-**marble/**
-- External multi-task learning framework (1000+ files)
-- Used for reference, may be separated in future refactors
 
 ## Data Flow
 

@@ -12,10 +12,12 @@ Shows:
 import numpy as np
 from pathlib import Path
 from mess.config import mess_config
+from mess.datasets.factory import DatasetFactory
 
 def main():
     # Load first two tracks
-    aggregated_features_dir = mess_config.aggregated_features_dir
+    dataset = DatasetFactory.get_dataset("smd")
+    aggregated_features_dir = dataset.aggregated_dir
     feature_files = list(aggregated_features_dir.glob("*.npy"))
 
     if len(feature_files) < 2:

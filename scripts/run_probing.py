@@ -13,6 +13,7 @@ import json
 import logging
 from pathlib import Path
 
+from mess.config import mess_config
 from mess.probing.layer_discovery import LayerDiscoverySystem
 
 logging.basicConfig(
@@ -35,7 +36,7 @@ def main(save_results=True):
     discovery = LayerDiscoverySystem()
 
     # Run full discovery
-    results = discovery.run_full_discovery()
+    results = discovery.discover_layer_functions()
 
     # Display results
     print("\n" + "=" * 70)
@@ -53,7 +54,7 @@ def main(save_results=True):
 
     # Save if requested
     if save_results:
-        output_path = Path(__file__).parent.parent / "pipeline" / "probing" / "layer_discovery_results.json"
+        output_path = mess_config.probing_results_file
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(output_path, 'w') as f:

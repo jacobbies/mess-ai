@@ -326,7 +326,9 @@ def create_target_dataset(audio_dir: Union[str, Path], output_dir: Union[str, Pa
 
 if __name__ == "__main__":
     # Example usage
-    audio_dir = str(mess_config.smd_audio_dir)
+    from mess.datasets.factory import DatasetFactory
+    dataset = DatasetFactory.get_dataset("smd")
+    audio_dir = str(dataset.audio_dir)
     output_dir = str(mess_config.proxy_targets_dir)
 
     create_target_dataset(audio_dir, output_dir)

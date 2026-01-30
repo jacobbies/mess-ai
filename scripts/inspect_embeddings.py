@@ -11,7 +11,7 @@ Shows:
 
 import numpy as np
 from pathlib import Path
-from mess.extraction.config import mess_config
+from mess.config import mess_config
 
 def main():
     # Load first two tracks

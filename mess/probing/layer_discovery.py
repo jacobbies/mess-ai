@@ -149,7 +149,7 @@ See Also:
 
 import sys
 from pathlib import Path
-from mess.extraction.config import mess_config
+from ..config import mess_config
 
 import numpy as np
 import torch

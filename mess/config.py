@@ -12,7 +12,7 @@ class MESSConfig:
 
     def __init__(self):
         # Project structure
-        self.project_root = Path(__file__).parent.parent.parent
+        self.project_root = Path(__file__).parent.parent
 
         # MERT Model Configuration
         self.MERT_MODEL_NAME: str = 'm-a-p/MERT-v1-95M'

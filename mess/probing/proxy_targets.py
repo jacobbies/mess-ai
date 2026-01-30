@@ -13,7 +13,7 @@ from typing import Dict, Any, Union
 import torch
 import torchaudio
 from pathlib import Path
-from mess.extraction.config import mess_config
+from ..config import mess_config
 
 
 class MusicalAspectTargets:

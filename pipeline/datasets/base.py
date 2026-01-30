@@ -10,11 +10,7 @@ from typing import List, Optional
 class BaseDataset(ABC):
     """
     Abstract base class for music datasets (ML-focused).
-
-    Hybrid approach: Datasets are self-contained but use config.data_root as default.
-    This allows both:
-    - Easy default usage: dataset = SMDDataset() uses config.data_root
-    - Flexible override: dataset = SMDDataset(data_root="/custom/path")
+    
     """
 
     def __init__(self, data_root: Optional[Path] = None):

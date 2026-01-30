@@ -10,7 +10,7 @@ Usage:
 
 import argparse
 import logging
-from pipeline.query.layer_based_recommender import LayerBasedRecommender
+from pipeline.search.layer_based_recommender import LayerBasedRecommender
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 

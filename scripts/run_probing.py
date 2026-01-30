@@ -13,7 +13,7 @@ import json
 import logging
 from pathlib import Path
 
-from pipeline.probing.layer_discovery import LayerDiscoverySystem
+from mess.probing.layer_discovery import LayerDiscoverySystem
 
 logging.basicConfig(
     level=logging.INFO,

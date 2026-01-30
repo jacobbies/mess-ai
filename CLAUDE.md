@@ -18,7 +18,7 @@ This repo is optimized for **local ML experimentation** on Apple Silicon (M3 Pro
 
 ```
 mess-ai/
-├── pipeline/              # Core ML library
+├── mess/              # Core ML library
 │   ├── extraction/       # MERT feature extraction
 │   ├── probing/          # Layer discovery & validation
 │   ├── query/            # Recommendation engine
@@ -65,7 +65,7 @@ python scripts/extract_features.py --dataset smd
 # Run probing experiments to validate layer specializations
 python scripts/run_probing.py
 
-# Output: pipeline/probing/layer_discovery_results.json
+# Output: mess/probing/layer_discovery_results.json
 # Contains R² scores for layer/proxy target pairs
 ```
 
@@ -90,9 +90,9 @@ jupyter notebook notebooks/
 
 ## Core Components
 
-### Pipeline Library
+### MESS Library
 
-The `pipeline/` directory is a Python library (not a service) with these modules:
+The `mess/` directory is a Python library (not a service) with these modules:
 
 **extraction/**
 - `extractor.py`: MERT feature extraction from audio
@@ -180,14 +180,14 @@ data/
 ## Best Practices
 
 ### Code Organization
-- Keep pipeline/ as a clean Python library (no API/service code)
+- Keep mess/ as a clean Python library (no API/service code)
 - Use scripts/ for CLI automation and batch processing
 - Use notebooks/ for exploration and visualization
 - Document discoveries in docs/
 
 ### Development Patterns
 - Run experiments in notebooks first
-- Productionize proven code into pipeline/ modules
+- Productionize proven code into mess/ modules
 - Use scripts/ for repeatable workflows
 - Sync validated features/models to EC2 for production
 
@@ -200,7 +200,7 @@ data/
 ### Research Workflow
 1. **Explore** in Jupyter notebooks
 2. **Validate** with probing experiments
-3. **Productionize** proven code into pipeline/
+3. **Productionize** proven code into mess/
 4. **Sync** to EC2/S3 for production use
 
 ## Local to Production Sync
@@ -229,14 +229,14 @@ python scripts/extract_features.py --dataset {dataset}
 
 ### Validate new layer hypothesis
 ```python
-# Add proxy target to pipeline/probing/proxy_targets.py
+# Add proxy target to mess/probing/proxy_targets.py
 # Run discovery
 python scripts/run_probing.py
 ```
 
 ### Test new similarity metric
 ```python
-# Update pipeline/search/similarity.py
+# Update mess/search/similarity.py
 # Benchmark
 python scripts/evaluate_similarity.py
 ```

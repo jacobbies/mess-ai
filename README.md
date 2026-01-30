@@ -102,7 +102,7 @@ python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 
 ```
 mess-ai/
-├── pipeline/              # Core ML library
+├── mess/              # Core ML library
 │   ├── extraction/       # MERT feature extraction
 │   ├── probing/          # Layer discovery & validation
 │   ├── query/            # Recommendation engine
@@ -129,7 +129,7 @@ mess-ai/
 Extract MERT embeddings from audio files:
 
 ```python
-from pipeline.extraction.extractor import FeatureExtractor
+from mess.extraction.extractor import FeatureExtractor
 
 extractor = FeatureExtractor()
 features = extractor.extract("path/to/audio.wav")
@@ -145,7 +145,7 @@ features = extractor.extract("path/to/audio.wav")
 Get recommendations using validated MERT layers:
 
 ```python
-from pipeline.query.layer_based_recommender import LayerBasedRecommender
+from mess.query.layer_based_recommender import LayerBasedRecommender
 
 recommender = LayerBasedRecommender()
 
@@ -165,7 +165,7 @@ for rec in results['recommendations']:
 Discover which MERT layers encode specific musical aspects:
 
 ```python
-from pipeline.probing.layer_discovery import LayerDiscovery
+from mess.probing.layer_discovery import LayerDiscovery
 
 discovery = LayerDiscovery()
 results = discovery.run_full_discovery()

@@ -156,7 +156,7 @@ See Also:
 
 import sys
 from pathlib import Path
-from pipeline.extraction.config import pipeline_config
+from mess.extraction.config import mess_config
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -200,8 +200,8 @@ class LayerBasedRecommender:
     """
     
     def __init__(self):
-        self.data_dir = pipeline_config.data_dir
-        self.features_dir = pipeline_config.aggregated_features_dir
+        self.data_dir = mess_config.data_dir
+        self.features_dir = mess_config.aggregated_features_dir
         
         # Load validated layer mappings
         self.layer_mappings = self._load_validated_layers()

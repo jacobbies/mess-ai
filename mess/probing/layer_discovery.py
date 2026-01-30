@@ -132,7 +132,7 @@ Typical Workflow:
 
 Usage:
 ------
-    from pipeline.probing.layer_discovery import LayerDiscoverySystem
+    from mess.probing.layer_discovery import LayerDiscoverySystem
 
     discovery = LayerDiscoverySystem()
     results = discovery.discover_layer_functions(n_samples=50)
@@ -149,7 +149,7 @@ See Also:
 
 import sys
 from pathlib import Path
-from pipeline.extraction.config import pipeline_config
+from mess.extraction.config import mess_config
 
 import numpy as np
 import torch
@@ -186,9 +186,9 @@ class LayerDiscoverySystem:
     """
     
     def __init__(self):
-        self.data_dir = pipeline_config.data_dir
-        self.features_dir = pipeline_config.smd_embeddings_dir / "raw"
-        self.targets_dir = pipeline_config.proxy_targets_dir
+        self.data_dir = mess_config.data_dir
+        self.features_dir = mess_config.smd_embeddings_dir / "raw"
+        self.targets_dir = mess_config.proxy_targets_dir
         
         # Validated layer mappings (from our experiments)
         self.validated_layers = {
@@ -359,7 +359,7 @@ class LayerDiscoverySystem:
         """Systematically discover what each layer encodes."""
         
         # Get audio files
-        audio_dir = pipeline_config.smd_audio_dir
+        audio_dir = mess_config.smd_audio_dir
         audio_files = sorted([str(f) for f in audio_dir.glob("*.wav")])[:n_samples]
         
         logger.info(f"Running layer discovery with {len(audio_files)} samples")
@@ -445,7 +445,7 @@ class LayerDiscoverySystem:
     def save_discovery_results(self, results: Dict[str, Any], output_path: Optional[str] = None):
         """Save discovery results to file."""
         if output_path is None:
-            output_path = str(pipeline_config.probing_results_file)
+            output_path = str(mess_config.probing_results_file)
         
         output_data = {
             'validated_layers': self.validated_layers,

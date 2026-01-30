@@ -11,7 +11,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from pipeline.search.layer_indices import LayerIndexBuilder
+from mess.search.layer_indices import LayerIndexBuilder
 
 logging.basicConfig(
     level=logging.INFO,

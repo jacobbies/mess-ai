@@ -2,9 +2,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 
-class PipelineConfig:
+class MESSConfig:
     """
-    Global pipeline configuration for MERT feature extraction.
+    Global MESS configuration for MERT feature extraction.
 
     Provides MERT model settings and global paths (project_root, data_root).
     Dataset-specific paths (audio, embeddings) should use Dataset classes.
@@ -104,7 +104,7 @@ class PipelineConfig:
     # Global Path Configuration
     # =========================================================================
     # For dataset-specific paths (audio, embeddings), use Dataset classes:
-    #   from pipeline.datasets.factory import DatasetFactory
+    #   from mess.datasets.factory import DatasetFactory
     #   dataset = DatasetFactory.get_dataset("smd")
     #   audio_dir = dataset.audio_dir
     #   embeddings_dir = dataset.embeddings_dir
@@ -129,7 +129,7 @@ class PipelineConfig:
     @property
     def probing_results_file(self) -> Path:
         """Layer discovery validation results JSON."""
-        return self.project_root / "pipeline" / "probing" / "layer_discovery_results.json"
+        return self.project_root / "mess" / "probing" / "layer_discovery_results.json"
 
     @property
     def proxy_targets_dir(self) -> Path:
@@ -141,7 +141,7 @@ class PipelineConfig:
     # =========================================================================
 
     def validate_config(self) -> None:
-        """Validate pipeline configuration parameters."""
+        """Validate MESS configuration parameters."""
         # Validate audio processing parameters
         if self.segment_duration <= 0:
             raise ValueError("segment_duration must be positive")
@@ -181,7 +181,7 @@ class PipelineConfig:
     def print_config(self) -> None:
         """Print current configuration for debugging."""
         print("\n" + "=" * 60)
-        print("MERT Pipeline Configuration".center(60))
+        print("MESS Configuration".center(60))
         print("=" * 60)
         print(f"  Model:            {self.model_name}")
         print(f"  Device:           {self.device}")
@@ -202,4 +202,4 @@ class PipelineConfig:
 # Global Configuration Instance
 # ============================================================================
 
-pipeline_config = PipelineConfig()
+mess_config = MESSConfig()

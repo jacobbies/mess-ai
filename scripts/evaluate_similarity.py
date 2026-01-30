@@ -13,8 +13,8 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline.search.faiss_index import FAISSIndex
-from pipeline.search.similarity import SimilarityComputer
+from mess.search.faiss_index import FAISSIndex
+from mess.search.similarity import SimilarityComputer
 
 logging.basicConfig(
     level=logging.INFO,

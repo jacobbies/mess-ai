@@ -11,11 +11,11 @@ Shows:
 
 import numpy as np
 from pathlib import Path
-from pipeline.extraction.config import pipeline_config
+from mess.extraction.config import mess_config
 
 def main():
     # Load first two tracks
-    aggregated_features_dir = pipeline_config.aggregated_features_dir
+    aggregated_features_dir = mess_config.aggregated_features_dir
     feature_files = list(aggregated_features_dir.glob("*.npy"))
 
     if len(feature_files) < 2:

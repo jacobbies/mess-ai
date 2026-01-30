@@ -43,7 +43,7 @@ Pipeline Flow:
 
 Usage:
 ------
-    from pipeline.extraction.extractor import FeatureExtractor
+    from mess.extraction.extractor import FeatureExtractor
 
     extractor = FeatureExtractor()
     features = extractor.extract_track_features("path/to/audio.wav")
@@ -62,7 +62,7 @@ from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor
 from transformers.models.auto.modeling_auto import AutoModel
 
 # Import unified configuration
-from .config import pipeline_config
+from .config import mess_config
 
 
 class FeatureExtractor:
@@ -90,15 +90,15 @@ class FeatureExtractor:
             output_dir: Output directory for features (uses config if None)
         """
         # Use configuration with parameter overrides
-        self.model_name = model_name or pipeline_config.model_name
-        self.device = device or pipeline_config.device
-        self.cache_dir = cache_dir or pipeline_config.cache_dir
-        self.output_dir = Path(output_dir) if output_dir else pipeline_config.output_dir
+        self.model_name = model_name or mess_config.model_name
+        self.device = device or mess_config.device
+        self.cache_dir = cache_dir or mess_config.cache_dir
+        self.output_dir = Path(output_dir) if output_dir else mess_config.output_dir
         
         # Audio processing settings from config
-        self.target_sample_rate = pipeline_config.target_sample_rate
-        self.segment_duration = pipeline_config.segment_duration
-        self.overlap_ratio = pipeline_config.overlap_ratio
+        self.target_sample_rate = mess_config.target_sample_rate
+        self.segment_duration = mess_config.segment_duration
+        self.overlap_ratio = mess_config.overlap_ratio
         
         self._load_model()
         

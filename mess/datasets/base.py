@@ -21,8 +21,8 @@ class BaseDataset(ABC):
             data_root: Root data directory. If None, uses config.data_root.
         """
         if data_root is None:
-            from pipeline.extraction.config import pipeline_config
-            data_root = pipeline_config.data_root
+            from mess.extraction.config import mess_config
+            data_root = mess_config.data_root
 
         self.data_root = Path(data_root)
 

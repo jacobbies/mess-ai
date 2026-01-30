@@ -12,8 +12,8 @@ import argparse
 import logging
 from pathlib import Path
 
-from pipeline.extraction.extractor import FeatureExtractor
-from pipeline.datasets.factory import DatasetFactory
+from mess.extraction.extractor import FeatureExtractor
+from mess.datasets.factory import DatasetFactory
 
 logging.basicConfig(
     level=logging.INFO,

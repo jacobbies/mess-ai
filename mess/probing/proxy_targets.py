@@ -13,7 +13,7 @@ from typing import Dict, Any, Union
 import torch
 import torchaudio
 from pathlib import Path
-from pipeline.extraction.config import pipeline_config
+from mess.extraction.config import mess_config
 
 
 class MusicalAspectTargets:
@@ -326,7 +326,7 @@ def create_target_dataset(audio_dir: Union[str, Path], output_dir: Union[str, Pa
 
 if __name__ == "__main__":
     # Example usage
-    audio_dir = str(pipeline_config.smd_audio_dir)
-    output_dir = str(pipeline_config.proxy_targets_dir)
+    audio_dir = str(mess_config.smd_audio_dir)
+    output_dir = str(mess_config.proxy_targets_dir)
 
     create_target_dataset(audio_dir, output_dir)

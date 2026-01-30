@@ -10,7 +10,11 @@ from typing import List, Optional
 class BaseDataset(ABC):
     """
     Abstract base class for music datasets (ML-focused).
-    
+
+    Hybrid approach: Datasets are self-contained but use config.data_root as default.
+    This allows both:
+    - Easy default usage: dataset = SMDDataset() uses config.data_root
+    - Flexible override: dataset = SMDDataset(data_root="/custom/path")
     """
 
     def __init__(self, data_root: Optional[Path] = None):
@@ -30,13 +34,13 @@ class BaseDataset(ABC):
     @abstractmethod
     def audio_dir(self) -> Path:
         """Directory containing audio files for this dataset."""
-        pass
+        ...
 
     @property
     @abstractmethod
     def embeddings_dir(self) -> Path:
         """Directory for storing MERT embeddings for this dataset."""
-        pass
+        ...
 
     @property
     def aggregated_dir(self) -> Path:
@@ -83,10 +87,10 @@ class BaseDataset(ABC):
     @abstractmethod
     def name(self) -> str:
         """Dataset name."""
-        pass
+        ...
 
     @property
     @abstractmethod
     def description(self) -> str:
         """Dataset description."""
-        pass
+        ...

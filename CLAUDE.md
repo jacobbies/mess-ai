@@ -16,10 +16,12 @@ This repo is optimized for **local ML experimentation** on Apple Silicon (M3 Pro
 
 ## Project Structure
 
+This is a **uv workspace** with multiple packages for clean separation of concerns.
+
 ```
 mess-ai/
-├── mess/              # Core ML library
-│   ├── extraction/       # MERT feature extraction
+├── mess/              # Core ML library (main package)
+│   ├── extraction/       # MERT feature extraction (batched, cached)
 │   ├── probing/          # Layer discovery & validation
 │   ├── search/           # FAISS similarity search & recommendations
 │   └── datasets/         # Dataset loaders (SMD, MAESTRO)
@@ -33,7 +35,9 @@ mess-ai/
 │   ├── smd/             # Saarland Music Dataset
 │   ├── maestro/         # MAESTRO Dataset
 │   └── processed/       # Pre-extracted MERT embeddings (~94GB)
-└── docs/                # Research documentation
+├── docs/                # Research documentation
+├── pyproject.toml       # uv workspace configuration
+└── uv.lock             # Dependency lock file
 ```
 
 ## Key Scientific Discoveries
@@ -92,8 +96,9 @@ jupyter notebook notebooks/
 The `mess/` directory is a Python library (not a service) with these modules:
 
 **extraction/**
-- `extractor.py`: MERT feature extraction from audio
+- `extractor.py`: MERT feature extraction from audio (with batching & caching)
 - `config.py`: Extraction configuration (sample rate, segment duration, etc.)
+- Optimized with batch processing and feature caching for faster experimentation
 
 **probing/**
 - `layer_discovery.py`: Systematic discovery of layer specializations
@@ -156,6 +161,7 @@ data/
 
 ## Tech Stack
 
+- **Package Manager**: uv (fast Python package management and workspace support)
 - **ML Framework**: PyTorch 2.6+ (MPS acceleration on Apple Silicon)
 - **Transformers**: Hugging Face transformers 4.38+ (MERT model)
 - **Audio**: librosa, soundfile (optimized for M3)
@@ -210,27 +216,30 @@ Production EC2 handles:
 ### Extract features from new audio
 ```bash
 # Add audio to data/{dataset}/wav-44/
+uv run python scripts/extract_features.py --dataset {dataset}
+
+# Or with standard Python if uv not available
 python scripts/extract_features.py --dataset {dataset}
 ```
 
 ### Validate new layer hypothesis
-```python
+```bash
 # Add proxy target to mess/probing/proxy_targets.py
 # Run discovery
-python scripts/run_probing.py
+uv run python scripts/run_probing.py
 ```
 
 ### Test new similarity metric
-```python
+```bash
 # Update mess/search/similarity.py
 # Benchmark
-python scripts/evaluate_similarity.py
+uv run python scripts/evaluate_similarity.py
 ```
 
 ### Experiment with recommendations
 ```bash
 # Direct Python usage
-python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
+uv run python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
 
 # Or in Jupyter for visualization
 ```

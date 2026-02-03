@@ -54,7 +54,7 @@ MERT (Music Understanding Model with Large-Scale Self-Supervised Training) is a 
 
 `Wav2Vec2FeatureExtractor` is actually a **generic audio preprocessing class**, NOT specific to Wav2Vec2 speech models.
 
-**What it actually does** (see [extractor.py:46-50](pipeline/extraction/extractor.py)):
+**What it actually does** (see [extractor.py:46-50](mess/extraction/extractor.py)):
 ```python
 self.processor = Wav2Vec2FeatureExtractor.from_pretrained(
     self.model_name,  # ← "m-a-p/MERT-v1-95M" (MERT, not Wav2Vec2!)
@@ -184,7 +184,7 @@ Searching by ONE musical aspect gives narrow results:
 
 **Concept**: Combine multiple MERT layers with custom weights to match your preferences.
 
-#### How It Works (from [layer_based_recommender.py:221-290](pipeline/query/layer_based_recommender.py))
+#### How It Works (from [layer_based_recommender.py:221-290](mess/search/layer_based_recommender.py))
 
 **Step 1: Define aspect weights**
 ```python
@@ -303,7 +303,7 @@ Where:
 
 ### Advanced: Layer Weight Calibration
 
-Notice in [layer_based_recommender.py:44-65](pipeline/query/layer_based_recommender.py):
+Notice in [layer_based_recommender.py:44-65](mess/search/layer_based_recommender.py):
 
 ```python
 0: {
@@ -385,7 +385,7 @@ This averages **redundant signals**, reducing noise. But our research shows most
 
 ### Empirical Validation
 
-We tested this! See [layer_discovery_results.json](pipeline/probing/layer_discovery_results.json):
+We tested this! See [layer_discovery_results.json](mess/probing/layer_discovery_results.json):
 
 | Method | R² for Brightness |
 |--------|-------------------|
@@ -540,8 +540,8 @@ features = mert_model(segment)
 **Separation of Concerns**:
 - `extraction/`: Audio → embeddings (ML engineering)
 - `probing/`: Validate what layers encode (ML research)
-- `query/`: Apply validated knowledge (application)
-- `search/`: Fast retrieval (engineering optimization)
+- `search/`: Apply validated knowledge & fast retrieval (application + optimization)
+- `datasets/`: Dataset loaders and management
 
 **Reproducibility**:
 - Save features once, experiment many times

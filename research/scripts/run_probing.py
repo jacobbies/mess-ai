@@ -4,8 +4,8 @@ Layer Discovery & Probing
 Run systematic discovery of MERT layer specializations.
 
 Usage:
-    python scripts/run_probing.py
-    python scripts/run_probing.py --no-save
+    python research/scripts/run_probing.py
+    python research/scripts/run_probing.py --no-save
 """
 
 import argparse

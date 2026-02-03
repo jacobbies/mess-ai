@@ -4,7 +4,7 @@ Similarity Evaluation Script
 Benchmark different similarity metrics and FAISS index configurations.
 
 Usage:
-    python scripts/evaluate_similarity.py
+    python research/scripts/evaluate_similarity.py
 """
 
 import logging

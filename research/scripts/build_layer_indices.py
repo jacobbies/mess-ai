@@ -3,8 +3,8 @@
 Build per-layer FAISS indices for MERT embeddings.
 
 Usage:
-    python scripts/build_layer_indices.py --embeddings data/embeddings/smd-emb --output data/indices/per_layer
-    python scripts/build_layer_indices.py --embeddings data/embeddings/smd-emb --output data/indices/per_layer --center
+    python research/scripts/build_layer_indices.py --embeddings data/embeddings/smd-emb --output data/indices/per_layer
+    python research/scripts/build_layer_indices.py --embeddings data/embeddings/smd-emb --output data/indices/per_layer --center
 """
 
 import argparse

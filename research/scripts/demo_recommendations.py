@@ -3,9 +3,9 @@
 Demo: Get music similarity recommendations using validated MERT layers.
 
 Usage:
-    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
-    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect timbral_texture
-    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --n 10
+    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect timbral_texture
+    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --n 10
 """
 
 import argparse

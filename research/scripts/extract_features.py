@@ -5,13 +5,13 @@ Extract MERT embeddings from audio files for similarity search.
 
 Usage:
     # Sequential (original, backward compatible)
-    python scripts/extract_features.py --dataset smd
+    python research/scripts/extract_features.py --dataset smd
 
     # Parallel (4 workers, ~40-50% faster)
-    python scripts/extract_features.py --dataset smd --workers 4
+    python research/scripts/extract_features.py --dataset smd --workers 4
 
     # Force re-extraction
-    python scripts/extract_features.py --dataset maestro --force --workers 4
+    python research/scripts/extract_features.py --dataset maestro --force --workers 4
 """
 
 import argparse
@@ -95,13 +95,13 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   # Sequential extraction (original)
-  python scripts/extract_features.py --dataset smd
+  python research/scripts/extract_features.py --dataset smd
 
   # Parallel extraction (4 workers, ~40-50% faster)
-  python scripts/extract_features.py --dataset smd --workers 4
+  python research/scripts/extract_features.py --dataset smd --workers 4
 
   # Force re-extraction with parallel processing
-  python scripts/extract_features.py --dataset maestro --force --workers 4
+  python research/scripts/extract_features.py --dataset maestro --force --workers 4
         """
     )
     parser.add_argument(

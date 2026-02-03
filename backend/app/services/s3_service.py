@@ -12,7 +12,7 @@ class S3Service:
     def __init__(self):
         self.bucket_name = settings.S3_BUCKET_NAME
         self.region = settings.AWS_REGION
-        self.s3 = boto3.client('s3', region_name='us-west-1')
+        self.s3 = boto3.client('s3', region_name=self.region)
         logger.info(f"S3 Service initialized: {self.bucket_name}, {self.region}")
 
     def get_audio_preurl(self, audio_S3key: str, expiration: int = 600) -> str:

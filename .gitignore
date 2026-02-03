@@ -59,7 +59,6 @@ data/
 !data/README.md
 
 # ML Models & Checkpoints
-models/
 checkpoints/
 *.bin
 *.safetensors

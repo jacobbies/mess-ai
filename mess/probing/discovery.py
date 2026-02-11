@@ -8,7 +8,7 @@ High R² means the layer explicitly encodes that musical aspect.
 Also provides model inspection utilities (inventory, activation tracing).
 
 Usage:
-    from mess.probing.layer_discovery import LayerDiscoverySystem
+    from mess.probing.discovery import LayerDiscoverySystem
 
     discovery = LayerDiscoverySystem()
     results = discovery.discover(n_samples=50)

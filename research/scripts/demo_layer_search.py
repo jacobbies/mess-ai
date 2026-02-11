@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mess.search.layer_indices import LayerIndexBuilder
+from mess.search.indices import LayerIndexBuilder
 
 logging.basicConfig(
     level=logging.INFO,

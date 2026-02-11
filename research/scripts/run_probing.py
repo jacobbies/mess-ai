@@ -18,7 +18,7 @@ import logging
 import mlflow
 
 from mess.config import mess_config
-from mess.probing.layer_discovery import LayerDiscoverySystem
+from mess.probing.discovery import LayerDiscoverySystem
 
 logging.basicConfig(
     level=logging.INFO,

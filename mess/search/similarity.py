@@ -3,59 +3,45 @@ import logging
 from pathlib import Path
 from typing import List, Tuple, Optional
 from .faiss_index import FAISSIndex
-from .cache import IndexCache
 
 
 class SimilaritySearchEngine:
     """
     High-level interface for music similarity search using FAISS.
-    
+
     Handles feature loading, index building, and similarity queries.
     """
-    
-    def __init__(self, features_dir: str = "data/processed/features", 
-                 feature_type: str = "aggregated", 
-                 cache_dir: Optional[str] = None):
+
+    def __init__(self, features_dir: str = "data/processed/features",
+                 feature_type: str = "aggregated"):
         """
         Initialize similarity search engine.
-        
+
         Args:
             features_dir: Directory containing extracted features
             feature_type: Type of features to use ('aggregated', 'segments', 'raw')
-            cache_dir: Directory for caching FAISS indices (optional)
         """
         self.features_dir = Path(features_dir)
         self.feature_type = feature_type
-        self.cache_dir = Path(cache_dir) if cache_dir else None
-        
+
         # Initialize components
         self.faiss_index = None
-        self.cache = IndexCache(cache_dir) if cache_dir else None
         self.features = {}
         self.track_names = []
-        
+
         # Load features and build index
         self._initialize()
     
     def _initialize(self):
-        """Load features and build/load FAISS index."""
+        """Load features and build FAISS index."""
         try:
             # Load features
             self._load_features()
-            
-            # Try to load cached index first
-            if self.cache and self.cache.index_exists(self.feature_type):
-                logging.info("Loading cached FAISS index...")
-                self.faiss_index = self.cache.load_index(self.feature_type, self.track_names)
-            else:
-                # Build new index
-                logging.info("Building new FAISS index...")
-                self._build_index()
-                
-                # Cache the index if cache is enabled
-                if self.cache:
-                    self.cache.save_index(self.faiss_index, self.feature_type)
-                    
+
+            # Build FAISS index
+            logging.info("Building FAISS index...")
+            self._build_index()
+
         except Exception as e:
             logging.error(f"Failed to initialize similarity search engine: {e}")
             raise

@@ -25,7 +25,7 @@ from transformers.models.auto.modeling_auto import AutoModel
 
 from ..config import mess_config
 from .audio import load_audio, segment_audio, validate_audio_file
-from .cache import FeatureCache
+from .storage import FeatureStorage
 
 
 class FeatureExtractor:
@@ -64,8 +64,8 @@ class FeatureExtractor:
         self.segment_duration = mess_config.segment_duration
         self.overlap_ratio = mess_config.overlap_ratio
 
-        # Feature cache for persistence
-        self._cache = FeatureCache()
+        # Feature storage for persistence
+        self._storage = FeatureStorage()
 
         self._load_model()
 
@@ -246,7 +246,7 @@ class FeatureExtractor:
         try:
             # Check cache if skip_existing enabled
             if skip_existing and output_dir:
-                existing = self._cache.load(audio_path, output_dir, track_id, dataset)
+                existing = self._storage.load(audio_path, output_dir, track_id, dataset)
                 if existing is not None:
                     logging.info(f"Loading cached features for: {audio_path}")
                     return existing
@@ -276,7 +276,7 @@ class FeatureExtractor:
 
             # Save features if output directory provided
             if output_dir:
-                self._cache.save(results, audio_path, output_dir, track_id, dataset)
+                self._storage.save(results, audio_path, output_dir, track_id, dataset)
 
             return results
 

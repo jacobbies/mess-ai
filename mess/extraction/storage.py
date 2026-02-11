@@ -5,11 +5,11 @@ Handles saving, loading, and checking existence of extracted .npy features.
 No model dependency — can be used independently for feature inspection.
 
 Usage:
-    from mess.extraction.cache import FeatureCache
+    from mess.extraction.storage import FeatureStorage
 
-    cache = FeatureCache()
-    if cache.exists(audio_path, output_dir, track_id="Beethoven_Op027"):
-        features = cache.load(audio_path, output_dir, track_id="Beethoven_Op027")
+    storage = FeatureStorage()
+    if storage.exists(audio_path, output_dir, track_id="Beethoven_Op027"):
+        features = storage.load(audio_path, output_dir, track_id="Beethoven_Op027")
 """
 
 import logging
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional, Dict, Union
 
 
-class FeatureCache:
+class FeatureStorage:
     """
     Feature save/load/exists operations for .npy MERT embeddings.
 

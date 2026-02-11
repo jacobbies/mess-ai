@@ -10,7 +10,7 @@ Usage:
 
 import argparse
 import logging
-from mess.search.layer_based_recommender import LayerBasedRecommender
+from mess.search.recommender import LayerBasedRecommender
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 

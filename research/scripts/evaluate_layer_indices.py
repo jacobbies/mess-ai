@@ -18,7 +18,7 @@ import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
-from mess.search.layer_indices import LayerIndexBuilder
+from mess.search.indices import LayerIndexBuilder
 
 logging.basicConfig(
     level=logging.INFO,

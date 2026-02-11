@@ -4,7 +4,7 @@ MERT Feature Extraction Package
 Public API:
     FeatureExtractor     - Core MERT model + inference + track extraction
     ExtractionPipeline   - Dataset-level batch processing
-    FeatureCache         - Feature save/load/exists
+    FeatureStorage       - Feature save/load/exists
     load_audio           - Load and preprocess audio (no model needed)
     segment_audio        - Segment audio into overlapping windows
     validate_audio_file  - Validate audio file before extraction
@@ -13,12 +13,12 @@ Public API:
 from .extractor import FeatureExtractor
 from .pipeline import ExtractionPipeline
 from .audio import load_audio, segment_audio, validate_audio_file
-from .cache import FeatureCache
+from .storage import FeatureStorage
 
 __all__ = [
     'FeatureExtractor',
     'ExtractionPipeline',
-    'FeatureCache',
+    'FeatureStorage',
     'load_audio',
     'segment_audio',
     'validate_audio_file',

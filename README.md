@@ -1,243 +1,149 @@
-# MESS-AI: ML Development for Music Similarity Search
+# MESS-AI
 
-Local ML development environment for MERT-based music similarity research using empirically validated layer specializations.
+**Music similarity research using empirically validated MERT layer specializations.**
 
-## What Makes This Different
-
-Unlike systems using arbitrary feature combinations, we **systematically discovered** which MERT layers encode specific musical aspects through rigorous cross-validation:
-
-- **Layer 0**: Spectral brightness (R² = 0.944) - Best for timbral similarity
-- **Layer 1**: Timbral texture (R² = 0.922) - Instrumental characteristics
-- **Layer 2**: Acoustic structure (R² = 0.933) - Resonance patterns
-
-This replaces simple feature averaging (which causes 90%+ similarity between all tracks) with evidence-based recommendations.
+Instead of naive feature averaging, we systematically discover which transformer layers encode specific musical aspects through linear probing with cross-validation.
 
 ## Quick Start
 
-### Setup Environment
-
-**Requirements:**
-- Python 3.11.14 (managed via pyenv)
-- UV package manager (faster than pip)
-
 ```bash
-# Install pyenv (if not already installed)
-brew install pyenv
+# Install with ML dependencies
+uv sync --group dev
 
-# Install Python 3.11.14
-pyenv install 3.11.14
+# Extract MERT features
+python research/scripts/extract_features.py --dataset smd
 
-# Install UV (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Run layer discovery (validates which layers encode what)
+python research/scripts/run_probing.py
 
-# Create virtual environment
-uv venv
+# View experiments
+mlflow ui
 
-# Activate virtual environment
-source .venv/bin/activate
-
-# Install dependencies (fast!)
-uv pip install -r requirements.txt
+# Get recommendations (uses validated layers)
+python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 ```
 
-### Run ML Workflows
+## What This Does
 
-```bash
-# Extract MERT features from audio
-python scripts/extract_features.py --dataset smd
+**Layer Discovery**: Systematically probe MERT's 13 layers against 15 musical proxy targets using Ridge regression + 5-fold CV. Results show which layers encode brightness, texture, dynamics, articulation, etc.
 
-# Get recommendations
-python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect spectral_brightness
+**Dynamic Aspect System**: The recommender auto-loads validated layers from discovery results — no hardcoded mappings. Search by 10 user-facing aspects (brightness, texture, warmth, tempo, dynamics, etc.).
 
-# Run layer discovery experiments
-python scripts/run_probing.py
+**MLflow Tracking**: All experiments logged automatically. Compare hyperparameters, R² scores, and layer validations across runs.
 
-# Benchmark similarity metrics
-python scripts/evaluate_similarity.py
-```
-
-## Understanding the Concepts
-
-**New to embeddings and audio ML?** This project includes comprehensive documentation designed for experienced programmers who want to understand the domain from first principles.
-
-### Documentation
-
-- **[docs/CONCEPTS.md](docs/CONCEPTS.md)** - Comprehensive guide covering:
-  - What are embeddings and why they work
-  - MERT architecture and how transformers process audio
-  - Layer specialization and linear probing methodology
-  - Similarity metrics (cosine vs euclidean) and when to use each
-  - Multi-aspect recommendations with weighted layer combinations
-  - FAISS fast similarity search
-  - Audio signal processing basics
-  - Common misconceptions and pitfalls
-
-- **[docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick lookup guide:
-  - Embedding shape cheat sheet
-  - Layer-to-aspect mapping table
-  - Similarity metrics decision tree
-  - FAISS index type selection
-  - Common tasks and command examples
-  - Debugging tips and performance benchmarks
-
-### Hands-On Exploration
-
-```bash
-# Inspect what embeddings look like
-python scripts/inspect_embeddings.py
-# Shows: shapes, statistics, layer specializations, cosine similarities
-
-# Try recommendations
-python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
-# Uses validated layers for evidence-based similarity search
-```
-
-**Reading order for newcomers:**
-1. Start with [docs/CONCEPTS.md](docs/CONCEPTS.md) (explains embeddings, MERT, and layer discovery)
-2. Run `scripts/inspect_embeddings.py` to see embeddings hands-on
-3. Use [docs/QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) for day-to-day lookups
-4. Experiment with `scripts/demo_recommendations.py` to understand layer-based search
-
-## Project Structure
+## Architecture
 
 ```
-mess-ai/
-├── mess/              # Core ML library
-│   ├── extraction/       # MERT feature extraction
-│   ├── probing/          # Layer discovery & validation
-│   ├── query/            # Recommendation engine
-│   ├── search/           # FAISS similarity search
-│   ├── datasets/         # Dataset loaders (SMD, MAESTRO)
-│   └── metadata/         # Metadata processing
-├── scripts/              # Workflow automation
-│   ├── extract_features.py
-│   ├── demo_recommendations.py
-│   ├── run_probing.py
-│   └── evaluate_similarity.py
-├── notebooks/            # Jupyter experimentation
-├── data/                 # Audio files & features
-│   ├── smd/             # Saarland Music Dataset
-│   ├── maestro/         # MAESTRO Dataset
-│   └── processed/       # Extracted MERT embeddings
-└── docs/                # Documentation
+mess/                    # Core library
+├── extraction/          # MERT feature extraction
+├── probing/             # Layer discovery via linear probing
+│   ├── discovery.py     # 13 layers × 15 targets = 195 experiments
+│   └── proxy_targets.py # Musical aspect ground truth generation
+├── search/              # Similarity search
+│   ├── aspects.py       # 10 user-facing aspect → target mappings
+│   └── layer_based_recommender.py  # Dynamic layer loading
+└── datasets/            # SMD, MAESTRO loaders
+
+research/scripts/        # Experiment automation
+data/                    # Audio + extracted features
 ```
 
-## Usage Examples
+## Example Validated Results
 
-### Feature Extraction
+From actual discovery runs on SMD dataset:
 
-Extract MERT embeddings from audio files:
+| Layer | Proxy Target | R² Score | User Aspect |
+|-------|-------------|----------|-------------|
+| 0 | spectral_centroid | 0.944 | brightness |
+| 1 | spectral_rolloff | 0.922 | texture |
+| 2 | harmonic_complexity | 0.933 | harmonic_richness |
 
+**15 total targets** across timbre, rhythm, dynamics, harmony, articulation, phrasing.
+
+## Usage
+
+**Python API:**
 ```python
-from mess.extraction.extractor import FeatureExtractor
+from mess.search.layer_based_recommender import LayerBasedRecommender
 
-extractor = FeatureExtractor()
-features = extractor.extract("path/to/audio.wav")
-
-# features contains:
-# - 'raw': Full temporal [segments, 13, time, 768]
-# - 'segments': Time-averaged [segments, 13, 768]
-# - 'aggregated': Track-level [13, 768]
-```
-
-### Layer-Based Recommendations
-
-Get recommendations using validated MERT layers:
-
-```python
-from mess.query.layer_based_recommender import LayerBasedRecommender
-
+# Loads validated layers from discovery results
 recommender = LayerBasedRecommender()
 
-# Find tracks with similar spectral brightness
-results = recommender.recommend(
-    reference_track="Beethoven_Op027No1-01",
-    aspect="spectral_brightness",
+# See what aspects are available (depends on what's been validated)
+print(recommender.get_available_aspects())
+# ['brightness', 'texture', 'dynamics', ...]
+
+# Search by aspect
+recs = recommender.recommend_by_aspect(
+    "Beethoven_Op027No1-01",
+    aspect="brightness",
     n_recommendations=5
 )
 
-for rec in results['recommendations']:
-    print(f"{rec['track_id']}: {rec['similarity']:.4f}")
+# Multi-aspect weighted search
+recs = recommender.multi_aspect_recommendation(
+    "Beethoven_Op027No1-01",
+    aspect_weights={'brightness': 0.6, 'texture': 0.4},
+    n_recommendations=5
+)
 ```
 
-### Layer Discovery
+**CLI:**
+```bash
+# Run probing with hyperparameter sweep
+python research/scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
 
-Discover which MERT layers encode specific musical aspects:
+# Extract features with parallelization
+python research/scripts/extract_features.py --dataset smd --workers 4
 
-```python
-from mess.probing.layer_discovery import LayerDiscovery
-
-discovery = LayerDiscovery()
-results = discovery.run_full_discovery()
-
-# Prints R² scores for each layer/proxy target pair
-# Identifies best layers for each musical aspect
+# Check MLflow for results
+mlflow ui  # localhost:5000
 ```
 
-## Datasets
+## Dependencies
 
-### Saarland Music Dataset (SMD)
-- 50 classical piano pieces at 44kHz
-- Pre-extracted MERT features (~94GB)
-- Used for layer discovery validation
+**Core** (for using pre-extracted features):
+- numpy, scipy, scikit-learn, faiss-cpu
 
-### MAESTRO Dataset
-- Larger dataset for expanded experiments
-- Classical piano performances
+**[ml]** (for extraction + research):
+- torch, transformers, librosa, mlflow, tqdm, jupyter
+
+```bash
+uv sync              # Core only
+uv sync --group dev  # Full ML stack
+```
 
 ## Tech Stack
 
-- **Python**: 3.11.14 (via pyenv)
-- **Package Manager**: UV (10-100x faster than pip)
-- **ML**: PyTorch 2.6+, transformers 4.38+, scikit-learn
-- **Search**: FAISS (sub-millisecond similarity queries)
-- **Audio**: librosa, soundfile (Apple Silicon optimized)
-- **Development**: Jupyter, matplotlib, seaborn
+- **ML**: PyTorch 2.2+, Hugging Face transformers (MERT-v1-95M)
+- **Search**: FAISS (sub-millisecond queries), sklearn cosine similarity
+- **Tracking**: MLflow (params, metrics, artifacts)
+- **Audio**: librosa, torchaudio (24kHz resampling)
+- **Dev**: uv (fast package manager), Jupyter
 
 ## Performance
 
-- **Similarity Search**: <1ms per query (FAISS IndexFlatIP)
-- **Feature Extraction**: ~2.6 minutes for 50-track dataset (M3 Pro)
-- **Layer Discovery**: ~10-15 minutes full validation
+- **Similarity search**: <1ms per query (FAISS IndexFlatIP)
+- **Feature extraction**: ~2.6 min for 50 tracks (M3 Pro, parallel)
+- **Layer discovery**: ~10-15 min full validation (195 experiments)
 
-## Workflow: Local to Production
+## Datasets
 
-This repo is optimized for **local ML development** on Apple Silicon (M3 Pro). The typical workflow:
+**SMD** (Saarland Music Dataset): 50 classical piano pieces @ 44kHz
+**MAESTRO**: Larger dataset support (infrastructure exists)
 
-1. **Local Development** (this repo)
-   - Experiment with layer discovery
-   - Test new similarity metrics
-   - Extract features from datasets
-   - Run probing experiments
+Features stored in `data/processed/features/`:
+- `raw/`: Full temporal `[segments, 13, time, 768]`
+- `segments/`: Time-averaged `[segments, 13, 768]`
+- `aggregated/`: Track-level `[13, 768]` ← used for search
 
-2. **Sync to Production**
-   - Push processed features to EC2/S3
-   - Deploy validated models to production API
-   - Share research findings
+## Documentation
 
-## Research Focus
+See `CLAUDE.md` for:
+- Full architecture details
+- Development workflow
+- Adding new proxy targets
+- Research best practices
+- MLflow experiment tracking guide
 
-Current areas of exploration:
-
-- **Layer Specialization**: Systematic discovery of MERT layer functions
-- **Proxy Target Validation**: Cross-validation of musical aspect mappings
-- **Similarity Metrics**: Comparing cosine, euclidean, dot product
-- **FAISS Optimization**: Testing IVF, HNSW indices for larger datasets
-- **Model Fine-tuning**: Domain-specific training on SMD dataset
-
-## Contributing
-
-This is a personal research environment. For production API, see the EC2 deployment.
-
-## Citation
-
-If you use the layer discovery methodology or validated MERT layer mappings:
-
-```
-MESS-AI: Empirically Validated MERT Layer Specializations
-Layer 0: Spectral Brightness (R² = 0.944)
-Layer 1: Timbral Texture (R² = 0.922)
-Layer 2: Acoustic Structure (R² = 0.933)
-```
-
-Built with scientific rigor for music similarity research.
+Built for reproducible music similarity research.

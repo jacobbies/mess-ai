@@ -15,14 +15,12 @@ authors = [
     { name = "Jacob Bieschke" }
 ]
 
-# Core: mess.search, mess.datasets, mess.config (no ML)
+# Core: mess.search, mess.datasets, mess.config (no ML, no experiment tracking)
 dependencies = [
     "numpy>=1.26,<3",
     "scipy>=1.12",
     "scikit-learn>=1.4",
     "faiss-cpu>=1.7",
-    "tqdm>=4.66",
-    "mlflow>=2.10",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +40,8 @@ ml = [
     "matplotlib",
     "seaborn",
     "ipywidgets",
+    "tqdm>=4.66",
+    "mlflow>=2.10",
 ]
 
 # Dependency groups — local developer workflows

@@ -20,6 +20,7 @@
 - Similarity search algorithm development
 - Dataset preprocessing and analysis
 - Research experimentation via Jupyter notebooks
+- MLflow experiment tracking for reproducible research
 
 ## Project Structure
 
@@ -52,12 +53,13 @@ mess-ai (core)          mess-ai[ml]
 numpy, scipy            + torch, torchaudio
 scikit-learn            + transformers
 faiss-cpu               + librosa
-tqdm                    + jupyter, matplotlib
-~200MB                  ~3GB
+~150MB                  + tqdm, mlflow
+                        + jupyter, matplotlib
+                        ~3GB
 ```
 
-- **Core deps**: Everything needed for `mess.search` and `mess.datasets` (inference & analysis)
-- **[ml] optional**: Full ML stack for `mess.extraction` and `mess.probing` (feature extraction & research)
+- **Core deps**: Everything needed for `mess.search` and `mess.datasets` (inference & analysis only)
+- **[ml] optional**: Full ML stack for `mess.extraction` and `mess.probing` (feature extraction, research, experiment tracking)
 
 ## Key Scientific Discoveries
 
@@ -102,6 +104,7 @@ python research/scripts/extract_features.py --dataset smd
 
 # Output: data/processed/features/aggregated/*.npy
 # Format: [13 layers, 768 dims] per track
+# MLflow: Logs to "feature_extraction" experiment with timing metrics
 ```
 
 ### 2. Layer Discovery
@@ -111,6 +114,7 @@ python research/scripts/run_probing.py
 
 # Output: mess/probing/layer_discovery_results.json
 # Contains R² scores for layer/proxy target pairs
+# MLflow: Logs to "layer_discovery" experiment with all metrics and artifacts
 ```
 
 ### 3. Similarity Search
@@ -131,6 +135,25 @@ jupyter notebook research/notebooks/
 # - similarity_benchmarks.ipynb
 # - feature_visualization.ipynb
 ```
+
+### 5. Experiment Tracking with MLflow
+```bash
+# View experiment history and metrics in browser UI
+mlflow ui
+
+# Then open http://localhost:5000 to browse:
+# - Feature extraction runs (timing, cache hit rates)
+# - Layer discovery runs (R² scores, best layers per target)
+# - Compare hyperparameters across runs
+# - Download artifacts (results JSON, model checkpoints)
+```
+
+**What's tracked:**
+- **Feature Extraction**: Dataset, workers, timing, cache statistics
+- **Layer Discovery**: Ridge alpha, CV folds, per-layer R² scores, best layer mappings
+- **Artifacts**: Results JSON files automatically logged
+
+**MLflow directory**: `mlruns/` (gitignored, stored locally)
 
 ## Core Components
 
@@ -210,6 +233,7 @@ data/
 - **Audio**: librosa, soundfile
 - **Search**: FAISS (CPU version, sub-millisecond queries)
 - **Scientific**: scikit-learn, numpy, pandas
+- **Experiment Tracking**: MLflow (metrics, parameters, artifacts)
 - **Development**: Jupyter, matplotlib, seaborn
 
 ## Best Practices
@@ -234,9 +258,10 @@ data/
 
 ### Research Workflow
 1. **Explore** in Jupyter notebooks
-2. **Validate** with probing experiments
+2. **Validate** with probing experiments (tracked in MLflow)
 3. **Productionize** proven code into `mess/`
-4. **Share** findings through documentation and papers
+4. **Review** experiment history with `mlflow ui`
+5. **Share** findings through documentation and papers
 
 ## Common Tasks
 
@@ -287,5 +312,6 @@ python research/scripts/demo_recommendations.py --track {track_id} --aspect {asp
 - `mess/` is the core library - keep it clean, well-documented, and modular
 - `research/` contains experimentation code (notebooks, scripts)
 - Use `uv sync --group dev` for full development setup
+- All experiments are tracked in MLflow - run `mlflow ui` to view results
 - Focus on scientific rigor, reproducibility, and clean code
 - The library should be accessible to researchers and easy to extend

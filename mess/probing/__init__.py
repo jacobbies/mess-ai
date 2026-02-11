@@ -9,13 +9,15 @@ Public API:
     create_target_dataset - Batch generate targets for a dataset
 """
 
-from .discovery import LayerDiscoverySystem, inspect_model, trace_activations
+from .discovery import LayerDiscoverySystem, inspect_model, trace_activations, ASPECT_REGISTRY, resolve_aspects
 from .targets import MusicalAspectTargets, create_target_dataset
 
 __all__ = [
     'LayerDiscoverySystem',
     'inspect_model',
     'trace_activations',
+    'ASPECT_REGISTRY',
+    'resolve_aspects',
     'MusicalAspectTargets',
     'create_target_dataset',
 ]

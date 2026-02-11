@@ -1,0 +1,13 @@
+The following research scripts need to be updated to work with the simplified search module:
+
+- build_layer_indices.py (uses old LayerIndexBuilder)
+- demo_layer_search.py (uses old LayerIndexBuilder)
+- evaluate_layer_indices.py (uses old LayerIndexBuilder)
+- evaluate_similarity.py (uses old FAISSIndex and SimilarityComputer)
+
+These scripts were experimental and not validated. They can be:
+1. Updated to use the new simple search.py module
+2. Deleted if not needed
+3. Rewritten for specific research experiments
+
+The main demo script (demo_recommendations.py) has been updated to work with the new module.

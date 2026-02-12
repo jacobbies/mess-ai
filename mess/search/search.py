@@ -172,7 +172,7 @@ def search_by_aspect(
     Returns:
         List of (track_id, similarity_score) tuples
     """
-    from .probing import resolve_aspects
+    from ..probing import resolve_aspects
 
     # Resolve aspect to layer
     aspect_mappings = resolve_aspects()

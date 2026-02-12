@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 from .audio import load_audio, segment_audio
-from .storage import FeatureStorage
+from .storage import features_exist, save_features
 
 
 class ExtractionPipeline:
@@ -42,7 +42,6 @@ class ExtractionPipeline:
             extractor: A FeatureExtractor instance (used for MERT inference)
         """
         self.extractor = extractor
-        self.storage = FeatureStorage()
 
     def run(
         self,
@@ -185,7 +184,7 @@ class ExtractionPipeline:
                                 'aggregated': np.mean(segment_features, axis=(0, 2))
                             }
 
-                            self.storage.save(
+                            save_features(
                                 features, result['path'],
                                 output_dir, result['track_id'], dataset
                             )
@@ -256,7 +255,7 @@ class ExtractionPipeline:
         try:
             track_id = audio_path.stem
 
-            if skip_existing and self.storage.exists(audio_path, output_dir, track_id, dataset):
+            if skip_existing and features_exist(audio_path, output_dir, track_id, dataset):
                 return {
                     'status': 'cached',
                     'path': str(audio_path),

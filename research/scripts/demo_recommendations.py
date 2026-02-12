@@ -12,7 +12,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from mess.search import find_similar, load_features, search_by_aspect
+from mess.search.search import find_similar, load_features, search_by_aspect
 from mess.probing import resolve_aspects
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')

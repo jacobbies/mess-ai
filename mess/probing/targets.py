@@ -2,25 +2,61 @@
 Proxy target generators for musical aspects in classical music.
 These create ground-truth labels for probing MERT's learned representations.
 
-Targets: rhythm, harmony, timbre, articulation, dynamics, phrasing 
+Data Structure Contract:
+    Saves targets as .npz files with nested dict structure:
+    {category: {field: np.ndarray}}
 
+    Example:
+        {'timbre': {'spectral_centroid': array([...]), 'spectral_rolloff': array([...])},
+         'rhythm': {'tempo': array([120.0]), 'onset_density': array([2.5])}}
+
+    This structure is consumed by discovery.py via:
+        data = np.load(file, allow_pickle=True)
+        value = data[category].item()[field]  # .item() unpacks pickled dict
+
+Targets Generated:
+    - Timbre: spectral features, MFCCs, zero-crossing rate
+    - Rhythm: tempo, onset density, rhythmic regularity
+    - Harmony: chroma, key profiles, harmonic complexity
+    - Articulation: attack slopes, attack sharpness
+    - Dynamics: RMS energy, dynamic range, crescendo/diminuendo
+    - Phrasing: phrase boundaries, regularity, novelty
 """
 
+import logging
+import time
+from typing import Dict, Any, Union, Optional
+
+import mlflow
 import numpy as np
 import librosa
 import scipy.signal
-from typing import Dict, Any, Union
 import torch
 import torchaudio
 from pathlib import Path
+
 from ..config import mess_config
+
+logger = logging.getLogger(__name__)
 
 
 class MusicalAspectTargets:
-    """Generate proxy targets for different musical aspects."""
-    
-    def __init__(self, sample_rate: int = 24000):
-        self.sample_rate = sample_rate
+    """
+    Generate proxy targets for different musical aspects.
+
+    Extracts ground-truth labels from audio for probing MERT layer representations.
+    All targets are saved as numpy arrays in a nested dict structure that
+    discovery.py can consume for linear probing experiments.
+    """
+
+    def __init__(self, sample_rate: Optional[int] = None):
+        """
+        Initialize target generator.
+
+        Args:
+            sample_rate: Audio sample rate. If None, uses mess_config.target_sample_rate (24kHz).
+        """
+        self.sample_rate = sample_rate or mess_config.target_sample_rate
     
     def generate_all_targets(self, audio_path: str) -> Dict[str, Dict[str, np.ndarray]]:
         """Generate all proxy targets for a given audio file."""
@@ -46,7 +82,40 @@ class MusicalAspectTargets:
         }
         
         return targets
-    
+
+    @staticmethod
+    def validate_target_structure(targets: Dict[str, Dict[str, np.ndarray]]) -> bool:
+        """
+        Verify targets match discovery.py's expected structure.
+
+        Checks that all required (category, field) pairs exist in the targets dict.
+        Logs warnings for any missing targets but does not raise errors.
+
+        Args:
+            targets: Nested dict of {category: {field: array}}
+
+        Returns:
+            True if all required targets are present, False otherwise.
+        """
+        from .discovery import LayerDiscoverySystem
+
+        missing = []
+        for target_name, (category, key, _) in LayerDiscoverySystem.SCALAR_TARGETS.items():
+            if category not in targets:
+                missing.append(f"{category}/{key} (for '{target_name}')")
+            elif key not in targets[category]:
+                missing.append(f"{category}/{key} (for '{target_name}')")
+
+        if missing:
+            logger.warning(
+                f"Missing {len(missing)} target(s) expected by discovery.py:\n  "
+                + "\n  ".join(missing)
+            )
+            return False
+
+        logger.info(f"Target structure validated: all {len(LayerDiscoverySystem.SCALAR_TARGETS)} targets present")
+        return True
+
     def _generate_rhythm_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
         """Generate rhythm-related targets."""
         # Tempo estimation
@@ -293,42 +362,210 @@ class MusicalAspectTargets:
 
 ###
 
-def create_target_dataset(audio_dir: Union[str, Path], output_dir: Union[str, Path]):
-    """Create proxy target dataset for all audio files."""
+def create_target_dataset(
+    audio_dir: Union[str, Path],
+    output_dir: Union[str, Path],
+    validate: bool = True,
+    use_mlflow: bool = True,
+) -> Dict[str, int]:
+    """
+    Create proxy target dataset for all audio files.
+
+    Processes all .wav files in audio_dir, extracts proxy targets, and saves
+    them as .npz files. Optionally validates against discovery.py's expected
+    structure and logs metrics to MLflow.
+
+    Args:
+        audio_dir: Directory containing .wav audio files.
+        output_dir: Directory to save _targets.npz files.
+        validate: Whether to validate target structure against discovery.py.
+        use_mlflow: Whether to log processing metrics to MLflow.
+
+    Returns:
+        Dict with 'total', 'success', 'failed' counts.
+    """
     audio_dir = Path(audio_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     target_generator = MusicalAspectTargets()
-    
+
     # Process all audio files
-    audio_files = list(audio_dir.glob("*.wav"))
-    
-    for audio_file in audio_files:
-        print(f"Processing {audio_file.name}...")
-        
+    audio_files = sorted(audio_dir.glob("*.wav"))
+    n_total = len(audio_files)
+
+    if n_total == 0:
+        logger.warning(f"No .wav files found in {audio_dir}")
+        return {'total': 0, 'success': 0, 'failed': 0}
+
+    logger.info(f"Processing {n_total} audio files from {audio_dir}")
+
+    # Track statistics
+    start_time = time.time()
+    success_count = 0
+    failed_count = 0
+    errors = []
+    target_stats: Dict[str, list] = {}
+
+    # Log to MLflow if requested and a run is active
+    if use_mlflow and mlflow.active_run():
+        mlflow.log_params({
+            'audio_dir': str(audio_dir),
+            'output_dir': str(output_dir),
+            'n_files': n_total,
+            'sample_rate': target_generator.sample_rate,
+        })
+
+    for i, audio_file in enumerate(audio_files, 1):
+        logger.info(f"[{i}/{n_total}] Processing {audio_file.name}...")
+
         try:
             targets = target_generator.generate_all_targets(str(audio_file))
-            
-            # Save targets (flatten nested dict structure)
+
+            # Optional validation
+            if validate:
+                MusicalAspectTargets.validate_target_structure(targets)
+
+            # Collect statistics for first file (sample)
+            if success_count == 0:
+                for category, fields in targets.items():
+                    for field_name, field_value in fields.items():
+                        key = f"{category}/{field_name}"
+                        if isinstance(field_value, np.ndarray):
+                            target_stats[key] = {
+                                'shape': field_value.shape,
+                                'mean': float(np.mean(field_value)),
+                                'std': float(np.std(field_value)),
+                            }
+
+            # Save targets
+            # Note: numpy will pickle the nested dicts automatically (allow_pickle=True implicit)
             target_file = output_dir / f"{audio_file.stem}_targets.npz"
-            flattened = {}
-            for category, category_data in targets.items():
-                flattened[category] = category_data
-            np.savez_compressed(target_file, **flattened)
-            
-            print(f"Saved targets to {target_file}")
-            
+            np.savez_compressed(target_file, **targets)
+
+            logger.info(f"  ✓ Saved to {target_file.name}")
+            success_count += 1
+
         except Exception as e:
-            print(f"Error processing {audio_file}: {e}")
+            error_msg = f"{audio_file.name}: {str(e)}"
+            logger.error(f"  ✗ Error: {error_msg}")
+            errors.append(error_msg)
+            failed_count += 1
             continue
+
+    elapsed = time.time() - start_time
+
+    # Summary
+    logger.info(f"\n{'='*70}")
+    logger.info(f"Target Dataset Creation Complete")
+    logger.info(f"{'='*70}")
+    logger.info(f"  Total files:    {n_total}")
+    logger.info(f"  Success:        {success_count} ({success_count/n_total*100:.1f}%)")
+    logger.info(f"  Failed:         {failed_count}")
+    logger.info(f"  Elapsed time:   {elapsed:.2f}s ({elapsed/n_total:.2f}s per file)")
+    logger.info(f"  Output dir:     {output_dir}")
+
+    if errors:
+        logger.warning(f"\nErrors encountered ({len(errors)}):")
+        for error in errors[:5]:  # Show first 5
+            logger.warning(f"  - {error}")
+        if len(errors) > 5:
+            logger.warning(f"  ... and {len(errors) - 5} more")
+
+    # Log to MLflow
+    if use_mlflow and mlflow.active_run():
+        mlflow.log_metrics({
+            'total_files': n_total,
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'success_rate': success_count / n_total if n_total > 0 else 0.0,
+            'elapsed_seconds': elapsed,
+            'seconds_per_file': elapsed / n_total if n_total > 0 else 0.0,
+        })
+
+        # Log sample statistics for first file
+        for key, stats in target_stats.items():
+            safe_key = key.replace('/', '_')
+            mlflow.log_metrics({
+                f"sample_{safe_key}_mean": stats['mean'],
+                f"sample_{safe_key}_std": stats['std'],
+            })
+
+        # Log errors as text artifact if any
+        if errors:
+            errors_file = output_dir / "errors.txt"
+            errors_file.write_text("\n".join(errors))
+            mlflow.log_artifact(str(errors_file))
+
+    return {'total': n_total, 'success': success_count, 'failed': failed_count}
+
+
+def main():
+    """CLI entry point for target dataset creation."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate proxy targets for layer discovery")
+    parser.add_argument(
+        '--dataset',
+        type=str,
+        default='smd',
+        help='Dataset name (default: smd)',
+    )
+    parser.add_argument(
+        '--no-validate',
+        action='store_true',
+        help='Skip validation against discovery.py structure',
+    )
+    parser.add_argument(
+        '--no-mlflow',
+        action='store_true',
+        help='Disable MLflow tracking',
+    )
+    args = parser.parse_args()
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(levelname)s: %(message)s',
+    )
+
+    # Load dataset
+    from mess.datasets.factory import DatasetFactory
+    dataset = DatasetFactory.get_dataset(args.dataset)
+    audio_dir = dataset.audio_dir
+    output_dir = mess_config.proxy_targets_dir
+
+    logger.info(f"Generating proxy targets for dataset: {args.dataset}")
+    logger.info(f"  Audio dir:  {audio_dir}")
+    logger.info(f"  Output dir: {output_dir}")
+
+    # Start MLflow run if enabled
+    if not args.no_mlflow:
+        mlflow.set_experiment("proxy_target_generation")
+        with mlflow.start_run():
+            mlflow.set_tag("dataset", args.dataset)
+            result = create_target_dataset(
+                audio_dir=audio_dir,
+                output_dir=output_dir,
+                validate=not args.no_validate,
+                use_mlflow=True,
+            )
+    else:
+        result = create_target_dataset(
+            audio_dir=audio_dir,
+            output_dir=output_dir,
+            validate=not args.no_validate,
+            use_mlflow=False,
+        )
+
+    # Exit code based on success
+    if result['failed'] > 0:
+        logger.warning(f"Completed with {result['failed']} failures")
+        return 1
+    else:
+        logger.info("All files processed successfully")
+        return 0
 
 
 if __name__ == "__main__":
-    # Example usage
-    from mess.datasets.factory import DatasetFactory
-    dataset = DatasetFactory.get_dataset("smd")
-    audio_dir = str(dataset.audio_dir)
-    output_dir = str(mess_config.proxy_targets_dir)
-
-    create_target_dataset(audio_dir, output_dir)
+    raise SystemExit(main())

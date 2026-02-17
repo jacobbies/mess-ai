@@ -43,6 +43,26 @@ class ExtractionPipeline:
         """
         self.extractor = extractor
 
+    def _discover_audio_files(self, audio_dir: Path, file_pattern: str) -> list[Path]:
+        """
+        Resolve audio files with a recursive fallback for nested datasets.
+
+        If a non-recursive pattern (for example ``*.wav``) finds no files at the
+        dataset root, fallback to ``rglob`` so datasets like MAESTRO (year
+        subfolders) are handled without special-case script logic.
+        """
+        files = sorted(audio_dir.glob(file_pattern))
+        if files or "**" in file_pattern:
+            return files
+
+        recursive_files = sorted(audio_dir.rglob(file_pattern))
+        if recursive_files:
+            logging.info(
+                f"No files matched '{file_pattern}' at dataset root; "
+                f"falling back to recursive search and found {len(recursive_files)} files."
+            )
+        return recursive_files
+
     def run(
         self,
         audio_dir: Union[str, Path],
@@ -80,7 +100,7 @@ class ExtractionPipeline:
         audio_dir = Path(audio_dir)
         output_dir = Path(output_dir)
 
-        audio_files = list(audio_dir.glob(file_pattern))
+        audio_files = self._discover_audio_files(audio_dir, file_pattern)
 
         if not audio_files:
             logging.warning(f"No audio files found in {audio_dir} with pattern {file_pattern}")
@@ -141,7 +161,7 @@ class ExtractionPipeline:
         if num_workers is None:
             num_workers = mess_config.max_workers
 
-        audio_files = list(audio_dir.glob(file_pattern))
+        audio_files = self._discover_audio_files(audio_dir, file_pattern)
 
         if not audio_files:
             logging.warning(f"No audio files found in {audio_dir} with pattern {file_pattern}")
@@ -310,7 +330,7 @@ class ExtractionPipeline:
         import random
 
         audio_dir = Path(audio_dir)
-        audio_files = list(audio_dir.glob(file_pattern))
+        audio_files = self._discover_audio_files(audio_dir, file_pattern)
 
         if not audio_files:
             logging.warning(f"No audio files found in {audio_dir}")

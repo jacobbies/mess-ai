@@ -6,8 +6,8 @@ This script demonstrates how to query per-layer indices and compare results
 across different layers to understand layer specializations.
 
 Usage:
-    python research/scripts/demo_layer_search.py --query "Bach_BWV849-01_001_20090916-SMD"
-    python research/scripts/demo_layer_search.py --query "Beethoven_Op027No1-01_003_20090916-SMD" --layers 0 1 2 7 8 9 12
+    python scripts/demo_layer_search.py --query "Bach_BWV849-01_001_20090916-SMD"
+    python scripts/demo_layer_search.py --query "Beethoven_Op027No1-01_003_20090916-SMD" --layers 0 1 2 7 8 9 12
 """
 
 import argparse

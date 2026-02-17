@@ -7,13 +7,13 @@ Results are tracked in MLflow — run `mlflow ui` to browse experiments.
 
 Usage:
     # Sequential (original, backward compatible)
-    python research/scripts/extract_features.py --dataset smd
+    python scripts/extract_features.py --dataset smd
 
     # Parallel (4 workers, ~40-50% faster)
-    python research/scripts/extract_features.py --dataset smd --workers 4
+    python scripts/extract_features.py --dataset smd --workers 4
 
     # Force re-extraction
-    python research/scripts/extract_features.py --dataset maestro --force --workers 4
+    python scripts/extract_features.py --dataset maestro --force --workers 4
 """
 
 import argparse
@@ -62,7 +62,7 @@ def main(dataset_name="smd", force_recompute=False, num_workers=1):
 
         # Get dataset paths
         audio_dir = dataset.audio_dir
-        output_dir = Path("data/processed/features")
+        output_dir = dataset.embeddings_dir
 
         logger.info(f"Audio directory: {audio_dir}")
         logger.info(f"Output directory: {output_dir}")
@@ -122,13 +122,13 @@ if __name__ == "__main__":
         epilog="""
 Examples:
   # Sequential extraction (original)
-  python research/scripts/extract_features.py --dataset smd
+  python scripts/extract_features.py --dataset smd
 
   # Parallel extraction (4 workers, ~40-50% faster)
-  python research/scripts/extract_features.py --dataset smd --workers 4
+  python scripts/extract_features.py --dataset smd --workers 4
 
   # Force re-extraction with parallel processing
-  python research/scripts/extract_features.py --dataset maestro --force --workers 4
+  python scripts/extract_features.py --dataset maestro --force --workers 4
         """
     )
     parser.add_argument(

@@ -3,9 +3,9 @@
 Demo: Get music similarity recommendations using validated MERT layers.
 
 Usage:
-    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
-    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect brightness
-    python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --k 10
+    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect brightness
+    python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --k 10
 """
 
 import argparse
@@ -22,11 +22,11 @@ def main(track_name: str, aspect: str = None, k: int = 5, dataset: str = "smd"):
     """Run similarity search demo."""
 
     # Construct features directory path
-    features_dir = Path(f"data/processed/features/{dataset}/aggregated")
+    features_dir = Path(f"data/embeddings/{dataset}-emb/aggregated")
 
     if not features_dir.exists():
         print(f"Error: Features not found at {features_dir}")
-        print("Run feature extraction first: python research/scripts/extract_features.py")
+        print("Run feature extraction first: python scripts/extract_features.py")
         return 1
 
     print(f"\n{'='*70}")

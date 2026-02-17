@@ -11,16 +11,16 @@ Instead of naive feature averaging, we systematically discover which transformer
 uv sync --group dev
 
 # Extract MERT features
-python research/scripts/extract_features.py --dataset smd
+python scripts/extract_features.py --dataset smd
 
 # Run layer discovery (validates which layers encode what)
-python research/scripts/run_probing.py
+python scripts/run_probing.py
 
 # View experiments
 mlflow ui
 
 # Get recommendations (uses validated layers)
-python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 ```
 
 ## What This Does
@@ -44,7 +44,7 @@ mess/                    # Core library
 │   └── layer_based_recommender.py  # Dynamic layer loading
 └── datasets/            # SMD, MAESTRO loaders
 
-research/scripts/        # Experiment automation
+scripts/                 # Experiment automation
 data/                    # Audio + extracted features
 ```
 
@@ -91,10 +91,10 @@ recs = recommender.multi_aspect_recommendation(
 **CLI:**
 ```bash
 # Run probing with hyperparameter sweep
-python research/scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
+python scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
 
 # Extract features with parallelization
-python research/scripts/extract_features.py --dataset smd --workers 4
+python scripts/extract_features.py --dataset smd --workers 4
 
 # Check MLflow for results
 mlflow ui  # localhost:5000
@@ -132,7 +132,7 @@ uv sync --group dev  # Full ML stack
 **SMD** (Saarland Music Dataset): 50 classical piano pieces @ 44kHz
 **MAESTRO**: Larger dataset support (infrastructure exists)
 
-Features stored in `data/processed/features/`:
+Features stored in `data/embeddings/<dataset>-emb/`:
 - `raw/`: Full temporal `[segments, 13, time, 768]`
 - `segments/`: Time-averaged `[segments, 13, 768]`
 - `aggregated/`: Track-level `[13, 768]` ← used for search

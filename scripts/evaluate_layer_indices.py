@@ -8,7 +8,7 @@ This script tests:
 3. Comparison plots showing spread improvement
 
 Usage:
-    python research/scripts/evaluate_layer_indices.py --indices data/indices/per_layer --embeddings data/embeddings/smd-emb --output results
+    python scripts/evaluate_layer_indices.py --indices data/indices/per_layer --embeddings data/embeddings/smd-emb --output results
 """
 
 import argparse

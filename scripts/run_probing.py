@@ -6,10 +6,10 @@ Run systematic discovery of MERT layer specializations.
 Results are tracked in MLflow — run `mlflow ui` to browse experiments.
 
 Usage:
-    python research/scripts/run_probing.py
-    python research/scripts/run_probing.py --no-save
-    python research/scripts/run_probing.py --samples 30 --alpha 0.5
-    python research/scripts/run_probing.py --experiment "ridge_tuning"
+    python scripts/run_probing.py
+    python scripts/run_probing.py --no-save
+    python scripts/run_probing.py --samples 30 --alpha 0.5
+    python scripts/run_probing.py --experiment "ridge_tuning"
 """
 
 import argparse

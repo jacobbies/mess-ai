@@ -28,6 +28,7 @@ import numpy as np
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import KFold, cross_val_predict
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from ..config import mess_config
@@ -246,13 +247,13 @@ class LayerDiscoverySystem:
         if n < self.n_folds:
             return {'r2_score': -999.0, 'correlation': 0.0, 'rmse': 999.0}
 
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-
         kf = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
-        probe = Ridge(alpha=self.alpha, random_state=42)
+        probe = make_pipeline(
+            StandardScaler(),
+            Ridge(alpha=self.alpha, random_state=42),
+        )
 
-        y_pred = cross_val_predict(probe, X_scaled, y, cv=kf)
+        y_pred = cross_val_predict(probe, X, y, cv=kf)
 
         r2 = float(r2_score(y, y_pred))
         corr = float(np.corrcoef(y, y_pred)[0, 1]) if np.std(y_pred) > 1e-10 else 0.0

@@ -15,19 +15,15 @@ authors = [
     { name = "Jacob Bieschke" }
 ]
 
-# Core: mess.search, mess.datasets, mess.config (no ML, no experiment tracking)
+# Project dependencies
 dependencies = [
     "numpy>=1.26,<3",
     "scipy>=1.12",
     "scikit-learn>=1.4",
     "faiss-cpu>=1.7",
-]
-
-[project.optional-dependencies]
-# Full ML stack + research tooling for local development
-ml = [
-    "torch>=2.2",
-    "torchaudio>=2.2",
+    "torch==2.9.1+cu128",
+    "torchaudio==2.9.1+cu128",
+    "torchcodec==0.9.1",
     "transformers>=4.38",
     "safetensors",
     "soundfile",
@@ -42,10 +38,15 @@ ml = [
     "ipywidgets",
     "tqdm>=4.66",
     "mlflow>=2.10",
+    "nnaudio>=0.3.4",
 ]
 
-# Dependency groups — local developer workflows
-[dependency-groups]
-dev = [
-    "mess-ai[ml]",
-]
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchaudio = [{ index = "pytorch-cu128" }]
+torchcodec = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

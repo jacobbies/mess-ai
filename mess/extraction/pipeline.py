@@ -15,7 +15,6 @@ Usage:
 
 import time
 import logging
-import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, Union, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -86,7 +85,9 @@ class ExtractionPipeline:
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
         num_workers: int = 1,
-        dataset: Optional[str] = None
+        dataset: Optional[str] = None,
+        include_raw: bool = True,
+        include_segments: bool = True
     ) -> Optional[Dict[str, Any]]:
         """
         Extract features for entire dataset.
@@ -102,6 +103,8 @@ class ExtractionPipeline:
             skip_existing: Skip already-extracted files (default: True)
             num_workers: Number of worker threads (default: 1 for sequential)
             dataset: Dataset name for subdirectory (optional)
+            include_raw: Include full-resolution raw hidden states
+            include_segments: Include per-segment features
 
         Returns:
             Dict with statistics if num_workers>1, None if sequential (backward compatible)
@@ -109,7 +112,7 @@ class ExtractionPipeline:
         if num_workers > 1:
             return self.run_parallel(
                 audio_dir, output_dir, file_pattern,
-                skip_existing, num_workers, dataset
+                skip_existing, num_workers, dataset, include_raw, include_segments
             )
 
         # Sequential implementation (original behavior, backward compatible)
@@ -130,7 +133,9 @@ class ExtractionPipeline:
                     audio_file,
                     output_dir,
                     skip_existing=skip_existing,
-                    dataset=dataset
+                    dataset=dataset,
+                    include_raw=include_raw,
+                    include_segments=include_segments,
                 )
             except Exception as e:
                 logging.error(f"Failed to process {audio_file}: {e}")
@@ -146,7 +151,9 @@ class ExtractionPipeline:
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
         num_workers: Optional[int] = None,
-        dataset: Optional[str] = None
+        dataset: Optional[str] = None,
+        include_raw: bool = True,
+        include_segments: bool = True
     ) -> Dict[str, Any]:
         """
         Extract features with parallel audio loading.
@@ -165,6 +172,8 @@ class ExtractionPipeline:
             skip_existing: Skip already-extracted files (default: True)
             num_workers: Number of worker threads
             dataset: Dataset name for subdirectory (optional)
+            include_raw: Include full-resolution raw hidden states
+            include_segments: Include per-segment features
 
         Returns:
             Dict with extraction statistics
@@ -210,15 +219,11 @@ class ExtractionPipeline:
 
                     if result['status'] == 'ready':
                         try:
-                            segment_features = self.extractor._extract_mert_features_batched(
-                                result['segments']
+                            features = self.extractor._extract_feature_views_from_segments(
+                                result['segments'],
+                                include_raw=include_raw,
+                                include_segments=include_segments
                             )
-
-                            features = {
-                                'raw': segment_features,
-                                'segments': np.mean(segment_features, axis=2),
-                                'aggregated': np.mean(segment_features, axis=(0, 2))
-                            }
 
                             save_features(
                                 features, result['path'],

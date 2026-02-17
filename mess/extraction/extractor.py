@@ -25,7 +25,7 @@ from transformers.models.auto.modeling_auto import AutoModel
 
 from ..config import mess_config
 from .audio import load_audio, segment_audio, validate_audio_file
-from .storage import load_features, save_features
+from .storage import features_exist, load_selected_features, save_features
 
 
 class FeatureExtractor:
@@ -68,14 +68,61 @@ class FeatureExtractor:
 
         # Set batch size based on device if not specified
         if batch_size is None:
-            if self.device == 'cuda':
-                self.batch_size = 16
-            elif self.device == 'mps':
-                self.batch_size = 8
-            else:
-                self.batch_size = 4
+            self.batch_size = mess_config.batch_size
         else:
             self.batch_size = batch_size
+
+    def _extract_feature_views_from_segments(
+        self,
+        segments: List[np.ndarray],
+        include_raw: bool = True,
+        include_segments: bool = True
+    ) -> Dict[str, np.ndarray]:
+        """
+        Extract feature views for a list of audio segments in memory-safe batches.
+
+        Always returns 'aggregated'. Returns 'segments' and 'raw' when requested.
+        """
+        if not segments:
+            raise ValueError("No audio segments available for extraction")
+
+        raw_batches = [] if include_raw else None
+        segment_batches = [] if include_segments else None
+
+        aggregated_sum: Optional[np.ndarray] = None
+        total_segments = 0
+
+        for batch_start in range(0, len(segments), self.batch_size):
+            batch_segments = segments[batch_start:batch_start + self.batch_size]
+            batch_features = self._extract_mert_features_batched(batch_segments)
+
+            if include_raw:
+                raw_batches.append(batch_features)
+
+            batch_segment_features = np.mean(batch_features, axis=2)
+            if include_segments:
+                segment_batches.append(batch_segment_features)
+
+            if aggregated_sum is None:
+                aggregated_sum = np.zeros_like(batch_segment_features[0], dtype=np.float64)
+
+            aggregated_sum += batch_segment_features.sum(axis=0, dtype=np.float64)
+            total_segments += batch_segment_features.shape[0]
+
+        if aggregated_sum is None or total_segments == 0:
+            raise RuntimeError("Failed to compute aggregated features")
+
+        results: Dict[str, np.ndarray] = {
+            'aggregated': (aggregated_sum / total_segments).astype(np.float32)
+        }
+
+        if include_segments:
+            results['segments'] = np.concatenate(segment_batches, axis=0)
+
+        if include_raw:
+            results['raw'] = np.concatenate(raw_batches, axis=0)
+
+        return results
 
     def _load_model(self) -> None:
         """Load MERT model and processor."""
@@ -218,7 +265,9 @@ class FeatureExtractor:
         output_dir: Optional[Union[str, Path]] = None,
         track_id: Optional[str] = None,
         dataset: Optional[str] = None,
-        skip_existing: bool = True
+        skip_existing: bool = True,
+        include_raw: bool = True,
+        include_segments: bool = True
     ) -> Dict[str, np.ndarray]:
         """
         Extract MERT features for an audio track.
@@ -226,9 +275,9 @@ class FeatureExtractor:
         Pipeline: audio → preprocess → segment → MERT (batched) → aggregate
 
         Output formats:
-          - 'raw': [segments, 13, time, 768]
-          - 'segments': [segments, 13, 768]
-          - 'aggregated': [13, 768]
+          - 'raw': [segments, 13, time, 768] (optional)
+          - 'segments': [segments, 13, 768] (optional)
+          - 'aggregated': [13, 768] (always)
 
         Args:
             audio_path: Path to audio file
@@ -236,17 +285,32 @@ class FeatureExtractor:
             track_id: Custom track ID (optional)
             dataset: Dataset name for subdirectory (optional)
             skip_existing: Skip if features already exist (default: True)
+            include_raw: Include/snapshot full-resolution raw hidden states
+            include_segments: Include per-segment features
 
         Returns:
-            Dict with 'raw', 'segments', 'aggregated' keys
+            Dict with requested feature views and mandatory 'aggregated'
         """
         try:
             # Check cache if skip_existing enabled
             if skip_existing and output_dir:
-                existing = load_features(audio_path, output_dir, track_id, dataset)
-                if existing is not None:
-                    logging.info(f"Loading cached features for: {audio_path}")
-                    return existing
+                requested_feature_types = ['aggregated']
+                if include_segments:
+                    requested_feature_types.append('segments')
+                if include_raw:
+                    requested_feature_types.append('raw')
+
+                if features_exist(audio_path, output_dir, track_id, dataset):
+                    existing = load_selected_features(
+                        audio_path,
+                        output_dir,
+                        requested_feature_types,
+                        track_id=track_id,
+                        dataset=dataset,
+                    )
+                    if existing is not None:
+                        logging.info(f"Loading cached features for: {audio_path}")
+                        return existing
 
             logging.info(f"Extracting features for: {audio_path}")
 
@@ -261,15 +325,12 @@ class FeatureExtractor:
                 sample_rate=self.target_sample_rate
             )
 
-            # Extract features in batches (GPU-optimized)
-            segment_features = self._extract_mert_features_batched(segments)
-
-            # Create different feature representations
-            results = {
-                'raw': segment_features,
-                'segments': np.mean(segment_features, axis=2),
-                'aggregated': np.mean(segment_features, axis=(0, 2))
-            }
+            # Extract features in memory-safe batches.
+            results = self._extract_feature_views_from_segments(
+                segments,
+                include_raw=include_raw,
+                include_segments=include_segments
+            )
 
             # Save features if output directory provided
             if output_dir:
@@ -288,7 +349,9 @@ class FeatureExtractor:
         track_id: Optional[str] = None,
         dataset: Optional[str] = None,
         skip_existing: bool = True,
-        validate: bool = True
+        validate: bool = True,
+        include_raw: bool = True,
+        include_segments: bool = True
     ) -> Tuple[Optional[Dict[str, np.ndarray]], Optional[str]]:
         """
         Safe version of extract_track_features with comprehensive error handling.
@@ -302,6 +365,8 @@ class FeatureExtractor:
             dataset: Dataset name (optional)
             skip_existing: Skip if features exist (default: True)
             validate: Validate audio file before extraction (default: True)
+            include_raw: Include full-resolution raw hidden states
+            include_segments: Include per-segment features
 
         Returns:
             Tuple of (features_dict or None, error_message or None)
@@ -314,7 +379,13 @@ class FeatureExtractor:
                     return None, f"Validation failed: {error_msg}"
 
             features = self.extract_track_features(
-                audio_path, output_dir, track_id, dataset, skip_existing
+                audio_path,
+                output_dir,
+                track_id,
+                dataset,
+                skip_existing,
+                include_raw,
+                include_segments
             )
 
             return features, None
@@ -349,7 +420,9 @@ class FeatureExtractor:
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
         num_workers: int = 1,
-        dataset: Optional[str] = None
+        dataset: Optional[str] = None,
+        include_raw: bool = True,
+        include_segments: bool = True
     ) -> Optional[Dict[str, Any]]:
         """
         Extract features for entire dataset (convenience delegator).
@@ -364,6 +437,8 @@ class FeatureExtractor:
             skip_existing: Skip already-extracted files (default: True)
             num_workers: Number of worker threads (default: 1 for sequential)
             dataset: Dataset name for subdirectory (optional)
+            include_raw: Include full-resolution raw hidden states
+            include_segments: Include per-segment features
 
         Returns:
             Dict with statistics if num_workers>1, None if sequential
@@ -373,7 +448,8 @@ class FeatureExtractor:
         pipeline = ExtractionPipeline(self)
         return pipeline.run(
             audio_dir, output_dir, file_pattern,
-            skip_existing, num_workers, dataset
+            skip_existing, num_workers, dataset,
+            include_raw, include_segments
         )
 
     def estimate_extraction_time(

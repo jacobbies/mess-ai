@@ -14,7 +14,7 @@ Usage:
 import logging
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, Iterable
 
 
 def _resolve_base_dir(
@@ -94,6 +94,36 @@ def load_features(
 
     except Exception as e:
         logging.warning(f"Error loading existing features for {audio_path}: {e}")
+        return None
+
+
+def load_selected_features(
+    audio_path: Union[str, Path],
+    output_dir: Union[str, Path],
+    feature_types: Iterable[str],
+    track_id: Optional[str] = None,
+    dataset: Optional[str] = None
+) -> Optional[Dict[str, np.ndarray]]:
+    """
+    Load a selected subset of feature arrays from disk.
+
+    Returns None if any requested feature is missing.
+    """
+    try:
+        base_dir = _resolve_base_dir(output_dir, dataset)
+        filename = _resolve_filename(audio_path, track_id)
+
+        features: Dict[str, np.ndarray] = {}
+        for feature_type in feature_types:
+            feature_path = base_dir / feature_type / f"{filename}.npy"
+            if not feature_path.exists():
+                return None
+            features[feature_type] = np.load(feature_path)
+
+        return features
+
+    except Exception as e:
+        logging.warning(f"Error loading selected features for {audio_path}: {e}")
         return None
 
 

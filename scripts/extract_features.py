@@ -34,7 +34,13 @@ logger = logging.getLogger(__name__)
 MLFLOW_EXPERIMENT = "feature_extraction"
 
 
-def main(dataset_name="smd", force_recompute=False, num_workers=1):
+def main(
+    dataset_name="smd",
+    force_recompute=False,
+    num_workers=1,
+    feature_level="all",
+    batch_size=None,
+):
     """
     Extract features from specified dataset.
 
@@ -42,6 +48,8 @@ def main(dataset_name="smd", force_recompute=False, num_workers=1):
         dataset_name: Dataset to process (smd, maestro)
         force_recompute: Re-extract even if features exist
         num_workers: Number of worker threads (1=sequential, >1=parallel)
+        feature_level: all | segments | aggregated
+        batch_size: Optional MERT inference batch size override
     """
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
@@ -52,6 +60,8 @@ def main(dataset_name="smd", force_recompute=False, num_workers=1):
             'dataset': dataset_name,
             'force_recompute': force_recompute,
             'num_workers': num_workers,
+            'feature_level': feature_level,
+            'batch_size': batch_size if batch_size is not None else "default",
         })
 
         if num_workers > 1:
@@ -68,7 +78,10 @@ def main(dataset_name="smd", force_recompute=False, num_workers=1):
         logger.info(f"Output directory: {output_dir}")
 
         # Initialize extractor
-        extractor = FeatureExtractor()
+        extractor = FeatureExtractor(batch_size=batch_size)
+
+        include_raw = feature_level == "all"
+        include_segments = feature_level in {"all", "segments"}
 
         # Extract features for entire dataset
         results = extractor.extract_dataset_features(
@@ -77,7 +90,9 @@ def main(dataset_name="smd", force_recompute=False, num_workers=1):
             file_pattern="*.wav",
             skip_existing=not force_recompute,
             num_workers=num_workers,
-            dataset=dataset_name
+            dataset=dataset_name,
+            include_raw=include_raw,
+            include_segments=include_segments,
         )
 
         # Log results to MLflow and print
@@ -148,6 +163,29 @@ Examples:
         default=1,
         help="Number of worker threads (default: 1 for sequential, recommend 4 for parallel)"
     )
+    parser.add_argument(
+        "--feature-level",
+        choices=["all", "segments", "aggregated"],
+        default="all",
+        help=(
+            "Feature detail to save: all (raw+segments+aggregated), "
+            "segments (segments+aggregated), or aggregated (track-level only)"
+        ),
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Override MERT inference batch size (lower values reduce memory pressure)",
+    )
 
     args = parser.parse_args()
-    raise SystemExit(main(args.dataset, args.force, args.workers))
+    raise SystemExit(
+        main(
+            args.dataset,
+            args.force,
+            args.workers,
+            args.feature_level,
+            args.batch_size,
+        )
+    )

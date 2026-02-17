@@ -39,8 +39,10 @@ class MESSConfig:
 
     @property
     def device(self) -> str:
-        """Auto-detect optimal device (MPS for M3 Pro, fallback to CPU)."""
+        """Auto-detect optimal device (CUDA → MPS → CPU)."""
         import torch
+        if torch.cuda.is_available():
+            return 'cuda'
         if torch.backends.mps.is_available():
             return 'mps'
         return 'cpu'

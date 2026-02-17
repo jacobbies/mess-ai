@@ -33,7 +33,7 @@ def load_audio(audio_path: Union[str, Path], target_sr: int = 24000) -> np.ndarr
         Audio array (1D, target sample rate)
     """
     try:
-        audio, orig_sr = torchaudio.load(audio_path)
+        audio, orig_sr = torchaudio.load(str(audio_path))
 
         # Convert to mono if stereo
         if audio.shape[0] > 1:

@@ -30,7 +30,7 @@ Output formats per track:
 from mess.extraction.extractor import FeatureExtractor
 
 extractor = FeatureExtractor()
-features = extractor.extract_track_features("audio.wav", output_dir="data/processed/features")
+features = extractor.extract_track_features("audio.wav", output_dir="data/embeddings/<dataset>-emb")
 
 # Batch: extract entire dataset (backward-compatible convenience method)
 extractor.extract_dataset_features(audio_dir, output_dir, num_workers=4)

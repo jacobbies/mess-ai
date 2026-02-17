@@ -8,7 +8,7 @@ Usage:
     from mess.search import find_similar, load_features
 
     # Load features
-    features, track_names = load_features("data/processed/features/smd/aggregated")
+    features, track_names = load_features("data/embeddings/smd-emb/aggregated")
 
     # Find similar tracks
     similar = find_similar(

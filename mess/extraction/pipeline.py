@@ -51,11 +51,27 @@ class ExtractionPipeline:
         dataset root, fallback to ``rglob`` so datasets like MAESTRO (year
         subfolders) are handled without special-case script logic.
         """
-        files = sorted(audio_dir.glob(file_pattern))
+        # Normalize extension matching across case-sensitive (Linux) and
+        # case-insensitive (macOS default) filesystems.
+        if file_pattern.startswith("*.") and "/" not in file_pattern:
+            extension = file_pattern[1:].lower()
+            files = sorted(
+                p for p in audio_dir.glob("*")
+                if p.is_file() and p.suffix.lower() == extension
+            )
+        else:
+            files = sorted(audio_dir.glob(file_pattern))
         if files or "**" in file_pattern:
             return files
 
-        recursive_files = sorted(audio_dir.rglob(file_pattern))
+        if file_pattern.startswith("*.") and "/" not in file_pattern:
+            extension = file_pattern[1:].lower()
+            recursive_files = sorted(
+                p for p in audio_dir.rglob("*")
+                if p.is_file() and p.suffix.lower() == extension
+            )
+        else:
+            recursive_files = sorted(audio_dir.rglob(file_pattern))
         if recursive_files:
             logging.info(
                 f"No files matched '{file_pattern}' at dataset root; "

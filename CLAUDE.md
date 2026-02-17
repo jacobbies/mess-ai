@@ -118,9 +118,9 @@ pip install mess-ai[ml]          # Full ML stack
 ```bash
 # Extract MERT embeddings from audio (requires [ml])
 uv sync --group dev
-python research/scripts/extract_features.py --dataset smd
+python scripts/extract_features.py --dataset smd
 
-# Output: data/processed/features/aggregated/*.npy
+# Output: data/embeddings/<dataset>-emb/aggregated/*.npy
 # Format: [13 layers, 768 dims] per track
 # MLflow: Logs to "feature_extraction" experiment with timing metrics
 ```
@@ -128,7 +128,7 @@ python research/scripts/extract_features.py --dataset smd
 ### 2. Layer Discovery
 ```bash
 # Run probing experiments to validate layer specializations
-python research/scripts/run_probing.py
+python scripts/run_probing.py
 
 # Output: mess/probing/layer_discovery_results.json
 # Contains R² scores for 13 layers × 15 proxy targets (195 experiments)
@@ -139,14 +139,14 @@ python research/scripts/run_probing.py
 #   - Best layers per target with confidence ratings
 
 # Hyperparameter tuning examples:
-python research/scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
-python research/scripts/run_probing.py --experiment "ridge_alpha_sweep"
+python scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
+python scripts/run_probing.py --experiment "ridge_alpha_sweep"
 ```
 
 ### 3. Similarity Search
 ```bash
 # Test recommendations using validated layers (dynamically loaded from discovery)
-python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 
 # The recommender auto-loads layer_discovery_results.json and resolves aspects
 # Available aspects depend on what's been validated (run discovery first)
@@ -156,7 +156,7 @@ python research/scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 ### 4. Experimentation
 ```bash
 # Launch Jupyter for exploration
-jupyter notebook research/notebooks/
+jupyter notebook notebooks/
 
 # Suggested notebooks:
 # - layer_discovery_analysis.ipynb
@@ -277,8 +277,8 @@ data/
 
 ### Code Organization
 - Keep `mess/` as a clean, well-documented Python library
-- Use `research/scripts/` for CLI automation and batch processing
-- Use `research/notebooks/` for exploration and visualization
+- Use `scripts/` for CLI automation and batch processing
+- Use `notebooks/` for exploration and visualization
 - Document discoveries in `docs/`
 
 ### Development Patterns
@@ -289,7 +289,7 @@ data/
 
 ### Data Management
 - Keep raw audio in `data/{dataset}/wav-44/`
-- Store processed features in `data/processed/features/`
+- Store processed features in `data/embeddings/`
 - Never commit large binary files (use .gitignore)
 - Document feature extraction parameters
 
@@ -306,7 +306,7 @@ data/
 ```bash
 # Add audio to data/{dataset}/wav-44/
 uv sync --group dev
-python research/scripts/extract_features.py --dataset {dataset}
+python scripts/extract_features.py --dataset {dataset}
 ```
 
 ### Validate new layer hypothesis
@@ -314,7 +314,7 @@ python research/scripts/extract_features.py --dataset {dataset}
 # 1. Add proxy target to mess/probing/proxy_targets.py (if needed)
 # 2. Add to SCALAR_TARGETS in mess/probing/discovery.py
 # 3. Run discovery
-python research/scripts/run_probing.py
+python scripts/run_probing.py
 
 # 4. Check MLflow for R² scores
 mlflow ui
@@ -327,13 +327,13 @@ mlflow ui
 ```bash
 # Update mess/search/similarity.py
 # Benchmark
-python research/scripts/evaluate_similarity.py
+python scripts/evaluate_similarity.py
 ```
 
 ### Experiment with recommendations
 ```bash
 # Direct Python usage
-python research/scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
+python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
 
 # Or in Jupyter for visualization
 ```

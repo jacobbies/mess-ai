@@ -167,7 +167,7 @@ class SimilarityEvaluator:
 ### 3.2 CLI Script
 
 ```python
-# research/scripts/run_evaluation.py
+# scripts/run_evaluation.py
 
 import argparse
 from research.evaluation.evaluator import SimilarityEvaluator
@@ -182,7 +182,7 @@ def main():
     # Initialize evaluator
     evaluator = SimilarityEvaluator(
         ground_truth_path=f'data/evaluation/{args.dataset}_ground_truth.jsonl',
-        features_dir=f'data/processed/features/aggregated/'
+        features_dir=f'data/embeddings/<dataset>-emb/aggregated/'
     )
 
     # Define baselines
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     main()
 ```
 
-**Deliverable:** `research/scripts/run_evaluation.py`
+**Deliverable:** `scripts/run_evaluation.py`
 
 ---
 
@@ -215,7 +215,7 @@ if __name__ == '__main__':
 ### 4.1 Results Visualization
 
 ```python
-# research/notebooks/evaluation_analysis.ipynb
+# notebooks/evaluation_analysis.ipynb
 
 # Comparison bar chart
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
@@ -257,7 +257,7 @@ def analyze_failures():
     # What types of queries are hardest?
 ```
 
-**Deliverable:** `research/notebooks/evaluation_analysis.ipynb`
+**Deliverable:** `notebooks/evaluation_analysis.ipynb`
 
 ---
 
@@ -369,7 +369,7 @@ mess-ai/
 - [ ] Results show measurable improvement (>10%) over mean pooling
 - [ ] Visualization notebook with clear comparative charts
 - [ ] Documentation explaining evaluation methodology
-- [ ] Reproducible: Others can run `python research/scripts/run_evaluation.py`
+- [ ] Reproducible: Others can run `python scripts/run_evaluation.py`
 
 ---
 

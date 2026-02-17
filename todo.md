@@ -125,7 +125,7 @@ class ContrastiveFusionTrainer:
    - LayerFusionNetwork (attention-based or MLP)
    - ContrastiveFusionTrainer (triplet loss)
 
-2. Create `research/scripts/train_fusion.py`
+2. Create `scripts/train_fusion.py`
    - Load MERT features [13, 768]
    - Generate triplets from metadata
    - Train fusion network
@@ -137,7 +137,7 @@ class ContrastiveFusionTrainer:
    - Pre-compute fused embeddings
    - Use in search
 
-4. Create `research/notebooks/fusion_analysis.ipynb`
+4. Create `notebooks/fusion_analysis.ipynb`
    - Visualize learned layer weights
    - Compare to linear probing results
    - Evaluate search quality

@@ -15,6 +15,10 @@ class MAESTRODataset(BaseDataset):
     """
 
     @property
+    def dataset_id(self) -> str:
+        return "maestro"
+
+    @property
     def audio_dir(self) -> Path:
         """Directory containing MAESTRO audio files."""
         return self.data_root / "audio" / "maestro"

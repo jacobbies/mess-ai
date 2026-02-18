@@ -15,6 +15,10 @@ class SMDDataset(BaseDataset):
     """
 
     @property
+    def dataset_id(self) -> str:
+        return "smd"
+
+    @property
     def audio_dir(self) -> Path:
         """Directory containing SMD audio files."""
         return self.data_root / "audio" / "smd" / "wav-44"

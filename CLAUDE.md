@@ -6,13 +6,13 @@
 
 ### Architecture
 - **mess/** - Core ML library (feature extraction, similarity search, layer discovery)
-- **research/** - Jupyter notebooks and CLI scripts for experimentation
-- **data/** - Audio datasets and extracted features
+- **scripts/** - CLI workflow automation scripts
+- **data/** - Audio datasets and extracted features (239GB total)
 
 ### Purpose
 - ML research library for music understanding and similarity
-- Optimized for Apple Silicon (MPS acceleration) but works on any platform
 - Focus on layer-wise feature analysis and evidence-based similarity search
+- Platform-agnostic (works on Linux, macOS, Windows with appropriate GPU/CPU backends)
 
 ### Core Focus
 - Feature extraction from audio using MERT
@@ -32,36 +32,59 @@ mess-ai/
 │   ├── search/               # FAISS similarity search
 │   ├── datasets/             # Dataset loaders (SMD, MAESTRO)
 │   └── config.py             # Global configuration
-├── research/                 # ML experimentation
-│   ├── scripts/              # CLI workflow automation
-│   └── notebooks/            # Jupyter notebooks
-├── data/                     # Audio files & extracted features
-│   ├── smd/                  # Saarland Music Dataset
-│   ├── maestro/              # MAESTRO Dataset
-│   └── processed/            # Pre-extracted MERT embeddings (~94GB)
+├── tests/                    # pytest test suite (see tests/tests.md)
+│   ├── datasets/             # Dataset loader tests
+│   ├── extraction/           # Audio & storage tests
+│   ├── probing/              # Discovery & registry tests
+│   └── search/               # FAISS search tests
+├── scripts/                  # CLI workflow automation
+├── notebooks/                # Jupyter exploration
+├── data/                     # Audio files & extracted features (239GB total)
+│   ├── audio/                # Raw audio files (124GB)
+│   │   ├── smd/              # Saarland Music Dataset (50 tracks)
+│   │   └── maestro/          # MAESTRO Dataset (~1200 tracks)
+│   ├── embeddings/           # Pre-extracted MERT embeddings (115GB)
+│   │   ├── smd-emb/          # 94GB (raw, segments, aggregated)
+│   │   ├── maestro-emb/      # 21GB (raw, segments, aggregated)
+│   │   └── demo-emb/         # Demo subset
+│   ├── proxy_targets/        # Computed proxy target features (135MB)
+│   ├── indices/              # FAISS index files
+│   ├── metadata/             # Dataset metadata and manifests
+│   ├── waveforms/            # Cached waveform arrays
+│   └── models/               # Future training checkpoints
+├── mlruns/                   # MLflow experiment tracking (gitignored)
 ├── docs/                     # Research documentation
 └── pyproject.toml            # Package configuration
 ```
 
 ## Dependency Architecture
 
-The library has split dependencies to keep the core lightweight:
+The library bundles all dependencies together for a complete ML research environment:
 
+**Core Dependencies:**
+- **Scientific**: numpy, scipy, scikit-learn, pandas
+- **ML Framework**: PyTorch 2.10+ (with MPS/CUDA support), torchcodec
+- **Transformers**: Hugging Face transformers 4.38+, safetensors
+- **Audio Processing**: librosa 0.10+, soundfile, nnaudio
+- **Search**: FAISS (CPU version)
+- **Experiment Tracking**: MLflow 2.10+
+- **Development**: Jupyter, matplotlib, seaborn, ipywidgets, tqdm
+
+**Platform-Specific Features:**
+- Linux: PyTorch with CUDA 12.8 support (via pytorch-cu128 index)
+- macOS: PyTorch with MPS (Metal Performance Shaders) acceleration
+
+**Testing:**
+- pytest 8+, pytest-cov, pytest-mock (in `[dependency-groups] dev`)
+
+**Installation:**
+```bash
+# Install all dependencies (including test deps)
+uv sync --group dev
+
+# Or using pip
+pip install -e .
 ```
-mess-ai (core)          mess-ai[ml]
-─────────────────       ─────────────────
-numpy, scipy            + torch, torchaudio
-scikit-learn            + transformers
-faiss-cpu               + librosa
-~150MB                  + tqdm, mlflow
-                        + jupyter, matplotlib
-                        ~3GB
-```
-
-- **Core deps**: Everything needed for `mess.search` and `mess.datasets` (inference & analysis only)
-- **[ml] optional**: Full ML stack for `mess.extraction` and `mess.probing` (feature extraction, research, experiment tracking)
-
-**Note**: `tqdm` and `mlflow` are in `[ml]` extras, not core. Core is purely for using pre-extracted features.
 
 ## Layer Discovery System
 
@@ -94,34 +117,42 @@ These specializations replace naive feature averaging and enable evidence-based 
 ### Installation
 
 ```bash
-# Install core dependencies only (for using pre-extracted features)
-uv sync
-
-# Install with ML dependencies (for feature extraction and research)
+# Install all dependencies (including test deps)
 uv sync --group dev
 
 # Or using pip
-pip install mess-ai              # Core only
-pip install mess-ai[ml]          # Full ML stack
+pip install -e .
 ```
 
-### Dependency Groups
+All dependencies are installed together. The library includes everything needed for:
+- Feature extraction from audio
+- Layer discovery and validation
+- Similarity search and recommendations
+- Jupyter notebook experimentation
+- MLflow experiment tracking
 
-| Command | What it installs | Use case |
-|---------|------------------|----------|
-| `uv sync` | Core deps | Using pre-extracted features, similarity search |
-| `uv sync --group dev` | `mess-ai[ml]` | ML research, feature extraction |
+### Running Tests
+
+```bash
+uv run pytest -v                          # all tests verbose
+uv run pytest --cov=mess --cov-report=term-missing  # with coverage
+uv run pytest -m unit                     # only fast unit tests
+uv run pytest tests/test_config.py -v     # single module
+```
+
+99 tests, ~3.5s, no model loading or real audio I/O. See `tests/tests.md` for full details.
 
 ## Development Workflow
 
 ### 1. Feature Extraction
 ```bash
-# Extract MERT embeddings from audio (requires [ml])
-uv sync --group dev
+# Extract MERT embeddings from audio
 python scripts/extract_features.py --dataset smd
 
-# Output: data/embeddings/<dataset>-emb/aggregated/*.npy
-# Format: [13 layers, 768 dims] per track
+# Output: data/embeddings/<dataset>-emb/
+#   - raw/: Full temporal features [segments, 13, time, 768]
+#   - segments/: Time-averaged [segments, 13, 768]
+#   - aggregated/: Track-level [13, 768] - used for similarity search
 # MLflow: Logs to "feature_extraction" experiment with timing metrics
 ```
 
@@ -153,17 +184,6 @@ python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 # Examples: brightness, texture, warmth, dynamics, articulation, phrasing
 ```
 
-### 4. Experimentation
-```bash
-# Launch Jupyter for exploration
-jupyter notebook notebooks/
-
-# Suggested notebooks:
-# - layer_discovery_analysis.ipynb
-# - similarity_benchmarks.ipynb
-# - feature_visualization.ipynb
-```
-
 ### 5. Experiment Tracking with MLflow
 ```bash
 # View experiment history and metrics in browser UI
@@ -189,11 +209,13 @@ mlflow ui
 
 The `mess/` directory is a Python library with these modules:
 
-**extraction/** (requires `mess-ai[ml]`)
+**extraction/**
 - `extractor.py`: MERT feature extraction from audio (with batching & caching)
-- `config.py`: Extraction configuration (sample rate, segment duration, etc.)
+- `audio.py`: Audio loading and preprocessing
+- `pipeline.py`: Feature extraction pipeline orchestration
+- `storage.py`: Feature storage and caching utilities
 
-**probing/** (requires `mess-ai[ml]`)
+**probing/**
 - `discovery.py`: Systematic discovery of layer specializations via linear probing
   - `LayerDiscoverySystem`: 13 layers × 15 proxy targets with Ridge regression + CV
   - Logs all params/metrics to MLflow if run is active
@@ -201,7 +223,7 @@ The `mess/` directory is a Python library with these modules:
 - `proxy_targets.py`: Musical aspect proxy targets for validation
 - `layer_discovery_results.json`: Empirical validation results (gitignored, generated by probing)
 
-**search/** (core deps only)
+**search/**
 - `aspects.py`: Aspect registry mapping user concepts to probing targets
   - `ASPECT_REGISTRY`: 10 searchable aspects (brightness, texture, warmth, etc.)
   - `resolve_aspects()`: Auto-loads discovery results and maps aspects to best layers
@@ -209,14 +231,11 @@ The `mess/` directory is a Python library with these modules:
   - Loads validated layers from `layer_discovery_results.json` at init
   - Zero hardcoded layer mappings — fully data-driven
   - Graceful fallback when no results exist
-- `faiss_index.py`: FAISS index wrapper for similarity search
-- `layer_indices.py`: Per-layer FAISS indices
-- `similarity.py`: Similarity computation (cosine, euclidean, etc.)
-- `diverse_similarity.py`: Diverse recommendation algorithms
+- `search.py`: Simplified similarity search interface
 - `cache.py`: Feature caching utilities
 
-**datasets/** (core deps only)
-- `base.py`: Base dataset class
+**datasets/**
+- `base.py`: Base dataset class with common functionality
 - `smd.py`: Saarland Music Dataset loader
 - `maestro.py`: MAESTRO dataset loader
 - `factory.py`: Dataset factory pattern
@@ -226,15 +245,17 @@ The `mess/` directory is a Python library with these modules:
 ```
 Audio Files (.wav)
     ↓
-MERT Feature Extraction (mess.extraction)  ← requires [ml]
+MERT Feature Extraction (mess.extraction)
     ↓
 Embeddings [13 layers, 768 dims]
     ↓
-Layer Discovery (mess.probing)             ← requires [ml]
+Proxy Target Computation (mess.probing.proxy_targets)
     ↓
-Validated Layer Mappings
+Layer Discovery (mess.probing.discovery)
     ↓
-Similarity Search (mess.search)            ← core deps only
+Validated Layer Mappings (layer_discovery_results.json)
+    ↓
+Similarity Search (mess.search)
     ↓
 Recommendations
 ```
@@ -243,35 +264,54 @@ Recommendations
 
 ```
 data/
-├── smd/                    # Saarland Music Dataset
-│   ├── wav-44/            # 50 audio files at 44kHz (MERT compatible)
-│   ├── csv/               # Performance annotations
-│   └── midi/              # Symbolic representations
-├── maestro/               # MAESTRO Dataset
-├── processed/features/     # MERT embeddings (94GB total)
-│   ├── raw/               # Full temporal features [segments, 13, time, 768]
-│   ├── segments/          # Time-averaged [segments, 13, 768]
-│   └── aggregated/        # Track-level [13, 768] - used for similarity search
-└── models/                # Future training checkpoints
+├── audio/                      # Raw audio files (124GB)
+│   ├── smd/                    # Saarland Music Dataset
+│   │   ├── wav-44/            # 50 audio files at 44kHz (MERT compatible)
+│   │   ├── csv/               # Performance annotations
+│   │   └── midi/              # Symbolic representations
+│   └── maestro/               # MAESTRO Dataset (~1200 recordings)
+│       ├── 2004-2018/         # Years of recordings
+│       ├── *.csv              # Metadata manifests
+│       └── *.json             # Dataset information
+├── embeddings/                 # MERT embeddings (115GB)
+│   ├── smd-emb/               # SMD embeddings (94GB)
+│   │   ├── raw/               # Full temporal [segments, 13, time, 768]
+│   │   ├── segments/          # Time-averaged [segments, 13, 768]
+│   │   └── aggregated/        # Track-level [13, 768]
+│   ├── maestro-emb/           # MAESTRO embeddings (21GB)
+│   │   ├── raw/
+│   │   ├── segments/
+│   │   └── aggregated/
+│   └── demo-emb/              # Small demo subset
+├── proxy_targets/             # Computed proxy features (135MB)
+│   └── *.npy                  # Per-dataset proxy target arrays
+├── indices/                   # FAISS index files
+├── metadata/                  # Dataset manifests and track lists
+├── waveforms/                 # Cached waveform arrays
+└── models/                    # Future training checkpoints
 ```
 
 ## Performance Characteristics
 
 - **Feature Extraction**: ~2.6 minutes for 50-track dataset (M3 Pro)
 - **Similarity Search**: <1ms per query (FAISS IndexFlatIP)
-- **Layer Discovery**: ~10-15 minutes full validation
-- **Dataset Size**: ~94GB processed features (SMD + MAESTRO)
+- **Layer Discovery**: ~10-15 minutes full validation (195 probing experiments)
+- **Storage Requirements**:
+  - Audio files: 124GB (SMD + MAESTRO)
+  - Embeddings: 115GB (94GB SMD + 21GB MAESTRO)
+  - Proxy targets: 135MB
+  - Total: ~239GB
 
 ## Tech Stack
 
 - **Package Manager**: uv (fast Python package manager)
-- **ML Framework**: PyTorch 2.2+ (MPS acceleration on Apple Silicon)
+- **ML Framework**: PyTorch 2.10+ (MPS/CUDA/CPU), torchcodec 0.10+
 - **Transformers**: Hugging Face transformers 4.38+ (MERT model)
-- **Audio**: librosa, soundfile
+- **Audio**: librosa 0.10+, soundfile, nnaudio 0.3.4+
 - **Search**: FAISS (CPU version, sub-millisecond queries)
-- **Scientific**: scikit-learn, numpy, pandas
-- **Experiment Tracking**: MLflow (metrics, parameters, artifacts)
-- **Development**: Jupyter, matplotlib, seaborn
+- **Scientific**: scikit-learn, numpy, scipy, pandas
+- **Experiment Tracking**: MLflow 2.10+ (metrics, parameters, artifacts)
+- **Development**: Jupyter, matplotlib, seaborn, ipywidgets, tqdm
 
 ## Best Practices
 
@@ -282,16 +322,19 @@ data/
 - Document discoveries in `docs/`
 
 ### Development Patterns
-- Run experiments in notebooks first
 - Productionize proven code into `mess/` modules
-- Use scripts for repeatable workflows
-- Keep the core library (`mess.search`, `mess.datasets`) lightweight
+- Use scripts for repeatable workflows and batch processing
+- Keep the `mess/` library clean and well-tested
+- Write tests for new code — mirror source structure in `tests/` (e.g., `mess/search/` → `tests/search/`)
+- Unit tests should avoid loading the MERT model; mock heavy deps, use `tmp_path` for I/O
+- Run `uv run pytest` before committing
 
 ### Data Management
-- Keep raw audio in `data/{dataset}/wav-44/`
-- Store processed features in `data/embeddings/`
+- Keep raw audio in `data/audio/{dataset}/`
+- Store processed features in `data/embeddings/{dataset}-emb/`
+- Proxy targets go in `data/proxy_targets/`
 - Never commit large binary files (use .gitignore)
-- Document feature extraction parameters
+- Document feature extraction parameters in experiment tracking
 
 ### Research Workflow
 1. **Explore** in Jupyter notebooks
@@ -304,8 +347,7 @@ data/
 
 ### Extract features from new audio
 ```bash
-# Add audio to data/{dataset}/wav-44/
-uv sync --group dev
+# Add audio to data/audio/{dataset}/
 python scripts/extract_features.py --dataset {dataset}
 ```
 
@@ -346,16 +388,32 @@ python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
 - Expanded proxy target validation
 
 **📋 Planned:**
-- Multi-modal fusion (audio + score + metadata)
+- Making feature extraction more robust
 - User preference learning
-- Expanded dataset support beyond classical music
+
+## Known Issues
+
+**Scripts needing updates** (see `scripts/_NEEDS_UPDATE.txt`):
+- `build_layer_indices.py` - Uses old LayerIndexBuilder API
+- `demo_layer_search.py` - Uses old LayerIndexBuilder API
+- `evaluate_layer_indices.py` - Uses old LayerIndexBuilder API
+- `evaluate_similarity.py` - Uses old FAISSIndex and SimilarityComputer APIs
+
+These scripts were experimental and not validated. They can be:
+1. Updated to use the new simplified search module
+2. Deleted if not needed
+3. Rewritten for specific research experiments
+
+The main demo script (`demo_recommendations.py`) works correctly with the current API.
 
 ## Notes for Claude
 
+- Ignore AGENTS.md
 - This is an **open source ML research library** intended for public release
 - `mess/` is the core library - keep it clean, well-documented, and modular
-- `research/` contains experimentation code (notebooks, scripts)
-- Use `uv sync --group dev` for full development setup
+- `scripts/` contains CLI automation, `notebooks/` contains experimentation code
+- Use `uv sync` for full development setup (all deps bundled together)
 - All experiments are tracked in MLflow - run `mlflow ui` to view results
 - Focus on scientific rigor, reproducibility, and clean code
 - The library should be accessible to researchers and easy to extend
+- Total storage requirement: ~239GB (124GB audio + 115GB embeddings)

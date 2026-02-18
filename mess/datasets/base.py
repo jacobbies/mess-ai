@@ -32,6 +32,12 @@ class BaseDataset(ABC):
 
     @property
     @abstractmethod
+    def dataset_id(self) -> str:
+        """Stable dataset identifier used in configs and artifact naming."""
+        ...
+
+    @property
+    @abstractmethod
     def audio_dir(self) -> Path:
         """Directory containing audio files for this dataset."""
         ...

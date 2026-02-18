@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Dict, Any, Optional
+import os
 
 
 class MESSConfig:
@@ -21,12 +22,28 @@ class MESSConfig:
         self.MERT_SEGMENT_DURATION: float = 5.0
         self.MERT_OVERLAP_RATIO: float = 0.5
 
+        # Device Configuration (CPU default, explicit GPU opt-in)
+        self.MERT_DEVICE: Optional[str] = 'cpu'  # Default: 'cpu', Options: 'cuda', 'mps'
+
+        # Device-specific batch sizes (optimized per hardware)
+        self.MERT_BATCH_SIZE_CUDA: int = 16  # RTX 3070Ti can handle 16
+        self.MERT_BATCH_SIZE_MPS: int = 8
+        self.MERT_BATCH_SIZE_CPU: int = 4
+
+        # CUDA optimizations (RTX 3070Ti Ampere benefits from all of these)
+        self.MERT_CUDA_PINNED_MEMORY: bool = True  # 10-20% speedup
+        self.MERT_CUDA_NON_BLOCKING: bool = True   # Overlaps transfers
+        self.MERT_CUDA_MIXED_PRECISION: bool = True  # ~2x speedup with Tensor Cores
+        self.MERT_CUDA_AUTO_OOM_RECOVERY: bool = True  # Auto-reduce batch on OOM
+
         # Processing Configuration
-        self.MERT_BATCH_SIZE: int = 8
         self.MERT_MAX_WORKERS: int = 4
         self.MERT_MEMORY_EFFICIENT: bool = False
         self.MERT_CHECKPOINT_INTERVAL: int = 10
         self.MERT_VERBOSE: bool = True
+
+        # Environment variable overrides (useful for Docker/cluster deployment)
+        self._apply_env_overrides()
     
     # =========================================================================
     # Model Configuration
@@ -37,14 +54,38 @@ class MESSConfig:
         """MERT model identifier from Hugging Face."""
         return self.MERT_MODEL_NAME
 
+    def _apply_env_overrides(self) -> None:
+        """Apply environment variable overrides for deployment flexibility."""
+        if os.getenv('MESS_DEVICE'):
+            # Examples: MESS_DEVICE=cuda, MESS_DEVICE=cpu, MESS_DEVICE=mps
+            self.MERT_DEVICE = os.getenv('MESS_DEVICE')
+
+        if os.getenv('MESS_WORKERS'):
+            self.MERT_MAX_WORKERS = int(os.getenv('MESS_WORKERS'))
+
+        if os.getenv('MESS_BATCH_SIZE'):
+            # Override all batch sizes uniformly
+            batch_size = int(os.getenv('MESS_BATCH_SIZE'))
+            self.MERT_BATCH_SIZE_CUDA = batch_size
+            self.MERT_BATCH_SIZE_MPS = batch_size
+            self.MERT_BATCH_SIZE_CPU = batch_size
+
+        # CUDA optimization toggles
+        if os.getenv('MESS_CUDA_MIXED_PRECISION'):
+            self.MERT_CUDA_MIXED_PRECISION = os.getenv('MESS_CUDA_MIXED_PRECISION') == '1'
+
     @property
     def device(self) -> str:
-        """Auto-detect optimal device (CUDA → MPS → CPU)."""
-        import torch
-        if torch.cuda.is_available():
-            return 'cuda'
-        if torch.backends.mps.is_available():
-            return 'mps'
+        """
+        Device selection with CPU as safe default.
+
+        Users must explicitly set device='cuda' or device='mps' to use GPU.
+        This prevents accidental GPU usage and OOM errors.
+        """
+        if self.MERT_DEVICE:
+            return self.MERT_DEVICE
+
+        # Fallback to CPU if not explicitly set
         return 'cpu'
 
     @property
@@ -79,8 +120,14 @@ class MESSConfig:
 
     @property
     def batch_size(self) -> int:
-        """Batch size for MERT inference."""
-        return self.MERT_BATCH_SIZE
+        """Device-adaptive batch size for optimal throughput."""
+        device = self.device
+        if device == 'cuda':
+            return self.MERT_BATCH_SIZE_CUDA
+        elif device == 'mps':
+            return self.MERT_BATCH_SIZE_MPS
+        else:
+            return self.MERT_BATCH_SIZE_CPU
 
     @property
     def max_workers(self) -> int:
@@ -156,6 +203,10 @@ class MESSConfig:
         if self.max_workers < 1:
             raise ValueError("max_workers must be at least 1")
 
+        # Validate device
+        if self.device not in ['cpu', 'cuda', 'mps']:
+            raise ValueError(f"Invalid device: {self.device}. Must be 'cpu', 'cuda', or 'mps'")
+
         # Ensure data root exists
         self.data_root.mkdir(parents=True, exist_ok=True)
         print(f"✓ Config validated. Data root: {self.data_root}")
@@ -163,12 +214,26 @@ class MESSConfig:
     def get_device_info(self) -> Dict[str, Any]:
         """Get device information for debugging."""
         import torch
-        return {
+        info = {
             'device': self.device,
             'pytorch_version': torch.__version__,
             'mps_available': torch.backends.mps.is_available(),
-            'cuda_available': torch.cuda.is_available()
+            'cuda_available': torch.cuda.is_available(),
+            'batch_size': self.batch_size,
         }
+
+        # Add CUDA-specific info
+        if self.device == 'cuda' and torch.cuda.is_available():
+            info.update({
+                'cuda_device_name': torch.cuda.get_device_name(0),
+                'cuda_memory_gb': torch.cuda.get_device_properties(0).total_memory / 1e9,
+                'cuda_pinned_memory': self.MERT_CUDA_PINNED_MEMORY,
+                'cuda_non_blocking': self.MERT_CUDA_NON_BLOCKING,
+                'cuda_mixed_precision': self.MERT_CUDA_MIXED_PRECISION,
+                'cuda_oom_recovery': self.MERT_CUDA_AUTO_OOM_RECOVERY,
+            })
+
+        return info
 
     def get_path_info(self) -> Dict[str, str]:
         """Get path information for debugging."""
@@ -186,7 +251,7 @@ class MESSConfig:
         print("MESS Configuration".center(60))
         print("=" * 60)
         print(f"  Model:            {self.model_name}")
-        print(f"  Device:           {self.device}")
+        print(f"  Device:           {self.device.upper()}")
         print(f"  Sample Rate:      {self.target_sample_rate} Hz")
         print(f"  Segment Duration: {self.segment_duration}s")
         print(f"  Overlap Ratio:    {self.overlap_ratio}")
@@ -194,6 +259,16 @@ class MESSConfig:
         print(f"  Max Workers:      {self.max_workers}")
         print(f"  Memory Efficient: {self.memory_efficient}")
         print(f"  Verbose:          {self.verbose}")
+
+        # Show CUDA optimizations if using CUDA
+        if self.device == 'cuda':
+            print("-" * 60)
+            print("  CUDA Optimizations:")
+            print(f"    Pinned Memory:   {self.MERT_CUDA_PINNED_MEMORY}")
+            print(f"    Non-blocking:    {self.MERT_CUDA_NON_BLOCKING}")
+            print(f"    Mixed Precision: {self.MERT_CUDA_MIXED_PRECISION}")
+            print(f"    OOM Recovery:    {self.MERT_CUDA_AUTO_OOM_RECOVERY}")
+
         print("-" * 60)
         print(f"  Project Root:     {self.project_root}")
         print(f"  Data Root:        {self.data_root}")

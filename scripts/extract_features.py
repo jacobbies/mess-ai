@@ -6,14 +6,20 @@ Extract MERT embeddings from audio files for similarity search.
 Results are tracked in MLflow — run `mlflow ui` to browse experiments.
 
 Usage:
-    # Sequential (original, backward compatible)
+    # CPU mode (safe default)
     python scripts/extract_features.py --dataset smd
 
-    # Parallel (4 workers, ~40-50% faster)
-    python scripts/extract_features.py --dataset smd --workers 4
+    # GPU mode with RTX 3070Ti optimizations (2-2.5x faster)
+    python scripts/extract_features.py --dataset smd --device cuda
+
+    # Parallel + GPU for large datasets (~15-20 min for 100GB)
+    python scripts/extract_features.py --dataset maestro --device cuda --workers 4
 
     # Force re-extraction
-    python scripts/extract_features.py --dataset maestro --force --workers 4
+    python scripts/extract_features.py --dataset maestro --force --workers 4 --device cuda
+
+    # Disable mixed precision (for debugging)
+    python scripts/extract_features.py --dataset smd --device cuda --no-mixed-precision
 """
 
 import argparse
@@ -40,6 +46,9 @@ def main(
     num_workers=1,
     feature_level="all",
     batch_size=None,
+    device="cpu",
+    no_mixed_precision=False,
+    disable_oom_recovery=False,
 ):
     """
     Extract features from specified dataset.
@@ -50,18 +59,42 @@ def main(
         num_workers: Number of worker threads (1=sequential, >1=parallel)
         feature_level: all | segments | aggregated
         batch_size: Optional MERT inference batch size override
+        device: Device to use ('cpu', 'cuda', 'mps')
+        no_mixed_precision: Disable CUDA mixed precision (FP16)
+        disable_oom_recovery: Disable automatic OOM recovery
     """
+    from mess.config import mess_config
+
+    # Configure device (CPU default, explicit GPU opt-in)
+    mess_config.MERT_DEVICE = device
+
+    # Configure CUDA optimizations (enabled by default when using CUDA)
+    if device == 'cuda':
+        if no_mixed_precision:
+            mess_config.MERT_CUDA_MIXED_PRECISION = False
+        if disable_oom_recovery:
+            mess_config.MERT_CUDA_AUTO_OOM_RECOVERY = False
+
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
     with mlflow.start_run():
         logger.info(f"Starting feature extraction for {dataset_name}")
+        logger.info(f"Device: {mess_config.device.upper()}")
+        logger.info(f"Batch size: {mess_config.batch_size}")
+
+        if device == 'cuda':
+            logger.info(f"CUDA mixed precision: {mess_config.MERT_CUDA_MIXED_PRECISION}")
+            logger.info(f"CUDA OOM recovery: {mess_config.MERT_CUDA_AUTO_OOM_RECOVERY}")
 
         mlflow.log_params({
             'dataset': dataset_name,
+            'device': mess_config.device,
             'force_recompute': force_recompute,
             'num_workers': num_workers,
             'feature_level': feature_level,
-            'batch_size': batch_size if batch_size is not None else "default",
+            'batch_size': batch_size if batch_size is not None else mess_config.batch_size,
+            'mixed_precision': mess_config.MERT_CUDA_MIXED_PRECISION if device == 'cuda' else False,
+            'oom_recovery': mess_config.MERT_CUDA_AUTO_OOM_RECOVERY if device == 'cuda' else False,
         })
 
         if num_workers > 1:
@@ -74,6 +107,7 @@ def main(
         audio_dir = dataset.audio_dir
         output_dir = dataset.embeddings_dir
 
+        logger.info(f"Dataset: {dataset.dataset_id}")
         logger.info(f"Audio directory: {audio_dir}")
         logger.info(f"Output directory: {output_dir}")
 
@@ -90,7 +124,7 @@ def main(
             file_pattern="*.wav",
             skip_existing=not force_recompute,
             num_workers=num_workers,
-            dataset=dataset_name,
+            dataset=None,
             include_raw=include_raw,
             include_segments=include_segments,
         )
@@ -136,14 +170,20 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Sequential extraction (original)
+  # CPU mode (safe default)
   python scripts/extract_features.py --dataset smd
 
-  # Parallel extraction (4 workers, ~40-50% faster)
-  python scripts/extract_features.py --dataset smd --workers 4
+  # GPU mode with RTX 3070Ti optimizations (2-2.5x faster)
+  python scripts/extract_features.py --dataset smd --device cuda
 
-  # Force re-extraction with parallel processing
-  python scripts/extract_features.py --dataset maestro --force --workers 4
+  # Parallel + GPU for large datasets (optimal speed)
+  python scripts/extract_features.py --dataset maestro --device cuda --workers 4
+
+  # Force re-extraction
+  python scripts/extract_features.py --dataset maestro --force --device cuda --workers 4
+
+  # Debug mode (disable optimizations)
+  python scripts/extract_features.py --dataset smd --device cuda --no-mixed-precision --disable-oom-recovery
         """
     )
     parser.add_argument(
@@ -178,6 +218,22 @@ Examples:
         default=None,
         help="Override MERT inference batch size (lower values reduce memory pressure)",
     )
+    parser.add_argument(
+        "--device",
+        choices=["cpu", "cuda", "mps"],
+        default="cpu",
+        help="Device to use (default: cpu). Use 'cuda' for GPU acceleration on RTX 3070Ti.",
+    )
+    parser.add_argument(
+        "--no-mixed-precision",
+        action="store_true",
+        help="Disable CUDA mixed precision (FP16). Default: enabled for CUDA.",
+    )
+    parser.add_argument(
+        "--disable-oom-recovery",
+        action="store_true",
+        help="Disable automatic OOM recovery. Default: enabled.",
+    )
 
     args = parser.parse_args()
     raise SystemExit(
@@ -187,5 +243,8 @@ Examples:
             args.workers,
             args.feature_level,
             args.batch_size,
+            args.device,
+            args.no_mixed_precision,
+            args.disable_oom_recovery,
         )
     )

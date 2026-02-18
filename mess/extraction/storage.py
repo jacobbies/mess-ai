@@ -13,6 +13,9 @@ Usage:
 
 import logging
 import numpy as np
+import tempfile
+import shutil
+import fcntl
 from pathlib import Path
 from typing import Optional, Dict, Union, Iterable
 
@@ -59,6 +62,40 @@ def features_exist(
     filename = _resolve_filename(audio_path, track_id)
     aggregated_path = base_dir / "aggregated" / f"{filename}.npy"
     return aggregated_path.exists()
+
+
+def features_exist_for_types(
+    audio_path: Union[str, Path],
+    output_dir: Union[str, Path],
+    feature_types: Iterable[str],
+    track_id: Optional[str] = None,
+    dataset: Optional[str] = None
+) -> bool:
+    """
+    Check whether all requested feature arrays exist on disk.
+
+    Args:
+        audio_path: Path to audio file (used for filename fallback)
+        output_dir: Root feature directory
+        feature_types: Required feature types to validate
+        track_id: Custom track ID (optional, defaults to audio file stem)
+        dataset: Dataset name for subdirectory (optional)
+
+    Returns:
+        True when every requested feature file exists, else False
+    """
+    if not output_dir:
+        return False
+
+    base_dir = _resolve_base_dir(output_dir, dataset)
+    filename = _resolve_filename(audio_path, track_id)
+
+    for feature_type in feature_types:
+        feature_path = base_dir / feature_type / f"{filename}.npy"
+        if not feature_path.exists():
+            return False
+
+    return True
 
 
 def load_features(
@@ -135,7 +172,10 @@ def save_features(
     dataset: Optional[str] = None
 ) -> None:
     """
-    Save extracted features to disk as .npy files.
+    Save extracted features atomically with file locking.
+
+    Uses temp files + atomic rename to prevent partial writes and file locks
+    to prevent concurrent writes to the same track in parallel extraction.
 
     Args:
         features: Dict with 'raw', 'segments', 'aggregated' arrays
@@ -147,11 +187,52 @@ def save_features(
     base_dir = _resolve_base_dir(output_dir, dataset)
     filename = _resolve_filename(audio_path, track_id)
 
-    for feature_type, data in features.items():
-        type_dir = base_dir / feature_type
-        type_dir.mkdir(parents=True, exist_ok=True)
+    # Create lock file directory
+    lock_dir = base_dir / ".locks"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_file_path = lock_dir / f"{filename}.lock"
 
-        save_path = type_dir / f"{filename}.npy"
-        np.save(save_path, data)
+    # Acquire exclusive lock
+    try:
+        with open(lock_file_path, 'w') as lock_file:
+            try:
+                # Non-blocking lock - fail fast if another process is writing
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                # Another process is writing this file, skip gracefully
+                logging.debug(f"Features for {filename} being written by another process, skipping")
+                return
 
-    logging.info(f"Features saved for {filename}")
+            try:
+                # Write each feature type atomically
+                for feature_type, data in features.items():
+                    type_dir = base_dir / feature_type
+                    type_dir.mkdir(parents=True, exist_ok=True)
+
+                    final_path = type_dir / f"{filename}.npy"
+
+                    # Write to temp file first
+                    with tempfile.NamedTemporaryFile(
+                        mode='wb',
+                        dir=type_dir,
+                        delete=False,
+                        suffix='.tmp'
+                    ) as tmp:
+                        np.save(tmp, data)
+                        tmp_path = tmp.name
+
+                    # Atomic rename (overwrites existing file if present)
+                    shutil.move(tmp_path, final_path)
+
+                logging.info(f"Features saved for {filename}")
+
+            finally:
+                # Release lock
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    finally:
+        # Clean up lock file
+        try:
+            lock_file_path.unlink()
+        except FileNotFoundError:
+            pass

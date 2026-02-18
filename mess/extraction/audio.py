@@ -17,8 +17,26 @@ import torch
 import torchaudio
 import logging
 import numpy as np
+from threading import Lock
 from pathlib import Path
 from typing import Dict, List, Union, Any
+
+_RESAMPLER_CACHE: Dict[tuple[int, int], torchaudio.transforms.Resample] = {}
+_RESAMPLER_CACHE_LOCK = Lock()
+
+
+def _get_resampler(orig_sr: int, target_sr: int) -> torchaudio.transforms.Resample:
+    """Get cached resampler for a sample-rate pair."""
+    key = (orig_sr, target_sr)
+    with _RESAMPLER_CACHE_LOCK:
+        resampler = _RESAMPLER_CACHE.get(key)
+        if resampler is None:
+            resampler = torchaudio.transforms.Resample(
+                orig_freq=orig_sr,
+                new_freq=target_sr
+            )
+            _RESAMPLER_CACHE[key] = resampler
+    return resampler
 
 
 def load_audio(audio_path: Union[str, Path], target_sr: int = 24000) -> np.ndarray:
@@ -41,10 +59,7 @@ def load_audio(audio_path: Union[str, Path], target_sr: int = 24000) -> np.ndarr
 
         # Resample if needed
         if orig_sr != target_sr:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=orig_sr,
-                new_freq=target_sr
-            )
+            resampler = _get_resampler(orig_sr, target_sr)
             audio = resampler(audio)
 
         # Convert to numpy and squeeze

@@ -17,11 +17,11 @@ import time
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Union, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from tqdm import tqdm
 
 from .audio import load_audio, segment_audio
-from .storage import features_exist, save_features
+from .storage import features_exist_for_types, save_features
 
 
 class ExtractionPipeline:
@@ -203,60 +203,85 @@ class ExtractionPipeline:
         cached_count = 0
         failed_count = 0
         errors = []
+        requested_feature_types = ['aggregated']
+        if include_segments:
+            requested_feature_types.append('segments')
+        if include_raw:
+            requested_feature_types.append('raw')
+        max_in_flight = max(num_workers * 2, 1)
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            future_to_file = {
-                executor.submit(
-                    self._preprocess_worker, audio_file,
-                    skip_existing, output_dir, dataset
-                ): audio_file
-                for audio_file in audio_files
-            }
+            audio_iter = iter(audio_files)
+            in_flight: Dict[Any, Path] = {}
+
+            def _submit_next() -> bool:
+                try:
+                    next_audio_file = next(audio_iter)
+                except StopIteration:
+                    return False
+
+                future = executor.submit(
+                    self._preprocess_worker,
+                    next_audio_file,
+                    skip_existing,
+                    output_dir,
+                    dataset,
+                    requested_feature_types,
+                )
+                in_flight[future] = next_audio_file
+                return True
+
+            for _ in range(min(max_in_flight, len(audio_files))):
+                _submit_next()
 
             with tqdm(total=len(audio_files), desc="Extracting features") as pbar:
-                for future in as_completed(future_to_file):
-                    result = future.result()
+                while in_flight:
+                    done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+                    for future in done:
+                        in_flight.pop(future, None)
+                        result = future.result()
 
-                    if result['status'] == 'ready':
-                        try:
-                            features = self.extractor._extract_feature_views_from_segments(
-                                result['segments'],
-                                include_raw=include_raw,
-                                include_segments=include_segments
-                            )
+                        if result['status'] == 'ready':
+                            try:
+                                features = self.extractor._extract_feature_views_from_segments(
+                                    result['segments'],
+                                    include_raw=include_raw,
+                                    include_segments=include_segments
+                                )
 
-                            save_features(
-                                features, result['path'],
-                                output_dir, result['track_id'], dataset
-                            )
+                                save_features(
+                                    features, result['path'],
+                                    output_dir, result['track_id'], dataset
+                                )
 
-                            processed_count += 1
+                                processed_count += 1
 
-                        except Exception as e:
-                            logging.error(f"MERT inference failed for {result['path']}: {e}")
+                            except Exception as e:
+                                logging.error(f"MERT inference failed for {result['path']}: {e}")
+                                failed_count += 1
+                                errors.append({
+                                    'path': result['path'],
+                                    'error': f"MERT inference error: {str(e)}"
+                                })
+
+                        elif result['status'] == 'cached':
+                            cached_count += 1
+
+                        elif result['status'] == 'error':
                             failed_count += 1
                             errors.append({
                                 'path': result['path'],
-                                'error': f"MERT inference error: {str(e)}"
+                                'error': result['error']
                             })
+                            logging.error(f"Failed to process {result['path']}: {result['error']}")
 
-                    elif result['status'] == 'cached':
-                        cached_count += 1
-
-                    elif result['status'] == 'error':
-                        failed_count += 1
-                        errors.append({
-                            'path': result['path'],
-                            'error': result['error']
-                        })
-                        logging.error(f"Failed to process {result['path']}: {result['error']}")
-
-                    pbar.update(1)
-                    pbar.set_postfix(
-                        processed=processed_count,
-                        cached=cached_count,
-                        failed=failed_count
-                    )
+                        pbar.update(1)
+                        pbar.set_postfix(
+                            processed=processed_count,
+                            cached=cached_count,
+                            failed=failed_count
+                        )
+                        _submit_next()
 
         elapsed_time = time.time() - start_time
         avg_time = elapsed_time / len(audio_files) if audio_files else 0.0
@@ -282,7 +307,8 @@ class ExtractionPipeline:
         audio_path: Path,
         skip_existing: bool,
         output_dir: Path,
-        dataset: Optional[str] = None
+        dataset: Optional[str] = None,
+        requested_feature_types: Optional[list[str]] = None
     ) -> Dict[str, Any]:
         """
         Worker function for parallel audio preprocessing (CPU-bound, thread-safe).
@@ -296,7 +322,14 @@ class ExtractionPipeline:
         try:
             track_id = audio_path.stem
 
-            if skip_existing and features_exist(audio_path, output_dir, track_id, dataset):
+            required_types = requested_feature_types or ['aggregated']
+            if skip_existing and features_exist_for_types(
+                audio_path,
+                output_dir,
+                required_types,
+                track_id=track_id,
+                dataset=dataset,
+            ):
                 return {
                     'status': 'cached',
                     'path': str(audio_path),

@@ -7,7 +7,7 @@ Dataset-level batch processing lives in pipeline.py.
 Output Formats:
   - raw: [segments, 13, time, 768] - full temporal resolution
   - segments: [segments, 13, 768] - time-averaged per segment
-  - aggregated: [13, 768] - track-level (for similarity search)
+  - aggregated: [13, 768] - track-level
 
 Usage:
     extractor = FeatureExtractor()
@@ -33,7 +33,7 @@ class FeatureExtractor:
     MERT-based feature extractor for music similarity.
 
     Handles: model loading → inference → track-level extraction.
-    Audio preprocessing delegated to audio.py, persistence to cache.py.
+    Audio preprocessing delegated to audio.py, persistence to storage.py.
     """
 
     def __init__(
@@ -48,9 +48,9 @@ class FeatureExtractor:
         Initialize MERT feature extractor.
 
         Args:
-            model_name: Hugging Face model name (default: m-a-p/MERT-v1-330M)
+            model_name: Hugging Face model name (default: m-a-p/MERT-v1-95M)
             device: 'cuda', 'mps', or 'cpu' (auto-detected if None)
-            cache_dir: Model cache directory
+            cache_dir: Hugging Face model cache directory
             output_dir: Feature output directory
             batch_size: Segments per batch (default: 16 for CUDA, 8 for MPS, 4 for CPU)
         """
@@ -72,6 +72,27 @@ class FeatureExtractor:
         else:
             self.batch_size = batch_size
 
+        # Log initialization info
+        self._log_initialization()
+
+    def _log_initialization(self) -> None:
+        """Log feature extractor configuration and device info."""
+        logging.info(f"FeatureExtractor initialized:")
+        logging.info(f"  Model: {self.model_name}")
+        logging.info(f"  Device: {self.device.upper()}")
+        logging.info(f"  Batch size: {self.batch_size}")
+        logging.info(f"  Target sample rate: {self.target_sample_rate}Hz")
+        logging.info(f"  Segment duration: {self.segment_duration}s")
+
+        # CUDA-specific info
+        if self.device == 'cuda':
+            from ..config import mess_config
+            logging.info(f"  CUDA device: {torch.cuda.get_device_name(0)}")
+            logging.info(f"  CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+            logging.info(f"  CUDA pinned memory: {mess_config.MERT_CUDA_PINNED_MEMORY}")
+            logging.info(f"  CUDA mixed precision: {mess_config.MERT_CUDA_MIXED_PRECISION}")
+            logging.info(f"  CUDA OOM recovery: {mess_config.MERT_CUDA_AUTO_OOM_RECOVERY}")
+
     def _extract_feature_views_from_segments(
         self,
         segments: List[np.ndarray],
@@ -82,6 +103,7 @@ class FeatureExtractor:
         Extract feature views for a list of audio segments in memory-safe batches.
 
         Always returns 'aggregated'. Returns 'segments' and 'raw' when requested.
+        Uses OOM recovery if enabled in config.
         """
         if not segments:
             raise ValueError("No audio segments available for extraction")
@@ -92,22 +114,20 @@ class FeatureExtractor:
         aggregated_sum: Optional[np.ndarray] = None
         total_segments = 0
 
-        for batch_start in range(0, len(segments), self.batch_size):
-            batch_segments = segments[batch_start:batch_start + self.batch_size]
-            batch_features = self._extract_mert_features_batched(batch_segments)
+        batch_features = self._extract_mert_features_batched_with_oom_recovery(segments)
 
-            if include_raw:
-                raw_batches.append(batch_features)
+        if include_raw:
+            raw_batches.append(batch_features)
 
-            batch_segment_features = np.mean(batch_features, axis=2)
-            if include_segments:
-                segment_batches.append(batch_segment_features)
+        batch_segment_features = np.mean(batch_features, axis=2)
+        if include_segments:
+            segment_batches.append(batch_segment_features)
 
-            if aggregated_sum is None:
-                aggregated_sum = np.zeros_like(batch_segment_features[0], dtype=np.float64)
+        if aggregated_sum is None:
+            aggregated_sum = np.zeros_like(batch_segment_features[0], dtype=np.float64)
 
-            aggregated_sum += batch_segment_features.sum(axis=0, dtype=np.float64)
-            total_segments += batch_segment_features.shape[0]
+        aggregated_sum += batch_segment_features.sum(axis=0, dtype=np.float64)
+        total_segments += batch_segment_features.shape[0]
 
         if aggregated_sum is None or total_segments == 0:
             raise RuntimeError("Failed to compute aggregated features")
@@ -205,7 +225,7 @@ class FeatureExtractor:
 
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = self.model(**inputs, output_hidden_states=True)
                 hidden_states = torch.stack(outputs.hidden_states)
                 hidden_states = hidden_states.squeeze(1)
@@ -218,9 +238,12 @@ class FeatureExtractor:
 
     def _extract_mert_features_batched(self, audio_segments: List[np.ndarray]) -> np.ndarray:
         """
-        Extract MERT features for multiple segments in parallel batches.
+        Extract MERT features with CUDA optimizations when available.
 
-        Processes segments in batches for GPU efficiency (2-5x faster than sequential).
+        CUDA optimizations:
+        - Pinned memory for faster host-to-device transfers (~10-20% speedup)
+        - Non-blocking transfers to overlap computation
+        - Optional mixed precision FP16 (~2x speedup on Tensor Core GPUs like RTX 3070Ti)
 
         Args:
             audio_segments: List of audio arrays [120k samples each]
@@ -229,13 +252,17 @@ class FeatureExtractor:
             Features [num_segments, 13, time_steps, 768]
         """
         try:
+            from ..config import mess_config
+
             all_features = []
             num_segments = len(audio_segments)
+            use_amp = (self.device == 'cuda' and mess_config.MERT_CUDA_MIXED_PRECISION)
 
             for batch_start in range(0, num_segments, self.batch_size):
                 batch_end = min(batch_start + self.batch_size, num_segments)
                 batch_segments = audio_segments[batch_start:batch_end]
 
+                # Process batch
                 inputs = self.processor(
                     batch_segments,
                     sampling_rate=self.target_sample_rate,
@@ -243,10 +270,26 @@ class FeatureExtractor:
                     padding=True
                 )
 
-                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                # CUDA optimization: use pinned memory for faster transfers
+                if self.device == 'cuda' and mess_config.MERT_CUDA_PINNED_MEMORY:
+                    inputs = {
+                        k: v.pin_memory().to(
+                            self.device,
+                            non_blocking=mess_config.MERT_CUDA_NON_BLOCKING
+                        )
+                        for k, v in inputs.items()
+                    }
+                else:
+                    inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-                with torch.no_grad():
-                    outputs = self.model(**inputs, output_hidden_states=True)
+                # Run inference with optional mixed precision
+                with torch.inference_mode():
+                    if use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = self.model(**inputs, output_hidden_states=True)
+                    else:
+                        outputs = self.model(**inputs, output_hidden_states=True)
+
                     hidden_states = torch.stack(outputs.hidden_states)
                     hidden_states = hidden_states.permute(1, 0, 2, 3)
 
@@ -258,6 +301,67 @@ class FeatureExtractor:
         except Exception as e:
             logging.error(f"Error extracting MERT features (batched): {e}")
             raise
+
+    def _extract_mert_features_batched_with_oom_recovery(
+        self,
+        audio_segments: List[np.ndarray]
+    ) -> np.ndarray:
+        """
+        Extract MERT features with automatic OOM recovery.
+
+        Automatically reduces batch size on GPU OOM errors and retries.
+        Critical for RTX 3070Ti (8GB VRAM) when processing very long audio files.
+
+        Args:
+            audio_segments: List of audio arrays
+
+        Returns:
+            Features [num_segments, 13, time_steps, 768]
+        """
+        from ..config import mess_config
+
+        # Skip OOM recovery if disabled or not using GPU
+        if not mess_config.MERT_CUDA_AUTO_OOM_RECOVERY or self.device not in ['cuda', 'mps']:
+            return self._extract_mert_features_batched(audio_segments)
+
+        batch_size = self.batch_size
+        min_batch_size = 1
+        original_batch_size = self.batch_size
+
+        while batch_size >= min_batch_size:
+            try:
+                # Temporarily set batch size
+                self.batch_size = batch_size
+                result = self._extract_mert_features_batched(audio_segments)
+
+                # Restore original batch size
+                self.batch_size = original_batch_size
+                return result
+
+            except RuntimeError as e:
+                error_msg = str(e).lower()
+                is_oom = any(phrase in error_msg for phrase in [
+                    "out of memory",
+                    "cuda out of memory",
+                    "mps out of memory"
+                ])
+
+                if is_oom and batch_size > min_batch_size:
+                    # Clear GPU cache
+                    self.clear_gpu_cache()
+
+                    # Reduce batch size and retry
+                    batch_size = max(min_batch_size, batch_size // 2)
+                    logging.warning(
+                        f"GPU OOM detected, reducing batch size to {batch_size} and retrying"
+                    )
+                    continue
+                else:
+                    # Not OOM or already at minimum, restore and re-raise
+                    self.batch_size = original_batch_size
+                    raise
+
+        raise RuntimeError(f"Failed to extract features even with batch_size=1")
 
     def extract_track_features(
         self,

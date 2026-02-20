@@ -1,149 +1,157 @@
 # MESS-AI
 
-**Music similarity research using empirically validated MERT layer specializations.**
+MESS-AI is a Python library for music similarity research with MERT embeddings.
+It focuses on expressive, content-based retrieval: extract features, probe layer behavior, and run similarity search with FAISS.
 
-Instead of naive feature averaging, we systematically discover which transformer layers encode specific musical aspects through linear probing with cross-validation.
+## What You Can Do
 
-## Quick Start
+- Extract MERT features from local audio datasets
+- Build proxy musical targets and run layer discovery
+- Search by cosine similarity, single aspect, or weighted multi-aspect queries
+- Track extraction and probing runs with MLflow
+
+## Project Scope
+
+This is a research-first repository. The core library is in `mess/`, with scripts in `scripts/` for common workflows.
+
+Current pipeline:
+
+`Audio WAV -> MERT features -> proxy targets -> layer discovery -> aspect-layer mapping -> FAISS search`
+
+## Requirements
+
+- Python 3.11+
+- `uv` for environment and dependency management
+- Local access to supported datasets (SMD and/or MAESTRO)
+
+## Installation
 
 ```bash
-# Install with ML dependencies
 uv sync --group dev
-
-# Extract MERT features
-python scripts/extract_features.py --dataset smd
-
-# Run layer discovery (validates which layers encode what)
-python scripts/run_probing.py
-
-# View experiments
-mlflow ui
-
-# Get recommendations (uses validated layers)
-python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 ```
 
-## What This Does
+Run commands with `uv run` so the project environment is used:
 
-**Layer Discovery**: Systematically probe MERT's 13 layers against 15 musical proxy targets using Ridge regression + 5-fold CV. Results show which layers encode brightness, texture, dynamics, articulation, etc.
-
-**Dynamic Aspect System**: The recommender auto-loads validated layers from discovery results — no hardcoded mappings. Search by 10 user-facing aspects (brightness, texture, warmth, tempo, dynamics, etc.).
-
-**MLflow Tracking**: All experiments logged automatically. Compare hyperparameters, R² scores, and layer validations across runs.
-
-## Architecture
-
-```
-mess/                    # Core library
-├── extraction/          # MERT feature extraction
-├── probing/             # Layer discovery via linear probing
-│   ├── discovery.py     # 13 layers × 15 targets = 195 experiments
-│   └── proxy_targets.py # Musical aspect ground truth generation
-├── search/              # Similarity search
-│   ├── aspects.py       # 10 user-facing aspect → target mappings
-│   └── layer_based_recommender.py  # Dynamic layer loading
-└── datasets/            # SMD, MAESTRO loaders
-
-scripts/                 # Experiment automation
-data/                    # Audio + extracted features
+```bash
+uv run python --version
 ```
 
-## Example Validated Results
+## Data Layout
 
-From actual discovery runs on SMD dataset:
+Default data root is `data/`. Expected structure:
 
-| Layer | Proxy Target | R² Score | User Aspect |
-|-------|-------------|----------|-------------|
-| 0 | spectral_centroid | 0.944 | brightness |
-| 1 | spectral_rolloff | 0.922 | texture |
-| 2 | harmonic_complexity | 0.933 | harmonic_richness |
+```text
+data/
+  audio/
+    smd/wav-44/*.wav
+    maestro/**/*.wav
+  embeddings/
+    smd-emb/
+      raw/*.npy
+      segments/*.npy
+      aggregated/*.npy
+    maestro-emb/
+      raw/*.npy
+      segments/*.npy
+      aggregated/*.npy
+  proxy_targets/
+    *_targets.npz
+```
 
-**15 total targets** across timbre, rhythm, dynamics, harmony, articulation, phrasing.
+## Quickstart
 
-## Usage
+1. Extract features:
 
-**Python API:**
+```bash
+uv run python scripts/extract_features.py --dataset smd
+```
+
+2. Run probing / layer discovery:
+
+```bash
+uv run python scripts/run_probing.py
+```
+
+3. Start MLflow UI (optional):
+
+```bash
+uv run mlflow ui
+```
+
+4. Run recommendations:
+
+```bash
+uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
+uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect brightness
+uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspects "brightness=0.7,phrasing=0.3"
+```
+
+## Python API Example
+
 ```python
-from mess.search.layer_based_recommender import LayerBasedRecommender
+from mess.search.search import find_similar, load_features, search_by_aspect, search_by_aspects
 
-# Loads validated layers from discovery results
-recommender = LayerBasedRecommender()
+features_dir = "data/embeddings/smd-emb/aggregated"
+features, track_names = load_features(features_dir)
 
-# See what aspects are available (depends on what's been validated)
-print(recommender.get_available_aspects())
-# ['brightness', 'texture', 'dynamics', ...]
-
-# Search by aspect
-recs = recommender.recommend_by_aspect(
-    "Beethoven_Op027No1-01",
-    aspect="brightness",
-    n_recommendations=5
-)
-
-# Multi-aspect weighted search
-recs = recommender.multi_aspect_recommendation(
-    "Beethoven_Op027No1-01",
-    aspect_weights={'brightness': 0.6, 'texture': 0.4},
-    n_recommendations=5
+baseline = find_similar("Beethoven_Op027No1-01", features, track_names, k=5)
+brightness = search_by_aspect("Beethoven_Op027No1-01", "brightness", features_dir, k=5)
+weighted = search_by_aspects(
+    query_track="Beethoven_Op027No1-01",
+    aspect_weights={"brightness": 0.7, "phrasing": 0.3},
+    features_dir=features_dir,
+    k=5,
 )
 ```
 
-**CLI:**
-```bash
-# Run probing with hyperparameter sweep
-python scripts/run_probing.py --alpha 0.5 --folds 10 --samples 30
+## Repository Layout
 
-# Extract features with parallelization
-python scripts/extract_features.py --dataset smd --workers 4
-
-# Check MLflow for results
-mlflow ui  # localhost:5000
+```text
+mess/
+  extraction/   # Audio loading, segmentation, and MERT feature extraction
+  probing/      # Proxy targets and layer discovery
+  search/       # FAISS search and aspect-aware retrieval
+  datasets/     # Dataset abstractions (SMD, MAESTRO)
+scripts/
+  extract_features.py
+  run_probing.py
+  demo_recommendations.py
+tests/
 ```
 
-## Dependencies
-
-**Core** (for using pre-extracted features):
-- numpy, scipy, scikit-learn, faiss-cpu
-
-**[ml]** (for extraction + research):
-- torch, transformers, librosa, mlflow, tqdm, jupyter
+## Testing
 
 ```bash
-uv sync              # Core only
-uv sync --group dev  # Full ML stack
+uv run pytest -v
 ```
 
-## Tech Stack
+For focused runs:
 
-- **ML**: PyTorch 2.2+, Hugging Face transformers (MERT-v1-95M)
-- **Search**: FAISS (sub-millisecond queries), sklearn cosine similarity
-- **Tracking**: MLflow (params, metrics, artifacts)
-- **Audio**: librosa, torchaudio (24kHz resampling)
-- **Dev**: uv (fast package manager), Jupyter
+```bash
+uv run pytest tests/search/test_search.py -v
+uv run pytest tests/probing/test_discovery.py -v
+```
 
-## Performance
+## Linting and Type Checking
 
-- **Similarity search**: <1ms per query (FAISS IndexFlatIP)
-- **Feature extraction**: ~2.6 min for 50 tracks (M3 Pro, parallel)
-- **Layer discovery**: ~10-15 min full validation (195 experiments)
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy mess
+```
 
-## Datasets
+To auto-fix lint/import issues and format code:
 
-**SMD** (Saarland Music Dataset): 50 classical piano pieces @ 44kHz
-**MAESTRO**: Larger dataset support (infrastructure exists)
+```bash
+uv run ruff check . --fix
+uv run ruff format .
+```
 
-Features stored in `data/embeddings/<dataset>-emb/`:
-- `raw/`: Full temporal `[segments, 13, time, 768]`
-- `segments/`: Time-averaged `[segments, 13, 768]`
-- `aggregated/`: Track-level `[13, 768]` ← used for search
+## Notes
 
-## Documentation
+- `scripts/_NEEDS_UPDATE.txt` lists older scripts that are currently outdated.
+- `AGENTS.md` is the implementation-oriented guide and source of operational conventions for this repo.
 
-See `CLAUDE.md` for:
-- Full architecture details
-- Development workflow
-- Adding new proxy targets
-- Research best practices
-- MLflow experiment tracking guide
+## License
 
-Built for reproducible music similarity research.
+Add your chosen open-source license in a `LICENSE` file before publishing.

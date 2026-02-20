@@ -1,5 +1,6 @@
 # mess-ai ML Development Environment .gitignore
 
+.github/workflows
 # Python
 __pycache__/
 *.py[cod]
@@ -80,6 +81,8 @@ huggingface/
 results/
 experiments/
 outputs/
+mlruns/
+mlflow.db
 
 # Temporary files
 .cache/

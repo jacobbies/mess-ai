@@ -8,6 +8,9 @@ uv run pytest --cov=mess --cov-report=term-missing  # with coverage
 uv run pytest -m unit                     # only unit markers
 uv run pytest tests/test_config.py -v     # single module
 uv run pytest --run-gpu                   # include GPU-marked tests
+uv run ruff check .                       # lint checks
+uv run ruff format --check .              # format checks
+uv run mypy mess                          # type checks
 ```
 
 ## Structure
@@ -64,5 +67,7 @@ In `pyproject.toml` `[dependency-groups] dev`:
 - `pytest>=8.0`
 - `pytest-cov>=5.0`
 - `pytest-mock>=3.14`
+- `ruff`
+- `mypy`
 
 Install: `uv sync --group dev`

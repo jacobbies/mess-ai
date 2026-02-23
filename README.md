@@ -30,6 +30,12 @@ Current pipeline:
 uv sync --group dev
 ```
 
+Install from another repository (pinned Git commit):
+
+```bash
+pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git@ac675b6"
+```
+
 Run commands with `uv run` so the project environment is used:
 
 ```bash
@@ -104,6 +110,12 @@ weighted = search_by_aspects(
 )
 ```
 
+Search-only import path (lightest runtime surface for recommendation services):
+
+```python
+from mess.search.search import load_features, find_similar, search_by_clip
+```
+
 ## Repository Layout
 
 ```text
@@ -118,6 +130,22 @@ scripts/
   demo_recommendations.py
 tests/
 ```
+
+## Script Status
+
+Maintained:
+- `scripts/extract_features.py`
+- `scripts/run_probing.py`
+- `scripts/demo_recommendations.py`
+
+Experimental / needs update:
+- `scripts/build_layer_indices.py`
+- `scripts/demo_layer_search.py`
+- `scripts/evaluate_layer_indices.py`
+- `scripts/evaluate_similarity.py`
+- `scripts/evaluate_clip_retrieval.py` (research evaluation utility)
+
+See `scripts/_NEEDS_UPDATE.txt` for details.
 
 ## Testing
 
@@ -151,6 +179,7 @@ uv run ruff format .
 
 - `scripts/_NEEDS_UPDATE.txt` lists older scripts that are currently outdated.
 - `AGENTS.md` is the implementation-oriented guide and source of operational conventions for this repo.
+- `docs/PUBLIC_RELEASE_CHECKLIST.md` contains reproducible public-release audit steps.
 
 ## License
 

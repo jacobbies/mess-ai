@@ -83,6 +83,7 @@ experiments/
 outputs/
 mlruns/
 mlflow.db
+mess/probing/layer_discovery_results.json
 
 # Temporary files
 .cache/

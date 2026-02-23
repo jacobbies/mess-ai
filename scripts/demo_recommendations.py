@@ -16,6 +16,7 @@ from typing import Dict, Optional
 from mess.search.search import (
     find_similar,
     load_features,
+    search_by_clip,
     search_by_aspect,
     search_by_aspects,
 )
@@ -72,18 +73,16 @@ def main(
     track_name: str,
     aspect: Optional[str] = None,
     aspects: Optional[str] = None,
+    clip_start: Optional[float] = None,
+    clip_duration: float = 5.0,
+    dedupe_window: float = 5.0,
     k: int = 5,
     dataset: str = "smd",
 ):
     """Run similarity search demo."""
-
-    # Construct features directory path
-    features_dir = Path(f"data/embeddings/{dataset}-emb/aggregated")
-
-    if not features_dir.exists():
-        print(f"Error: Features not found at {features_dir}")
-        print("Run feature extraction first: python scripts/extract_features.py")
-        return 1
+    # Construct features directory paths
+    aggregated_features_dir = Path(f"data/embeddings/{dataset}-emb/aggregated")
+    segment_features_dir = Path(f"data/embeddings/{dataset}-emb/segments")
 
     print(f"\n{'='*70}")
     print(f"RECOMMENDATIONS FOR: {track_name}")
@@ -91,8 +90,53 @@ def main(
     if aspect and aspects:
         print("Error: use either --aspect or --aspects, not both.")
         return 1
+    if clip_start is not None and (aspect or aspects):
+        print("Error: clip mode cannot be combined with --aspect/--aspects.")
+        return 1
+
+    if clip_start is not None:
+        if not segment_features_dir.exists():
+            print(f"Error: Segment features not found at {segment_features_dir}")
+            print(
+                "Run feature extraction with segments: "
+                "python scripts/extract_features.py --feature-level segments"
+            )
+            return 1
+        if clip_duration <= 0:
+            print("Error: --clip-duration must be > 0.")
+            return 1
+        if dedupe_window < 0:
+            print("Error: --dedupe-window must be >= 0.")
+            return 1
+
+        print(f"Clip Query: start={clip_start:.2f}s, duration={clip_duration:.2f}s")
+        print("Using: Clip-level segment search")
+        print(f"{'='*70}\n")
+
+        try:
+            results = search_by_clip(
+                query_track=track_name,
+                clip_start=clip_start,
+                clip_duration=clip_duration,
+                features_dir=str(segment_features_dir),
+                k=k,
+                dedupe_window_seconds=dedupe_window,
+            )
+        except ValueError as e:
+            print(f"Error: {e}")
+            return 1
+
+        for i, rec in enumerate(results, 1):
+            print(f"{i}. {rec.track_id} [{rec.start_time:.2f}s - {rec.end_time:.2f}s]")
+            print(f"   Similarity: {rec.similarity:.4f}\n")
+
+        return 0
 
     if aspects:
+        if not aggregated_features_dir.exists():
+            print(f"Error: Features not found at {aggregated_features_dir}")
+            print("Run feature extraction first: python scripts/extract_features.py")
+            return 1
         print("Using: Weighted multi-aspect search")
         print(f"{'='*70}\n")
 
@@ -101,7 +145,7 @@ def main(
             results = search_by_aspects(
                 query_track=track_name,
                 aspect_weights=aspect_weights,
-                features_dir=str(features_dir),
+                features_dir=str(aggregated_features_dir),
                 k=k,
             )
         except ValueError as e:
@@ -112,12 +156,16 @@ def main(
                 print(f"  - {asp}: {info['description']} (layer {info['layer']}, R²={info['r2_score']})")
             return 1
     elif aspect:
+        if not aggregated_features_dir.exists():
+            print(f"Error: Features not found at {aggregated_features_dir}")
+            print("Run feature extraction first: python scripts/extract_features.py")
+            return 1
         # Search using specific validated musical aspect
         print(f"Musical Aspect: {aspect}")
         print(f"{'='*70}\n")
 
         try:
-            results = search_by_aspect(track_name, aspect, str(features_dir), k=k)
+            results = search_by_aspect(track_name, aspect, str(aggregated_features_dir), k=k)
         except ValueError as e:
             print(f"Error: {e}")
             print("\nAvailable aspects:")
@@ -126,11 +174,15 @@ def main(
                 print(f"  - {asp}: {info['description']} (layer {info['layer']}, R²={info['r2_score']})")
             return 1
     else:
+        if not aggregated_features_dir.exists():
+            print(f"Error: Features not found at {aggregated_features_dir}")
+            print("Run feature extraction first: python scripts/extract_features.py")
+            return 1
         # Search using all features
         print(f"Using: All features (aggregated)")
         print(f"{'='*70}\n")
 
-        features, track_names = load_features(str(features_dir))
+        features, track_names = load_features(str(aggregated_features_dir))
         results = find_similar(track_name, features, track_names, k=k)
 
     # Display results
@@ -149,7 +201,35 @@ if __name__ == "__main__":
         "--aspects",
         help='Weighted aspects, e.g. "brightness=0.7,phrasing=0.3"',
     )
+    parser.add_argument(
+        "--clip-start",
+        type=float,
+        help="Clip query start time in seconds (enables clip-level search)",
+    )
+    parser.add_argument(
+        "--clip-duration",
+        type=float,
+        default=5.0,
+        help="Clip query duration in seconds (default: 5.0)",
+    )
+    parser.add_argument(
+        "--dedupe-window",
+        type=float,
+        default=5.0,
+        help="Per-track timestamp dedupe window in seconds for clip results",
+    )
     parser.add_argument("--k", type=int, default=5, help="Number of recommendations")
     parser.add_argument("--dataset", default="smd", help="Dataset name (default: smd)")
     args = parser.parse_args()
-    raise SystemExit(main(args.track, args.aspect, args.aspects, args.k, args.dataset))
+    raise SystemExit(
+        main(
+            track_name=args.track,
+            aspect=args.aspect,
+            aspects=args.aspects,
+            clip_start=args.clip_start,
+            clip_duration=args.clip_duration,
+            dedupe_window=args.dedupe_window,
+            k=args.k,
+            dataset=args.dataset,
+        )
+    )

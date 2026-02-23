@@ -9,6 +9,7 @@ Usage:
     python scripts/run_probing.py
     python scripts/run_probing.py --no-save
     python scripts/run_probing.py --samples 30 --alpha 0.5
+    python scripts/run_probing.py --dataset maestro --samples 30 --folds 3
     python scripts/run_probing.py --experiment "ridge_tuning"
 """
 
@@ -29,14 +30,22 @@ logger = logging.getLogger(__name__)
 MLFLOW_EXPERIMENT = "layer_discovery"
 
 
-def main(save_results=True, n_samples=50, alpha=1.0, n_folds=5, experiment_name=None):
+def main(
+    save_results=True,
+    n_samples=50,
+    alpha=1.0,
+    n_folds=5,
+    experiment_name=None,
+    dataset_name="smd",
+):
     """Run layer discovery experiments to find layer specializations."""
     mlflow.set_experiment(experiment_name or MLFLOW_EXPERIMENT)
 
     with mlflow.start_run():
         logger.info("Starting layer discovery experiments...")
 
-        discovery = LayerDiscoverySystem(alpha=alpha, n_folds=n_folds)
+        logger.info(f"Dataset: {dataset_name}")
+        discovery = LayerDiscoverySystem(dataset_name=dataset_name, alpha=alpha, n_folds=n_folds)
         results = discovery.discover(n_samples=n_samples)
 
         if not results:
@@ -75,7 +84,7 @@ def main(save_results=True, n_samples=50, alpha=1.0, n_folds=5, experiment_name=
 
         print("\n" + "=" * 70)
         print(f"MLflow run: {mlflow.active_run().info.run_id}")
-        print(f"View results: mlflow ui")
+        print("View results: mlflow ui")
         print("=" * 70)
 
     return 0
@@ -112,6 +121,13 @@ if __name__ == "__main__":
         default=None,
         help="MLflow experiment name (default: layer_discovery)"
     )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="smd",
+        choices=["smd", "maestro"],
+        help="Dataset to probe (default: smd)",
+    )
 
     args = parser.parse_args()
     raise SystemExit(main(
@@ -120,4 +136,5 @@ if __name__ == "__main__":
         alpha=args.alpha,
         n_folds=args.folds,
         experiment_name=args.experiment,
+        dataset_name=args.dataset,
     ))

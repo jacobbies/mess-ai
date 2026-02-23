@@ -4,9 +4,12 @@ import numpy as np
 import pytest
 
 from mess.search.search import (
+    ClipSearchResult,
     build_index,
     find_similar,
     load_features,
+    load_segment_features,
+    search_by_clip,
     search_by_aspects,
 )
 
@@ -118,6 +121,101 @@ class TestFindSimilar:
         results = find_similar("track_00", features, names, k=4)
         for _, score in results:
             assert -1.0 <= score <= 1.0 + 1e-6  # small epsilon for float precision
+
+
+class TestClipLevelSearch:
+    @staticmethod
+    def _make_segments(vectors):
+        arr = np.zeros((len(vectors), 13, 768), dtype=np.float32)
+        for i, values in enumerate(vectors):
+            arr[i, 0, : len(values)] = np.asarray(values, dtype=np.float32)
+        return arr
+
+    def test_load_segment_features_returns_timestamps(self, tmp_path):
+        np.save(
+            tmp_path / "track_x.npy",
+            self._make_segments([[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]]),
+        )
+
+        features, clip_locations = load_segment_features(str(tmp_path), layer=0)
+
+        assert features.shape == (3, 768)
+        assert len(clip_locations) == 3
+        assert clip_locations[0].track_id == "track_x"
+        assert clip_locations[0].segment_idx == 0
+        assert clip_locations[0].start_time == pytest.approx(0.0)
+        assert clip_locations[0].end_time == pytest.approx(5.0)
+        assert clip_locations[1].start_time == pytest.approx(2.5)
+        assert clip_locations[2].start_time == pytest.approx(5.0)
+
+    def test_search_by_clip_returns_timestamped_results(self, tmp_path):
+        np.save(
+            tmp_path / "query_track.npy",
+            self._make_segments(
+                [[1.0, 0.0], [0.0, 1.0], [0.98, 0.05], [0.2, 0.9]]
+            ),
+        )
+        np.save(
+            tmp_path / "candidate_track.npy",
+            self._make_segments(
+                [[0.95, 0.1], [0.97, 0.04], [0.0, 1.0], [-1.0, 0.0]]
+            ),
+        )
+
+        results = search_by_clip(
+            query_track="query_track",
+            clip_start=5.0,
+            features_dir=str(tmp_path),
+            layer=0,
+            k=3,
+            dedupe_window_seconds=0.0,
+        )
+
+        assert len(results) == 3
+        assert all(isinstance(item, ClipSearchResult) for item in results)
+        top = results[0]
+        assert top.track_id == "candidate_track"
+        assert top.start_time == pytest.approx(2.5)
+        assert top.end_time == pytest.approx(7.5)
+
+    def test_search_by_clip_dedupes_nearby_regions_per_track(self, tmp_path):
+        np.save(
+            tmp_path / "query_track.npy",
+            self._make_segments([[1.0, 0.0], [0.95, 0.05], [0.9, 0.1], [0.0, 1.0]]),
+        )
+        np.save(
+            tmp_path / "candidate_track.npy",
+            self._make_segments(
+                [[0.99, 0.01], [0.98, 0.02], [0.97, 0.03], [-1.0, 0.0]]
+            ),
+        )
+
+        results = search_by_clip(
+            query_track="query_track",
+            clip_start=0.0,
+            features_dir=str(tmp_path),
+            layer=0,
+            k=4,
+            dedupe_window_seconds=5.0,
+        )
+
+        candidate_starts = sorted(
+            result.start_time for result in results if result.track_id == "candidate_track"
+        )
+        assert candidate_starts
+        for i in range(1, len(candidate_starts)):
+            assert candidate_starts[i] - candidate_starts[i - 1] >= 5.0
+
+    def test_search_by_clip_unknown_track_raises(self, tmp_path):
+        np.save(tmp_path / "track_a.npy", self._make_segments([[1.0, 0.0], [0.0, 1.0]]))
+
+        with pytest.raises(ValueError, match="not found"):
+            search_by_clip(
+                query_track="missing",
+                clip_start=0.0,
+                features_dir=str(tmp_path),
+                layer=0,
+            )
 
 
 class TestSearchByAspects:

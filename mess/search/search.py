@@ -20,6 +20,7 @@ Usage:
 """
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -30,6 +31,30 @@ logger = logging.getLogger(__name__)
 
 NUM_LAYERS = 13
 EMBEDDING_DIM = 768
+DEFAULT_SEGMENT_DURATION = 5.0
+DEFAULT_OVERLAP_RATIO = 0.5
+DEFAULT_DEDUPE_WINDOW_SECONDS = 5.0
+
+
+@dataclass(frozen=True)
+class ClipLocation:
+    """Index location and time span for one segment embedding."""
+
+    track_id: str
+    segment_idx: int
+    start_time: float
+    end_time: float
+
+
+@dataclass(frozen=True)
+class ClipSearchResult:
+    """Search result for clip-level retrieval."""
+
+    track_id: str
+    segment_idx: int
+    start_time: float
+    end_time: float
+    similarity: float
 
 
 def _vectorize_track_features(
@@ -89,6 +114,157 @@ def _vectorize_track_features(
         f"Unsupported feature rank {features.ndim} in {source_name}; "
         "expected rank 1-4."
     )
+
+
+def _vectorize_segment_features(
+    raw_features: np.ndarray,
+    layer: Optional[int],
+    source_name: str,
+) -> np.ndarray:
+    """
+    Convert per-segment embeddings into one vector per segment.
+
+    Supported shapes:
+    - [segments, 13, 768]
+    - [segments, 13, time, 768]
+    - [13, 768] (treated as one segment)
+    """
+    features = np.asarray(raw_features)
+
+    if features.ndim == 2:
+        if features.shape != (NUM_LAYERS, EMBEDDING_DIM):
+            raise ValueError(
+                f"Unsupported 2D shape {features.shape} in {source_name}; "
+                f"expected ({NUM_LAYERS}, {EMBEDDING_DIM})."
+            )
+        features = features[None, :, :]
+
+    elif features.ndim == 3:
+        if features.shape[1:] != (NUM_LAYERS, EMBEDDING_DIM):
+            raise ValueError(
+                f"Unsupported 3D shape {features.shape} in {source_name}; "
+                f"expected [segments, {NUM_LAYERS}, {EMBEDDING_DIM}]."
+            )
+
+    elif features.ndim == 4:
+        if features.shape[1] != NUM_LAYERS or features.shape[3] != EMBEDDING_DIM:
+            raise ValueError(
+                f"Unsupported 4D shape {features.shape} in {source_name}; "
+                f"expected [segments, {NUM_LAYERS}, time, {EMBEDDING_DIM}]."
+            )
+        features = features.mean(axis=2)
+    else:
+        raise ValueError(
+            f"Unsupported feature rank {features.ndim} in {source_name}; "
+            "expected rank 2-4."
+        )
+
+    if layer is not None:
+        return features[:, layer, :].astype("float32")
+    return features.reshape(features.shape[0], -1).astype("float32")
+
+
+def _segment_hop_seconds(
+    segment_duration: float,
+    overlap_ratio: float,
+) -> float:
+    hop = segment_duration * (1.0 - overlap_ratio)
+    if hop <= 0:
+        raise ValueError("segment_duration and overlap_ratio must produce hop > 0")
+    return hop
+
+
+def _segment_bounds(
+    segment_idx: int,
+    segment_duration: float,
+    overlap_ratio: float,
+) -> Tuple[float, float]:
+    hop_seconds = _segment_hop_seconds(segment_duration, overlap_ratio)
+    start_time = segment_idx * hop_seconds
+    end_time = start_time + segment_duration
+    return start_time, end_time
+
+
+def _resolve_query_segment_index(
+    track_clip_locations: List[ClipLocation],
+    clip_start: float,
+) -> int:
+    if clip_start < 0:
+        raise ValueError("clip_start must be >= 0")
+
+    return min(
+        range(len(track_clip_locations)),
+        key=lambda i: abs(track_clip_locations[i].start_time - clip_start),
+    )
+
+
+def load_segment_features(
+    features_dir: str,
+    layer: Optional[int] = None,
+    segment_duration: float = DEFAULT_SEGMENT_DURATION,
+    overlap_ratio: float = DEFAULT_OVERLAP_RATIO,
+) -> Tuple[np.ndarray, List[ClipLocation]]:
+    """
+    Load per-segment vectors and clip metadata from embeddings directory.
+
+    Args:
+        features_dir: Directory containing segment embeddings as .npy files
+        layer: Specific MERT layer to use (0-12), or None for flattened 13x768 vectors
+        segment_duration: Segment duration used during extraction
+        overlap_ratio: Segment overlap ratio used during extraction
+
+    Returns:
+        features: Array of shape (n_segments, feature_dim)
+        clip_locations: List of segment metadata aligned to features rows
+    """
+    if layer is not None and not 0 <= layer < NUM_LAYERS:
+        raise ValueError(f"Invalid layer {layer}; expected range [0, {NUM_LAYERS - 1}]")
+
+    features_dir_path = Path(features_dir)
+    if not features_dir_path.exists():
+        raise FileNotFoundError(f"Features directory not found: {features_dir_path}")
+
+    feature_files = sorted(features_dir_path.glob("*.npy"))
+    if not feature_files:
+        raise ValueError(f"No .npy files found in {features_dir_path}")
+
+    all_vectors: List[np.ndarray] = []
+    clip_locations: List[ClipLocation] = []
+
+    for feature_file in feature_files:
+        segment_vectors = _vectorize_segment_features(
+            np.load(feature_file),
+            layer,
+            feature_file.name,
+        )
+        track_id = feature_file.stem
+        for segment_idx, segment_vector in enumerate(segment_vectors):
+            start_time, end_time = _segment_bounds(
+                segment_idx,
+                segment_duration=segment_duration,
+                overlap_ratio=overlap_ratio,
+            )
+            all_vectors.append(segment_vector)
+            clip_locations.append(
+                ClipLocation(
+                    track_id=track_id,
+                    segment_idx=segment_idx,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+            )
+
+    if not all_vectors:
+        raise ValueError(f"No valid segment features found in {features_dir_path}")
+
+    features = np.vstack(all_vectors).astype("float32")
+    logger.info(
+        "Loaded %d segment clips across %d tracks with %d-D vectors",
+        len(clip_locations),
+        len({loc.track_id for loc in clip_locations}),
+        features.shape[1],
+    )
+    return features, clip_locations
 
 
 def load_features(
@@ -285,6 +461,118 @@ def find_similar(
             continue
 
         results.append((track_id, float(score)))
+
+        if len(results) >= k:
+            break
+
+    return results
+
+
+def search_by_clip(
+    query_track: str,
+    clip_start: float,
+    features_dir: str,
+    k: int = 10,
+    clip_duration: float = DEFAULT_SEGMENT_DURATION,
+    layer: Optional[int] = None,
+    segment_duration: float = DEFAULT_SEGMENT_DURATION,
+    overlap_ratio: float = DEFAULT_OVERLAP_RATIO,
+    dedupe_window_seconds: float = DEFAULT_DEDUPE_WINDOW_SECONDS,
+    exclude_same_segment: bool = True,
+) -> List[ClipSearchResult]:
+    """
+    Find similar clips for a query clip defined by track and start time.
+
+    Args:
+        query_track: Track ID containing the query clip
+        clip_start: Clip start time in seconds
+        features_dir: Directory containing segment embeddings
+        k: Number of clip results to return
+        clip_duration: Query clip duration in seconds (for validation/reporting)
+        layer: Optional layer selection for clip embeddings
+        segment_duration: Segment duration used during extraction
+        overlap_ratio: Segment overlap ratio used during extraction
+        dedupe_window_seconds: Suppress nearby results within this window per track
+        exclude_same_segment: Exclude the exact query segment from results
+
+    Returns:
+        List of clip-level results with timestamps and similarity scores
+    """
+    if clip_duration <= 0:
+        raise ValueError("clip_duration must be > 0")
+    if k <= 0:
+        raise ValueError("k must be > 0")
+    if dedupe_window_seconds < 0:
+        raise ValueError("dedupe_window_seconds must be >= 0")
+
+    features, clip_locations = load_segment_features(
+        features_dir=features_dir,
+        layer=layer,
+        segment_duration=segment_duration,
+        overlap_ratio=overlap_ratio,
+    )
+
+    track_indices = [
+        idx for idx, loc in enumerate(clip_locations) if loc.track_id == query_track
+    ]
+    if not track_indices:
+        raise ValueError(f"Query track '{query_track}' not found in dataset")
+
+    track_locations = [clip_locations[idx] for idx in track_indices]
+    relative_query_idx = _resolve_query_segment_index(track_locations, clip_start)
+    query_idx = track_indices[relative_query_idx]
+    query_location = clip_locations[query_idx]
+
+    logger.info(
+        "Resolved query clip '%s' start %.2fs to segment %d [%.2f, %.2f]",
+        query_track,
+        clip_start,
+        query_location.segment_idx,
+        query_location.start_time,
+        query_location.end_time,
+    )
+
+    query_features = features[query_idx:query_idx + 1].astype("float32")
+    index = build_index(features)
+    faiss.normalize_L2(query_features)
+
+    # Over-fetch so we can still return k after filtering + deduping.
+    search_k = min(
+        len(clip_locations),
+        max(k * 25, k + 25),
+    )
+    distances, indices = index.search(query_features, search_k)
+
+    accepted_starts_by_track: Dict[str, List[float]] = {}
+    results: List[ClipSearchResult] = []
+
+    for idx, score in zip(indices[0], distances[0]):
+        if idx < 0:
+            continue
+
+        location = clip_locations[int(idx)]
+
+        if exclude_same_segment and int(idx) == query_idx:
+            continue
+
+        # Avoid near-duplicate regions from the same track.
+        existing_starts = accepted_starts_by_track.setdefault(location.track_id, [])
+        if dedupe_window_seconds > 0 and any(
+            abs(location.start_time - existing_start) < dedupe_window_seconds
+            for existing_start in existing_starts
+        ):
+            continue
+
+        existing_starts.append(location.start_time)
+        results.append(
+            ClipSearchResult(
+                track_id=location.track_id,
+                segment_idx=location.segment_idx,
+                start_time=location.start_time,
+                end_time=location.end_time,
+                similarity=float(score),
+            )
+        )
 
         if len(results) >= k:
             break

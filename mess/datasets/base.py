@@ -62,7 +62,11 @@ class BaseDataset(ABC):
         """
         if not self.audio_dir.exists():
             return []
-        return sorted(self.audio_dir.glob("*.wav"))
+        return sorted(
+            path
+            for path in self.audio_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() == ".wav"
+        )
 
     def get_feature_path(self, track_id: str, feature_type: str = "aggregated") -> Path:
         """

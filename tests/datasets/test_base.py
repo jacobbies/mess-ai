@@ -61,6 +61,30 @@ class TestGetAudioFiles:
         assert files[0].stem == "a_track"
         assert files[1].stem == "z_track"
 
+    def test_recursive_nested_audio_discovery(self, tmp_path):
+        audio_dir = tmp_path / "audio" / "test"
+        (audio_dir / "year_2020").mkdir(parents=True)
+        (audio_dir / "year_2021").mkdir(parents=True)
+        (audio_dir / "year_2020" / "piece_a.wav").touch()
+        (audio_dir / "year_2021" / "piece_b.wav").touch()
+
+        ds = ConcreteTestDataset(data_root=tmp_path)
+        files = ds.get_audio_files()
+
+        assert len(files) == 2
+        assert [f.stem for f in files] == ["piece_a", "piece_b"]
+
+    def test_case_insensitive_wav_extension(self, tmp_path):
+        audio_dir = tmp_path / "audio" / "test"
+        audio_dir.mkdir(parents=True)
+        (audio_dir / "a.WAV").touch()
+        (audio_dir / "b.wav").touch()
+
+        ds = ConcreteTestDataset(data_root=tmp_path)
+        files = ds.get_audio_files()
+
+        assert len(files) == 2
+
     def test_empty_dir(self, tmp_path):
         audio_dir = tmp_path / "audio" / "test"
         audio_dir.mkdir(parents=True)

@@ -21,7 +21,7 @@ tests/
 ├── test_config.py           # MESSConfig (23 tests)
 ├── datasets/
 │   ├── conftest.py          # autouse: saves/restores DatasetFactory._datasets
-│   ├── test_base.py         # BaseDataset via ConcreteTestDataset subclass (11)
+│   ├── test_base.py         # BaseDataset via ConcreteTestDataset subclass (13)
 │   ├── test_factory.py      # DatasetFactory registration/lookup (7)
 │   ├── test_smd.py          # SMDDataset properties (4)
 │   └── test_maestro.py      # MAESTRODataset properties (4)
@@ -31,9 +31,10 @@ tests/
 │   └── test_storage.py      # path helpers, save/load roundtrip (16)
 ├── probing/
 │   ├── conftest.py
-│   └── test_discovery.py    # _probe_single, best_layers, resolve_aspects, registries (16)
+│   ├── test_discovery.py    # _probe_single, discover flow, best_layers, resolve_aspects, registries (17)
+│   └── test_targets.py      # create_target_dataset nested/case-insensitive discovery (1)
 └── search/
-    └── test_search.py       # build_index, find_similar with small FAISS arrays (8)
+    └── test_search.py       # track/clip/aspect FAISS search behavior (19)
 ```
 
 ## Root Fixtures (tests/conftest.py)
@@ -55,11 +56,12 @@ Defined in `pyproject.toml [tool.pytest.ini_options]`:
 
 ## Design Principles
 
-- **No model loading**: All tests mock or bypass MERT/transformers imports
+- **No model loading in unit tests**: Heavy MERT model paths are mocked or bypassed
 - **tmp_path everywhere**: Tests never touch real `data/` directory
 - **No `__init__.py`**: pytest discovers test dirs without them
 - **Factory isolation**: `datasets/conftest.py` auto-restores `_datasets` dict per test
 - **`_probe_single` tested via `object.__new__`**: Bypasses `LayerDiscoverySystem.__init__` (which needs real dataset files)
+- **Nested dataset safety**: discovery and target-generation tests cover recursive `.wav` discovery (MAESTRO-style directory trees)
 
 ## Dependencies
 

@@ -3,7 +3,6 @@
 import json
 
 import numpy as np
-import pytest
 
 from mess.probing.discovery import (
     ASPECT_REGISTRY,
@@ -51,6 +50,50 @@ class TestProbeSingle:
         result = self._make_system()._probe_single(X, y)
         assert result["r2_score"] == -999.0
         assert result["rmse"] == 999.0
+
+    def test_discover_uses_dataset_audio_file_listing(self, monkeypatch, tmp_path):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 2
+        system.features_dir = tmp_path / "embeddings" / "raw"
+        system.targets_dir = tmp_path / "proxy_targets"
+
+        nested_files = [
+            tmp_path / "audio" / "maestro" / "2018" / "track_a.wav",
+            tmp_path / "audio" / "maestro" / "2019" / "track_b.wav",
+        ]
+
+        class DummyDataset:
+            name = "MAESTRO"
+
+            @staticmethod
+            def get_audio_files():
+                return nested_files
+
+        system.dataset = DummyDataset()
+
+        observed_audio_files = {}
+
+        def fake_load_features(audio_files):
+            observed_audio_files["files"] = list(audio_files)
+            per_layer = {layer: np.ones((2, 4), dtype=np.float32) for layer in range(13)}
+            return per_layer, list(audio_files)
+
+        def fake_load_targets(audio_files):
+            return {"spectral_centroid": np.array([0.1, 0.2], dtype=np.float32)}, list(audio_files)
+
+        monkeypatch.setattr(system, "load_features", fake_load_features)
+        monkeypatch.setattr(system, "load_targets", fake_load_targets)
+        monkeypatch.setattr(system, "_probe_single", lambda X, y: {
+            "r2_score": 0.9,
+            "correlation": 0.9,
+            "rmse": 0.1,
+        })
+
+        results = system.discover(n_samples=10)
+
+        assert results
+        assert observed_audio_files["files"] == [str(path) for path in nested_files]
 
 
 class TestBestLayers:

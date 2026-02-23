@@ -390,8 +390,12 @@ def create_target_dataset(
 
     target_generator = MusicalAspectTargets()
 
-    # Process all audio files
-    audio_files = sorted(audio_dir.glob("*.wav"))
+    # Process all audio files (recursive, case-insensitive extension match)
+    audio_files = sorted(
+        path
+        for path in audio_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() == ".wav"
+    )
     n_total = len(audio_files)
 
     if n_total == 0:

@@ -270,7 +270,7 @@ class LayerDiscoverySystem:
         Returns:
             {layer_idx: {target_name: {'r2_score', 'correlation', 'rmse'}}}
         """
-        audio_files = sorted(str(f) for f in self.dataset.audio_dir.glob("*.wav"))[:n_samples]
+        audio_files = sorted(str(f) for f in self.dataset.get_audio_files())[:n_samples]
         logger.info(f"Running discovery with up to {len(audio_files)} audio files")
 
         features, feat_files = self.load_features(audio_files)

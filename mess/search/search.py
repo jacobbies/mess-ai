@@ -19,12 +19,12 @@ Usage:
     )
 """
 
+import importlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-import faiss
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,16 @@ EMBEDDING_DIM = 768
 DEFAULT_SEGMENT_DURATION = 5.0
 DEFAULT_OVERLAP_RATIO = 0.5
 DEFAULT_DEDUPE_WINDOW_SECONDS = 5.0
+
+
+def _require_faiss() -> Any:
+    """Import faiss lazily so module import works without search dependencies."""
+    try:
+        return importlib.import_module("faiss")
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "faiss is required for similarity search. Install it with `pip install faiss-cpu`."
+        ) from exc
 
 
 @dataclass(frozen=True)
@@ -394,7 +404,7 @@ def _compose_weighted_vectors(
     return fused.astype("float32")
 
 
-def build_index(features: np.ndarray) -> faiss.IndexFlatIP:
+def build_index(features: np.ndarray) -> Any:
     """
     Build FAISS flat index for exact cosine similarity search.
 
@@ -404,6 +414,8 @@ def build_index(features: np.ndarray) -> faiss.IndexFlatIP:
     Returns:
         FAISS index ready for searching
     """
+    faiss = _require_faiss()
+
     # Normalize features for cosine similarity
     features = features.astype('float32')
     faiss.normalize_L2(features)
@@ -436,6 +448,8 @@ def find_similar(
     Returns:
         List of (track_id, similarity_score) tuples, sorted by descending similarity
     """
+    faiss = _require_faiss()
+
     if query_track not in track_names:
         raise ValueError(f"Query track '{query_track}' not found in dataset")
 
@@ -498,6 +512,8 @@ def search_by_clip(
     Returns:
         List of clip-level results with timestamps and similarity scores
     """
+    faiss = _require_faiss()
+
     if clip_duration <= 0:
         raise ValueError("clip_duration must be > 0")
     if k <= 0:

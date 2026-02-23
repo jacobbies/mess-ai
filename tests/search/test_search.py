@@ -5,12 +5,13 @@ import pytest
 
 from mess.search.search import (
     ClipSearchResult,
+    _require_faiss,
     build_index,
     find_similar,
     load_features,
     load_segment_features,
-    search_by_clip,
     search_by_aspects,
+    search_by_clip,
 )
 
 
@@ -281,3 +282,27 @@ class TestSearchByAspects:
                 aspect_weights={"nonexistent_aspect": 1.0},
                 features_dir=str(tmp_path),
             )
+
+
+class TestFaissDependency:
+    def test_require_faiss_reports_install_hint(self, monkeypatch):
+        def missing_faiss(_name):
+            raise ModuleNotFoundError("No module named 'faiss'")
+
+        monkeypatch.setattr("mess.search.search.importlib.import_module", missing_faiss)
+
+        with pytest.raises(ModuleNotFoundError, match="pip install faiss-cpu"):
+            _require_faiss()
+
+    def test_load_features_does_not_require_faiss(self, tmp_path, monkeypatch):
+        arr = np.random.default_rng(7).standard_normal((13, 768)).astype(np.float32)
+        np.save(tmp_path / "track.npy", arr)
+
+        def missing_faiss(_name):
+            raise ModuleNotFoundError("No module named 'faiss'")
+
+        monkeypatch.setattr("mess.search.search.importlib.import_module", missing_faiss)
+
+        features, track_names = load_features(str(tmp_path))
+        assert track_names == ["track"]
+        assert features.shape == (1, 13 * 768)

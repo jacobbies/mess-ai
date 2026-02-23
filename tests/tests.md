@@ -28,13 +28,15 @@ tests/
 ├── extraction/
 │   ├── conftest.py          # long_audio_array fixture (10s sine)
 │   ├── test_audio.py        # segment_audio pure logic, load_audio mocked (10)
+│   ├── test_extractor.py    # cache paths, OOM recovery, delegation, safe errors (6)
+│   ├── test_pipeline.py     # discovery fallback, worker statuses, run orchestration (7)
 │   └── test_storage.py      # path helpers, save/load roundtrip (16)
 ├── probing/
 │   ├── conftest.py
 │   ├── test_discovery.py    # _probe_single, discover flow, best_layers, resolve_aspects, registries (17)
 │   └── test_targets.py      # create_target_dataset nested/case-insensitive discovery (1)
 └── search/
-    └── test_search.py       # track/clip/aspect FAISS search behavior (19)
+    └── test_search.py       # track/clip/aspect FAISS search behavior (21)
 ```
 
 ## Root Fixtures (tests/conftest.py)

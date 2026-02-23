@@ -1,6 +1,6 @@
-from pathlib import Path
-from typing import Dict, Any, Optional
 import os
+from pathlib import Path
+from typing import Any
 
 
 class MESSConfig:
@@ -17,13 +17,13 @@ class MESSConfig:
 
         # MERT Model Configuration
         self.MERT_MODEL_NAME: str = 'm-a-p/MERT-v1-95M'
-        self.MERT_CACHE_DIR: Optional[str] = None
+        self.MERT_CACHE_DIR: str | None = None
         self.MERT_TARGET_SAMPLE_RATE: int = 24000
         self.MERT_SEGMENT_DURATION: float = 5.0
         self.MERT_OVERLAP_RATIO: float = 0.5
 
         # Device Configuration (CPU default, explicit GPU opt-in)
-        self.MERT_DEVICE: Optional[str] = 'cpu'  # Default: 'cpu', Options: 'cuda', 'mps'
+        self.MERT_DEVICE: str | None = 'cpu'  # Default: 'cpu', Options: 'cuda', 'mps'
 
         # Device-specific batch sizes (optimized per hardware)
         self.MERT_BATCH_SIZE_CUDA: int = 16  # RTX 3070Ti can handle 16
@@ -89,7 +89,7 @@ class MESSConfig:
         return 'cpu'
 
     @property
-    def cache_dir(self) -> Optional[Path]:
+    def cache_dir(self) -> Path | None:
         """Optional cache directory for Hugging Face models."""
         if self.MERT_CACHE_DIR:
             return Path(self.MERT_CACHE_DIR)
@@ -211,7 +211,7 @@ class MESSConfig:
         self.data_root.mkdir(parents=True, exist_ok=True)
         print(f"✓ Config validated. Data root: {self.data_root}")
     
-    def get_device_info(self) -> Dict[str, Any]:
+    def get_device_info(self) -> dict[str, Any]:
         """Get device information for debugging."""
         import torch
         info = {
@@ -235,7 +235,7 @@ class MESSConfig:
 
         return info
 
-    def get_path_info(self) -> Dict[str, str]:
+    def get_path_info(self) -> dict[str, str]:
         """Get path information for debugging."""
         return {
             'project_root': str(self.project_root),

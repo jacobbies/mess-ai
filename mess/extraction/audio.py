@@ -13,15 +13,16 @@ Usage:
     validation = validate_audio_file("track.wav")
 """
 
+import logging
+from pathlib import Path
+from threading import Lock
+from typing import Any
+
+import numpy as np
 import torch
 import torchaudio
-import logging
-import numpy as np
-from threading import Lock
-from pathlib import Path
-from typing import Dict, List, Union, Any
 
-_RESAMPLER_CACHE: Dict[tuple[int, int], torchaudio.transforms.Resample] = {}
+_RESAMPLER_CACHE: dict[tuple[int, int], torchaudio.transforms.Resample] = {}
 _RESAMPLER_CACHE_LOCK = Lock()
 
 
@@ -39,7 +40,7 @@ def _get_resampler(orig_sr: int, target_sr: int) -> torchaudio.transforms.Resamp
     return resampler
 
 
-def load_audio(audio_path: Union[str, Path], target_sr: int = 24000) -> np.ndarray:
+def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
     """
     Load audio and preprocess for MERT (mono, resampled).
 
@@ -77,7 +78,7 @@ def segment_audio(
     segment_duration: float = 5.0,
     overlap_ratio: float = 0.5,
     sample_rate: int = 24000
-) -> List[np.ndarray]:
+) -> list[np.ndarray]:
     """
     Segment audio into overlapping windows.
 
@@ -106,10 +107,10 @@ def segment_audio(
 
 
 def validate_audio_file(
-    audio_path: Union[str, Path],
+    audio_path: str | Path,
     check_corruption: bool = True,
     min_duration: float = 1.0
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Validate audio file before extraction.
 

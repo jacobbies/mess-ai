@@ -24,12 +24,11 @@ Usage:
 
 import argparse
 import logging
-from pathlib import Path
 
 import mlflow
 
-from mess.extraction.extractor import FeatureExtractor
 from mess.datasets.factory import DatasetFactory
+from mess.extraction.extractor import FeatureExtractor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -183,7 +182,8 @@ Examples:
   python scripts/extract_features.py --dataset maestro --force --device cuda --workers 4
 
   # Debug mode (disable optimizations)
-  python scripts/extract_features.py --dataset smd --device cuda --no-mixed-precision --disable-oom-recovery
+  python scripts/extract_features.py --dataset smd --device cuda \\
+    --no-mixed-precision --disable-oom-recovery
         """
     )
     parser.add_argument(

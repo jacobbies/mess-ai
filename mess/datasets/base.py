@@ -4,7 +4,6 @@ Simplified for local development - focuses on audio files and feature paths.
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional
 
 
 class BaseDataset(ABC):
@@ -17,7 +16,7 @@ class BaseDataset(ABC):
     - Flexible override: dataset = SMDDataset(data_root="/custom/path")
     """
 
-    def __init__(self, data_root: Optional[Path] = None):
+    def __init__(self, data_root: Path | None = None):
         """
         Initialize dataset with optional data root.
 
@@ -53,7 +52,7 @@ class BaseDataset(ABC):
         """Directory for aggregated [13, 768] embeddings."""
         return self.embeddings_dir / "aggregated"
 
-    def get_audio_files(self) -> List[Path]:
+    def get_audio_files(self) -> list[Path]:
         """
         Get list of audio file paths for the dataset.
 

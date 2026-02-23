@@ -25,15 +25,14 @@ Targets Generated:
 
 import logging
 import time
-from typing import Dict, Any, Union, Optional
+from pathlib import Path
 
+import librosa
 import mlflow
 import numpy as np
-import librosa
 import scipy.signal
 import torch
 import torchaudio
-from pathlib import Path
 
 from ..config import mess_config
 
@@ -49,7 +48,7 @@ class MusicalAspectTargets:
     discovery.py can consume for linear probing experiments.
     """
 
-    def __init__(self, sample_rate: Optional[int] = None):
+    def __init__(self, sample_rate: int | None = None):
         """
         Initialize target generator.
 
@@ -58,7 +57,7 @@ class MusicalAspectTargets:
         """
         self.sample_rate = sample_rate or mess_config.target_sample_rate
     
-    def generate_all_targets(self, audio_path: str) -> Dict[str, Dict[str, np.ndarray]]:
+    def generate_all_targets(self, audio_path: str) -> dict[str, dict[str, np.ndarray]]:
         """Generate all proxy targets for a given audio file."""
         # Load audio
         audio, sr = torchaudio.load(audio_path)
@@ -84,7 +83,7 @@ class MusicalAspectTargets:
         return targets
 
     @staticmethod
-    def validate_target_structure(targets: Dict[str, Dict[str, np.ndarray]]) -> bool:
+    def validate_target_structure(targets: dict[str, dict[str, np.ndarray]]) -> bool:
         """
         Verify targets match discovery.py's expected structure.
 
@@ -113,10 +112,13 @@ class MusicalAspectTargets:
             )
             return False
 
-        logger.info(f"Target structure validated: all {len(LayerDiscoverySystem.SCALAR_TARGETS)} targets present")
+        logger.info(
+            "Target structure validated: all %d targets present",
+            len(LayerDiscoverySystem.SCALAR_TARGETS),
+        )
         return True
 
-    def _generate_rhythm_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_rhythm_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate rhythm-related targets."""
         # Tempo estimation
         tempo, beats = librosa.beat.beat_track(
@@ -150,7 +152,7 @@ class MusicalAspectTargets:
             'onset_density': np.array([len(peaks) / (len(audio) / self.sample_rate)])
         }
     
-    def _generate_harmony_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_harmony_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate harmony-related targets."""
         # Chroma features (pitch class profiles)
         chroma = librosa.feature.chroma_cqt(
@@ -162,8 +164,12 @@ class MusicalAspectTargets:
         
         # Key estimation (template-based matching with major/minor profiles)
         # Major and minor key profiles (Krumhansl-Schmuckler)
-        major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
-        minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+        major_profile = np.array(
+            [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
+        )
+        minor_profile = np.array(
+            [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
+        )
 
         # Average chroma over time
         chroma_mean = np.mean(chroma, axis=1)
@@ -198,7 +204,7 @@ class MusicalAspectTargets:
             'harmonic_complexity': np.array([harmonic_complexity])
         }
     
-    def _generate_timbre_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_timbre_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate timbre-related targets."""
         # MFCCs (classic timbre descriptors)
         mfccs = librosa.feature.mfcc(
@@ -248,7 +254,7 @@ class MusicalAspectTargets:
             'zero_crossing_rate': zcr
         }
     
-    def _generate_articulation_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_articulation_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate articulation-related targets (attack characteristics)."""
         # Attack slope (how quickly energy rises)
         stft = librosa.stft(audio, hop_length=512)
@@ -291,7 +297,7 @@ class MusicalAspectTargets:
             'energy_envelope': energy
         }
     
-    def _generate_dynamics_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_dynamics_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate dynamics-related targets."""
         # RMS energy (dynamic level)
         rms = librosa.feature.rms(
@@ -312,7 +318,9 @@ class MusicalAspectTargets:
         # Crescendo/diminuendo detection
         rms_diff = np.diff(smoothed_rms)
         crescendo_strength = np.mean(rms_diff[rms_diff > 0]) if np.any(rms_diff > 0) else 0.0
-        diminuendo_strength = np.mean(np.abs(rms_diff[rms_diff < 0])) if np.any(rms_diff < 0) else 0.0
+        diminuendo_strength = (
+            np.mean(np.abs(rms_diff[rms_diff < 0])) if np.any(rms_diff < 0) else 0.0
+        )
         
         return {
             'rms_energy': rms,
@@ -323,7 +331,7 @@ class MusicalAspectTargets:
             'diminuendo_strength': np.array([diminuendo_strength])
         }
     
-    def _generate_phrasing_targets(self, audio: np.ndarray) -> Dict[str, np.ndarray]:
+    def _generate_phrasing_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate phrasing-related targets (musical sentence structure)."""
         # Novelty function for phrase boundary detection
         chroma = librosa.feature.chroma_cqt(y=audio, sr=self.sample_rate)
@@ -335,7 +343,7 @@ class MusicalAspectTargets:
         try:
             # Try newer API first
             novelty = librosa.segment.recurrence_matrix(chroma.T).diagonal()
-        except:
+        except Exception:
             # Fallback to older API or manual calculation
             novelty = np.diag(similarity_matrix)
         
@@ -363,11 +371,11 @@ class MusicalAspectTargets:
 ###
 
 def create_target_dataset(
-    audio_dir: Union[str, Path],
-    output_dir: Union[str, Path],
+    audio_dir: str | Path,
+    output_dir: str | Path,
     validate: bool = True,
     use_mlflow: bool = True,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Create proxy target dataset for all audio files.
 
@@ -409,7 +417,7 @@ def create_target_dataset(
     success_count = 0
     failed_count = 0
     errors = []
-    target_stats: Dict[str, list] = {}
+    target_stats: dict[str, list] = {}
 
     # Log to MLflow if requested and a run is active
     if use_mlflow and mlflow.active_run():
@@ -461,7 +469,7 @@ def create_target_dataset(
 
     # Summary
     logger.info(f"\n{'='*70}")
-    logger.info(f"Target Dataset Creation Complete")
+    logger.info("Target Dataset Creation Complete")
     logger.info(f"{'='*70}")
     logger.info(f"  Total files:    {n_total}")
     logger.info(f"  Success:        {success_count} ({success_count/n_total*100:.1f}%)")

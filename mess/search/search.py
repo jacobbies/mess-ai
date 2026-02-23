@@ -23,7 +23,7 @@ import importlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -69,7 +69,7 @@ class ClipSearchResult:
 
 def _vectorize_track_features(
     raw_features: np.ndarray,
-    layer: Optional[int],
+    layer: int | None,
     source_name: str
 ) -> np.ndarray:
     """
@@ -128,7 +128,7 @@ def _vectorize_track_features(
 
 def _vectorize_segment_features(
     raw_features: np.ndarray,
-    layer: Optional[int],
+    layer: int | None,
     source_name: str,
 ) -> np.ndarray:
     """
@@ -188,7 +188,7 @@ def _segment_bounds(
     segment_idx: int,
     segment_duration: float,
     overlap_ratio: float,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     hop_seconds = _segment_hop_seconds(segment_duration, overlap_ratio)
     start_time = segment_idx * hop_seconds
     end_time = start_time + segment_duration
@@ -196,7 +196,7 @@ def _segment_bounds(
 
 
 def _resolve_query_segment_index(
-    track_clip_locations: List[ClipLocation],
+    track_clip_locations: list[ClipLocation],
     clip_start: float,
 ) -> int:
     if clip_start < 0:
@@ -210,10 +210,10 @@ def _resolve_query_segment_index(
 
 def load_segment_features(
     features_dir: str,
-    layer: Optional[int] = None,
+    layer: int | None = None,
     segment_duration: float = DEFAULT_SEGMENT_DURATION,
     overlap_ratio: float = DEFAULT_OVERLAP_RATIO,
-) -> Tuple[np.ndarray, List[ClipLocation]]:
+) -> tuple[np.ndarray, list[ClipLocation]]:
     """
     Load per-segment vectors and clip metadata from embeddings directory.
 
@@ -238,8 +238,8 @@ def load_segment_features(
     if not feature_files:
         raise ValueError(f"No .npy files found in {features_dir_path}")
 
-    all_vectors: List[np.ndarray] = []
-    clip_locations: List[ClipLocation] = []
+    all_vectors: list[np.ndarray] = []
+    clip_locations: list[ClipLocation] = []
 
     for feature_file in feature_files:
         segment_vectors = _vectorize_segment_features(
@@ -279,8 +279,8 @@ def load_segment_features(
 
 def load_features(
     features_dir: str,
-    layer: Optional[int] = None
-) -> Tuple[np.ndarray, List[str]]:
+    layer: int | None = None
+) -> tuple[np.ndarray, list[str]]:
     """
     Load MERT features from directory.
 
@@ -326,7 +326,7 @@ def load_features(
 
 def _load_layer_features(
     features_dir: str
-) -> Tuple[np.ndarray, List[str]]:
+) -> tuple[np.ndarray, list[str]]:
     """
     Load per-track features and normalize to [n_tracks, 13, 768].
 
@@ -344,8 +344,8 @@ def _load_layer_features(
     if not feature_files:
         raise ValueError(f"No .npy files found in {features_dir}")
 
-    layer_features: List[np.ndarray] = []
-    track_names: List[str] = []
+    layer_features: list[np.ndarray] = []
+    track_names: list[str] = []
 
     for feature_file in feature_files:
         features = np.asarray(np.load(feature_file))
@@ -431,10 +431,10 @@ def build_index(features: np.ndarray) -> Any:
 def find_similar(
     query_track: str,
     features: np.ndarray,
-    track_names: List[str],
+    track_names: list[str],
     k: int = 10,
     exclude_self: bool = True
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     """
     Find k most similar tracks using cosine similarity.
 
@@ -467,7 +467,7 @@ def find_similar(
 
     # Convert to results
     results = []
-    for idx, score in zip(indices[0], distances[0]):
+    for idx, score in zip(indices[0], distances[0], strict=True):
         track_id = track_names[idx]
 
         # Skip self if requested
@@ -488,12 +488,12 @@ def search_by_clip(
     features_dir: str,
     k: int = 10,
     clip_duration: float = DEFAULT_SEGMENT_DURATION,
-    layer: Optional[int] = None,
+    layer: int | None = None,
     segment_duration: float = DEFAULT_SEGMENT_DURATION,
     overlap_ratio: float = DEFAULT_OVERLAP_RATIO,
     dedupe_window_seconds: float = DEFAULT_DEDUPE_WINDOW_SECONDS,
     exclude_same_segment: bool = True,
-) -> List[ClipSearchResult]:
+) -> list[ClipSearchResult]:
     """
     Find similar clips for a query clip defined by track and start time.
 
@@ -559,10 +559,10 @@ def search_by_clip(
     )
     distances, indices = index.search(query_features, search_k)
 
-    accepted_starts_by_track: Dict[str, List[float]] = {}
-    results: List[ClipSearchResult] = []
+    accepted_starts_by_track: dict[str, list[float]] = {}
+    results: list[ClipSearchResult] = []
 
-    for idx, score in zip(indices[0], distances[0]):
+    for idx, score in zip(indices[0], distances[0], strict=True):
         if idx < 0:
             continue
 
@@ -601,7 +601,7 @@ def search_by_aspect(
     aspect: str,
     features_dir: str,
     k: int = 10
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     """
     Find similar tracks using a specific musical aspect.
 
@@ -642,12 +642,12 @@ def search_by_aspect(
 
 def search_by_aspects(
     query_track: str,
-    aspect_weights: Dict[str, float],
+    aspect_weights: dict[str, float],
     features_dir: str,
     k: int = 10,
     min_r2: float = 0.5,
     scale_by_r2: bool = True,
-) -> List[Tuple[str, float]]:
+) -> list[tuple[str, float]]:
     """
     Find similar tracks using a weighted combination of multiple aspects.
 

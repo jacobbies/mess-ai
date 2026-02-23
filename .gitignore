@@ -1,6 +1,5 @@
 # mess-ai ML Development Environment .gitignore
 
-.github/workflows
 # Python
 __pycache__/
 *.py[cod]

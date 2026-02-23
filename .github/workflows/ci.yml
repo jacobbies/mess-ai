@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      - name: Run lint (maintained paths)
+        run: >
+          uv run ruff check
+          mess
+          tests
+          scripts/extract_features.py
+          scripts/run_probing.py
+          scripts/demo_recommendations.py

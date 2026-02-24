@@ -1,5 +1,19 @@
 """Public API for search and retrieval utilities."""
 
+from .faiss_index import (
+    ArtifactManifest,
+    ArtifactValidationError,
+    FAISSArtifact,
+    build_clip_artifact,
+    build_track_artifact,
+    download_artifact_from_s3,
+    find_latest_artifact_dir,
+    load_artifact,
+    load_latest_from_s3,
+    remove_local_artifact_dir,
+    save_artifact,
+    upload_artifact_to_s3,
+)
 from .search import (
     ClipLocation,
     ClipSearchResult,
@@ -22,4 +36,16 @@ __all__ = [
     "search_by_aspect",
     "search_by_aspects",
     "search_by_clip",
+    "ArtifactManifest",
+    "ArtifactValidationError",
+    "FAISSArtifact",
+    "build_track_artifact",
+    "build_clip_artifact",
+    "save_artifact",
+    "load_artifact",
+    "find_latest_artifact_dir",
+    "upload_artifact_to_s3",
+    "download_artifact_from_s3",
+    "load_latest_from_s3",
+    "remove_local_artifact_dir",
 ]

@@ -51,11 +51,13 @@ mess/
     targets.py
     DISCOVERY_REFERENCE.md
   search/
+    faiss_index.py
     search.py
 scripts/
   extract_features.py
   run_probing.py
   demo_recommendations.py
+  publish_faiss_index.py
   _NEEDS_UPDATE.txt
 tests/
   test_config.py
@@ -106,6 +108,17 @@ Proxy target contract (`targets.py` -> `discovery.py`):
 - NPZ file contains nested dict-like categories.
 - Discovery reads with `data[category].item()[field]`.
 - Missing required scalar targets causes target omission or warnings.
+
+Deployment/runtime contract (EC2 dependency mode):
+- This repo is imported as a Python dependency in the production music-recsys service running on EC2.
+- Production workers may not have a full local dataset checkout; audio, embeddings, and FAISS artifacts are retrieved from S3 at runtime.
+- Artifact flow must support both directions:
+  - download for serving (`load_latest_from_s3`, `download_artifact_from_s3`)
+  - upload/publish for training/index build jobs (`upload_artifact_to_s3`)
+- Treat S3 artifact integrity as mandatory:
+  - immutable `artifact_version_id`
+  - checksum validation for downloaded files
+  - pointer (`latest.json`) updated only after upload validation passes.
 
 ## 5) Core Config (`mess/config.py`)
 

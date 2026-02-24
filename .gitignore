@@ -99,3 +99,6 @@ build/
 
 # Node modules (shouldn't exist but just in case)
 node_modules/
+
+# Local research papers / reference PDFs
+docs/*.pdf

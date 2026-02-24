@@ -70,6 +70,38 @@ data/
     *_targets.npz
 ```
 
+## EC2 + S3 Deployment
+
+`mess-ai` is designed to be imported as a dependency by a production music-recsys service (for example on EC2).
+In that flow, workers can pull audio/embeddings/index artifacts from S3 and publish newly built artifacts back to S3.
+
+Core artifact helpers:
+
+```python
+from mess.search import (
+    build_clip_artifact,
+    save_artifact,
+    upload_artifact_to_s3,
+    download_artifact_from_s3,
+    load_latest_from_s3,
+)
+```
+
+Artifact integrity model:
+- immutable `artifact_version_id` in manifest/pointer
+- checksum validation on load
+- `latest.json` pointer written only after upload validation succeeds
+
+CLI example for build + publish:
+
+```bash
+uv run python scripts/publish_faiss_index.py \
+  --dataset smd \
+  --kind clip \
+  --s3-bucket <BUCKET> \
+  --s3-prefix mess/faiss
+```
+
 ## Quickstart
 
 1. Extract features:

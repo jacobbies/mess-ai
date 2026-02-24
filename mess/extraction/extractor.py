@@ -14,14 +14,14 @@ Usage:
     features = extractor.extract_track_features("audio.wav")
 """
 
-import torch
 import logging
-import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, List, Union, Tuple, Any
+from typing import Any
 
-from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor
+import numpy as np
+import torch
 from transformers.models.auto.modeling_auto import AutoModel
+from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor
 
 from ..config import mess_config
 from .audio import load_audio, segment_audio, validate_audio_file
@@ -38,11 +38,11 @@ class FeatureExtractor:
 
     def __init__(
         self,
-        model_name: Optional[str] = None,
-        device: Optional[str] = None,
-        cache_dir: Optional[Union[str, Path]] = None,
-        output_dir: Optional[Union[str, Path]] = None,
-        batch_size: Optional[int] = None
+        model_name: str | None = None,
+        device: str | None = None,
+        cache_dir: str | Path | None = None,
+        output_dir: str | Path | None = None,
+        batch_size: int | None = None
     ) -> None:
         """
         Initialize MERT feature extractor.
@@ -77,7 +77,7 @@ class FeatureExtractor:
 
     def _log_initialization(self) -> None:
         """Log feature extractor configuration and device info."""
-        logging.info(f"FeatureExtractor initialized:")
+        logging.info("FeatureExtractor initialized:")
         logging.info(f"  Model: {self.model_name}")
         logging.info(f"  Device: {self.device.upper()}")
         logging.info(f"  Batch size: {self.batch_size}")
@@ -88,17 +88,18 @@ class FeatureExtractor:
         if self.device == 'cuda':
             from ..config import mess_config
             logging.info(f"  CUDA device: {torch.cuda.get_device_name(0)}")
-            logging.info(f"  CUDA memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+            total_memory_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+            logging.info(f"  CUDA memory: {total_memory_gb:.2f} GB")
             logging.info(f"  CUDA pinned memory: {mess_config.MERT_CUDA_PINNED_MEMORY}")
             logging.info(f"  CUDA mixed precision: {mess_config.MERT_CUDA_MIXED_PRECISION}")
             logging.info(f"  CUDA OOM recovery: {mess_config.MERT_CUDA_AUTO_OOM_RECOVERY}")
 
     def _extract_feature_views_from_segments(
         self,
-        segments: List[np.ndarray],
+        segments: list[np.ndarray],
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Extract feature views for a list of audio segments in memory-safe batches.
 
@@ -111,7 +112,7 @@ class FeatureExtractor:
         raw_batches = [] if include_raw else None
         segment_batches = [] if include_segments else None
 
-        aggregated_sum: Optional[np.ndarray] = None
+        aggregated_sum: np.ndarray | None = None
         total_segments = 0
 
         batch_features = self._extract_mert_features_batched_with_oom_recovery(segments)
@@ -132,7 +133,7 @@ class FeatureExtractor:
         if aggregated_sum is None or total_segments == 0:
             raise RuntimeError("Failed to compute aggregated features")
 
-        results: Dict[str, np.ndarray] = {
+        results: dict[str, np.ndarray] = {
             'aggregated': (aggregated_sum / total_segments).astype(np.float32)
         }
 
@@ -236,7 +237,7 @@ class FeatureExtractor:
             logging.error(f"Error extracting MERT features: {e}")
             raise
 
-    def _extract_mert_features_batched(self, audio_segments: List[np.ndarray]) -> np.ndarray:
+    def _extract_mert_features_batched(self, audio_segments: list[np.ndarray]) -> np.ndarray:
         """
         Extract MERT features with CUDA optimizations when available.
 
@@ -304,7 +305,7 @@ class FeatureExtractor:
 
     def _extract_mert_features_batched_with_oom_recovery(
         self,
-        audio_segments: List[np.ndarray]
+        audio_segments: list[np.ndarray]
     ) -> np.ndarray:
         """
         Extract MERT features with automatic OOM recovery.
@@ -361,18 +362,18 @@ class FeatureExtractor:
                     self.batch_size = original_batch_size
                     raise
 
-        raise RuntimeError(f"Failed to extract features even with batch_size=1")
+        raise RuntimeError("Failed to extract features even with batch_size=1")
 
     def extract_track_features(
         self,
-        audio_path: Union[str, Path],
-        output_dir: Optional[Union[str, Path]] = None,
-        track_id: Optional[str] = None,
-        dataset: Optional[str] = None,
+        audio_path: str | Path,
+        output_dir: str | Path | None = None,
+        track_id: str | None = None,
+        dataset: str | None = None,
         skip_existing: bool = True,
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Extract MERT features for an audio track.
 
@@ -448,15 +449,15 @@ class FeatureExtractor:
 
     def extract_track_features_safe(
         self,
-        audio_path: Union[str, Path],
-        output_dir: Optional[Union[str, Path]] = None,
-        track_id: Optional[str] = None,
-        dataset: Optional[str] = None,
+        audio_path: str | Path,
+        output_dir: str | Path | None = None,
+        track_id: str | None = None,
+        dataset: str | None = None,
         skip_existing: bool = True,
         validate: bool = True,
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Tuple[Optional[Dict[str, np.ndarray]], Optional[str]]:
+    ) -> tuple[dict[str, np.ndarray] | None, str | None]:
         """
         Safe version of extract_track_features with comprehensive error handling.
 
@@ -519,15 +520,15 @@ class FeatureExtractor:
 
     def extract_dataset_features(
         self,
-        audio_dir: Union[str, Path],
-        output_dir: Union[str, Path],
+        audio_dir: str | Path,
+        output_dir: str | Path,
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
         num_workers: int = 1,
-        dataset: Optional[str] = None,
+        dataset: str | None = None,
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Extract features for entire dataset (convenience delegator).
 
@@ -558,11 +559,11 @@ class FeatureExtractor:
 
     def estimate_extraction_time(
         self,
-        audio_dir: Union[str, Path],
+        audio_dir: str | Path,
         file_pattern: str = "*.wav",
         sample_size: int = 5,
         num_workers: int = 1
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Estimate extraction time for dataset (convenience delegator).
 

@@ -21,7 +21,7 @@ Usage:
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import mlflow
 import numpy as np
@@ -43,7 +43,7 @@ EMBEDDING_DIM = 768
 # Model inspection utilities (require mess-ai[ml])
 # =============================================================================
 
-def inspect_model(model_name: Optional[str] = None) -> Dict[str, Any]:
+def inspect_model(model_name: str | None = None) -> dict[str, Any]:
     """
     Inventory MERT model: layer names, parameter counts, shapes.
 
@@ -55,7 +55,7 @@ def inspect_model(model_name: Optional[str] = None) -> Dict[str, Any]:
     name = model_name or mess_config.model_name
     model = AutoModel.from_pretrained(name, trust_remote_code=True)
 
-    inventory: Dict[str, Any] = {
+    inventory: dict[str, Any] = {
         'model_name': name,
         'total_params': sum(p.numel() for p in model.parameters()),
         'trainable_params': sum(p.numel() for p in model.parameters() if p.requires_grad),
@@ -81,9 +81,9 @@ def inspect_model(model_name: Optional[str] = None) -> Dict[str, Any]:
 
 def trace_activations(
     audio_path: str,
-    model_name: Optional[str] = None,
+    model_name: str | None = None,
     segment_duration: float = 5.0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run a forward pass through MERT and capture activation shapes per hidden layer.
 
@@ -179,10 +179,12 @@ class LayerDiscoverySystem:
         self.alpha = alpha
         self.n_folds = n_folds
 
-    def load_features(self, audio_files: List[str]) -> Tuple[Dict[int, np.ndarray], List[str]]:
+    def load_features(self, audio_files: list[str]) -> tuple[dict[int, np.ndarray], list[str]]:
         """Load MERT layer embeddings, averaged across segments and time steps."""
-        per_layer: Dict[int, List[np.ndarray]] = {l: [] for l in range(NUM_LAYERS)}
-        loaded: List[str] = []
+        per_layer: dict[int, list[np.ndarray]] = {
+            layer_idx: [] for layer_idx in range(NUM_LAYERS)
+        }
+        loaded: list[str] = []
 
         for path in audio_files:
             feat_file = self.features_dir / f"{Path(path).stem}.npy"
@@ -193,14 +195,14 @@ class LayerDiscoverySystem:
                 per_layer[layer].append(raw[:, layer, :, :].mean(axis=(0, 1)))
             loaded.append(path)
 
-        features = {l: np.array(v) for l, v in per_layer.items()}
+        features = {layer_idx: np.array(values) for layer_idx, values in per_layer.items()}
         logger.info(f"Loaded features for {len(loaded)}/{len(audio_files)} files")
         return features, loaded
 
-    def load_targets(self, audio_files: List[str]) -> Tuple[Dict[str, np.ndarray], List[str]]:
+    def load_targets(self, audio_files: list[str]) -> tuple[dict[str, np.ndarray], list[str]]:
         """Load scalar proxy targets from npz files for probing."""
-        collectors: Dict[str, List[float]] = {name: [] for name in self.SCALAR_TARGETS}
-        loaded: List[str] = []
+        collectors: dict[str, list[float]] = {name: [] for name in self.SCALAR_TARGETS}
+        loaded: list[str] = []
 
         for path in audio_files:
             target_file = self.targets_dir / f"{Path(path).stem}_targets.npz"
@@ -208,7 +210,7 @@ class LayerDiscoverySystem:
                 continue
 
             data = np.load(target_file, allow_pickle=True)
-            row: Dict[str, float] = {}
+            row: dict[str, float] = {}
             ok = True
 
             for name, (category, key, reduction) in self.SCALAR_TARGETS.items():
@@ -230,7 +232,7 @@ class LayerDiscoverySystem:
                 loaded.append(path)
 
         # Only keep targets with variance (constant targets can't be probed)
-        targets: Dict[str, np.ndarray] = {}
+        targets: dict[str, np.ndarray] = {}
         for name, values in collectors.items():
             arr = np.array(values)
             if len(arr) > 0 and np.std(arr) > 1e-10:
@@ -241,7 +243,7 @@ class LayerDiscoverySystem:
         logger.info(f"Loaded {len(targets)} targets for {len(loaded)} files")
         return targets, loaded
 
-    def _probe_single(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+    def _probe_single(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Cross-validated Ridge regression for one (layer, target) pair."""
         n = len(X)
         if n < self.n_folds:
@@ -261,7 +263,7 @@ class LayerDiscoverySystem:
 
         return {'r2_score': r2, 'correlation': corr, 'rmse': rmse}
 
-    def discover(self, n_samples: int = 50) -> Dict[int, Dict[str, Dict[str, float]]]:
+    def discover(self, n_samples: int = 50) -> dict[int, dict[str, dict[str, float]]]:
         """
         Run full layer discovery: probe all 13 layers against all proxy targets.
 
@@ -285,7 +287,9 @@ class LayerDiscoverySystem:
         feat_idx = [i for i, f in enumerate(feat_files) if f in common]
         tgt_idx = [i for i, f in enumerate(tgt_files) if f in common]
 
-        features = {l: v[feat_idx] for l, v in features.items()}
+        features = {
+            layer_idx: values[feat_idx] for layer_idx, values in features.items()
+        }
         targets = {name: v[tgt_idx] for name, v in targets.items()}
 
         n_tracks = len(common)
@@ -304,7 +308,7 @@ class LayerDiscoverySystem:
                 'targets': ','.join(sorted(targets.keys())),
             })
 
-        results: Dict[int, Dict[str, Dict[str, float]]] = {}
+        results: dict[int, dict[str, dict[str, float]]] = {}
 
         for layer in range(NUM_LAYERS):
             results[layer] = {}
@@ -340,8 +344,8 @@ class LayerDiscoverySystem:
 
     @staticmethod
     def best_layers(
-        results: Dict[int, Dict[str, Dict[str, float]]],
-    ) -> Dict[str, Dict[str, Any]]:
+        results: dict[int, dict[str, dict[str, float]]],
+    ) -> dict[str, dict[str, Any]]:
         """
         Find the best layer for each proxy target from discovery results.
 
@@ -355,7 +359,7 @@ class LayerDiscoverySystem:
         for layer_results in results.values():
             all_targets.update(layer_results.keys())
 
-        best: Dict[str, Dict[str, Any]] = {}
+        best: dict[str, dict[str, Any]] = {}
         for target in sorted(all_targets):
             best_layer = -1
             best_r2 = -999.0
@@ -381,14 +385,18 @@ class LayerDiscoverySystem:
 
         return best
 
-    def discover_and_save(self, n_samples: int = 50, path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    def discover_and_save(
+        self,
+        n_samples: int = 50,
+        path: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
         """Run discovery, save results, return best layers summary."""
         results = self.discover(n_samples)
         if results:
             self.save(results, path)
         return self.best_layers(results)
 
-    def save(self, results: Dict[int, Dict[str, Dict[str, float]]], path: Optional[str] = None):
+    def save(self, results: dict[int, dict[str, dict[str, float]]], path: str | None = None):
         """Save discovery results to JSON and log as MLflow artifact."""
         out_path = Path(path) if path else mess_config.probing_results_file
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -411,7 +419,7 @@ class LayerDiscoverySystem:
 
 # Maps user-facing aspect name → probing target(s) that validate it.
 # When multiple targets are listed, the one with highest R² is used.
-ASPECT_REGISTRY: Dict[str, Dict[str, Any]] = {
+ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
     'brightness': {
         'targets': ['spectral_centroid'],
         'description': 'Timbral brightness or darkness of the sound',
@@ -457,8 +465,8 @@ ASPECT_REGISTRY: Dict[str, Dict[str, Any]] = {
 
 def resolve_aspects(
     min_r2: float = 0.5,
-    results_path: Optional[Path] = None,
-) -> Dict[str, Dict[str, Any]]:
+    results_path: Path | None = None,
+) -> dict[str, dict[str, Any]]:
     """
     Resolve each aspect in the registry to its best validated MERT layer.
 
@@ -491,7 +499,7 @@ def resolve_aspects(
     # JSON keys are strings, convert back to int
     results = {int(layer): targets for layer, targets in raw.items()}
 
-    resolved: Dict[str, Dict[str, Any]] = {}
+    resolved: dict[str, dict[str, Any]] = {}
 
     for aspect_name, aspect_info in ASPECT_REGISTRY.items():
         best_layer = -1

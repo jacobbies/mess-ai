@@ -13,11 +13,12 @@ Usage:
     results = pipeline.run(audio_dir, output_dir, num_workers=4)
 """
 
-import time
 import logging
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
-from typing import Optional, Dict, Union, Any
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from typing import Any
+
 from tqdm import tqdm
 
 from .audio import load_audio, segment_audio
@@ -80,15 +81,15 @@ class ExtractionPipeline:
 
     def run(
         self,
-        audio_dir: Union[str, Path],
-        output_dir: Union[str, Path],
+        audio_dir: str | Path,
+        output_dir: str | Path,
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
         num_workers: int = 1,
-        dataset: Optional[str] = None,
+        dataset: str | None = None,
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Extract features for entire dataset.
 
@@ -146,15 +147,15 @@ class ExtractionPipeline:
 
     def run_parallel(
         self,
-        audio_dir: Union[str, Path],
-        output_dir: Union[str, Path],
+        audio_dir: str | Path,
+        output_dir: str | Path,
         file_pattern: str = "*.wav",
         skip_existing: bool = True,
-        num_workers: Optional[int] = None,
-        dataset: Optional[str] = None,
+        num_workers: int | None = None,
+        dataset: str | None = None,
         include_raw: bool = True,
         include_segments: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Extract features with parallel audio loading.
 
@@ -212,7 +213,7 @@ class ExtractionPipeline:
 
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
             audio_iter = iter(audio_files)
-            in_flight: Dict[Any, Path] = {}
+            in_flight: dict[Any, Path] = {}
 
             def _submit_next() -> bool:
                 try:
@@ -307,9 +308,9 @@ class ExtractionPipeline:
         audio_path: Path,
         skip_existing: bool,
         output_dir: Path,
-        dataset: Optional[str] = None,
-        requested_feature_types: Optional[list[str]] = None
-    ) -> Dict[str, Any]:
+        dataset: str | None = None,
+        requested_feature_types: list[str] | None = None
+    ) -> dict[str, Any]:
         """
         Worker function for parallel audio preprocessing (CPU-bound, thread-safe).
 
@@ -362,11 +363,11 @@ class ExtractionPipeline:
 
     def estimate_time(
         self,
-        audio_dir: Union[str, Path],
+        audio_dir: str | Path,
         file_pattern: str = "*.wav",
         sample_size: int = 5,
         num_workers: int = 1
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Estimate extraction time for dataset by sampling files.
 
@@ -430,12 +431,21 @@ class ExtractionPipeline:
             'estimated_speedup': speedup_factor
         }
 
-        logging.info(f"\nEstimation Results:")
+        logging.info("\nEstimation Results:")
         logging.info(f"  Total files: {result['total_files']}")
         logging.info(f"  Avg time/file: {result['avg_time_per_file']:.2f}s")
-        logging.info(f"  Sequential estimate: {result['estimated_sequential_time']:.1f}s ({result['estimated_sequential_time']/60:.1f} min)")
+        logging.info(
+            "  Sequential estimate: %.1fs (%.1f min)",
+            result["estimated_sequential_time"],
+            result["estimated_sequential_time"] / 60,
+        )
         if num_workers > 1:
-            logging.info(f"  Parallel estimate ({num_workers} workers): {result['estimated_parallel_time']:.1f}s ({result['estimated_parallel_time']/60:.1f} min)")
+            logging.info(
+                "  Parallel estimate (%d workers): %.1fs (%.1f min)",
+                num_workers,
+                result["estimated_parallel_time"],
+                result["estimated_parallel_time"] / 60,
+            )
             logging.info(f"  Expected speedup: {result['estimated_speedup']:.2f}x")
 
         return result

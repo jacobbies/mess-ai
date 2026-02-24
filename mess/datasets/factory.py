@@ -2,10 +2,10 @@
 Dataset factory for creating dataset instances
 """
 from pathlib import Path
-from typing import Dict, Type, Optional
+
 from .base import BaseDataset
-from .smd import SMDDataset
 from .maestro import MAESTRODataset
+from .smd import SMDDataset
 
 
 class DatasetFactory:
@@ -15,13 +15,13 @@ class DatasetFactory:
     Uses hybrid approach: datasets default to config.data_root but can be overridden.
     """
 
-    _datasets: Dict[str, Type[BaseDataset]] = {
+    _datasets: dict[str, type[BaseDataset]] = {
         'smd': SMDDataset,
         'maestro': MAESTRODataset,
     }
 
     @classmethod
-    def get_dataset(cls, dataset_type: str, data_root: Optional[Path] = None) -> BaseDataset:
+    def get_dataset(cls, dataset_type: str, data_root: Path | None = None) -> BaseDataset:
         """
         Get a dataset instance.
 
@@ -50,7 +50,7 @@ class DatasetFactory:
         return dataset_class(data_root)
 
     @classmethod
-    def create_dataset(cls, dataset_type: str, data_root: Optional[Path] = None) -> BaseDataset:
+    def create_dataset(cls, dataset_type: str, data_root: Path | None = None) -> BaseDataset:
         """
         Create a dataset instance (alias for get_dataset).
 
@@ -72,6 +72,6 @@ class DatasetFactory:
         return list(cls._datasets.keys())
 
     @classmethod
-    def register_dataset(cls, name: str, dataset_class: Type[BaseDataset]) -> None:
+    def register_dataset(cls, name: str, dataset_class: type[BaseDataset]) -> None:
         """Register a new dataset type."""
         cls._datasets[name] = dataset_class

@@ -11,18 +11,19 @@ Usage:
         features = load_features(audio_path, output_dir, track_id="Beethoven_Op027")
 """
 
-import logging
-import numpy as np
-import tempfile
-import shutil
 import fcntl
+import logging
+import shutil
+import tempfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Optional, Dict, Union, Iterable
+
+import numpy as np
 
 
 def _resolve_base_dir(
-    output_dir: Union[str, Path],
-    dataset: Optional[str] = None
+    output_dir: str | Path,
+    dataset: str | None = None
 ) -> Path:
     """Resolve base output directory with optional dataset subdirectory."""
     output_dir = Path(output_dir)
@@ -30,18 +31,18 @@ def _resolve_base_dir(
 
 
 def _resolve_filename(
-    audio_path: Union[str, Path],
-    track_id: Optional[str] = None
+    audio_path: str | Path,
+    track_id: str | None = None
 ) -> str:
     """Derive filename from track_id or audio path stem."""
     return track_id if track_id else Path(audio_path).stem
 
 
 def features_exist(
-    audio_path: Union[str, Path],
-    output_dir: Union[str, Path],
-    track_id: Optional[str] = None,
-    dataset: Optional[str] = None
+    audio_path: str | Path,
+    output_dir: str | Path,
+    track_id: str | None = None,
+    dataset: str | None = None
 ) -> bool:
     """
     Check if features already exist on disk.
@@ -65,11 +66,11 @@ def features_exist(
 
 
 def features_exist_for_types(
-    audio_path: Union[str, Path],
-    output_dir: Union[str, Path],
+    audio_path: str | Path,
+    output_dir: str | Path,
     feature_types: Iterable[str],
-    track_id: Optional[str] = None,
-    dataset: Optional[str] = None
+    track_id: str | None = None,
+    dataset: str | None = None
 ) -> bool:
     """
     Check whether all requested feature arrays exist on disk.
@@ -99,11 +100,11 @@ def features_exist_for_types(
 
 
 def load_features(
-    audio_path: Union[str, Path],
-    output_dir: Union[str, Path],
-    track_id: Optional[str] = None,
-    dataset: Optional[str] = None
-) -> Optional[Dict[str, np.ndarray]]:
+    audio_path: str | Path,
+    output_dir: str | Path,
+    track_id: str | None = None,
+    dataset: str | None = None
+) -> dict[str, np.ndarray] | None:
     """
     Load pre-extracted features from disk (~1000x faster than re-extracting).
 
@@ -135,12 +136,12 @@ def load_features(
 
 
 def load_selected_features(
-    audio_path: Union[str, Path],
-    output_dir: Union[str, Path],
+    audio_path: str | Path,
+    output_dir: str | Path,
     feature_types: Iterable[str],
-    track_id: Optional[str] = None,
-    dataset: Optional[str] = None
-) -> Optional[Dict[str, np.ndarray]]:
+    track_id: str | None = None,
+    dataset: str | None = None
+) -> dict[str, np.ndarray] | None:
     """
     Load a selected subset of feature arrays from disk.
 
@@ -150,7 +151,7 @@ def load_selected_features(
         base_dir = _resolve_base_dir(output_dir, dataset)
         filename = _resolve_filename(audio_path, track_id)
 
-        features: Dict[str, np.ndarray] = {}
+        features: dict[str, np.ndarray] = {}
         for feature_type in feature_types:
             feature_path = base_dir / feature_type / f"{filename}.npy"
             if not feature_path.exists():
@@ -165,11 +166,11 @@ def load_selected_features(
 
 
 def save_features(
-    features: Dict[str, np.ndarray],
-    audio_path: Union[str, Path],
-    output_dir: Union[str, Path],
-    track_id: Optional[str] = None,
-    dataset: Optional[str] = None
+    features: dict[str, np.ndarray],
+    audio_path: str | Path,
+    output_dir: str | Path,
+    track_id: str | None = None,
+    dataset: str | None = None
 ) -> None:
     """
     Save extracted features atomically with file locking.

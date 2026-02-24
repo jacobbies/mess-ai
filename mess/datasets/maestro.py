@@ -2,6 +2,7 @@
 MAESTRO Dataset implementation
 """
 from pathlib import Path
+
 from .base import BaseDataset
 
 
@@ -34,4 +35,7 @@ class MAESTRODataset(BaseDataset):
 
     @property
     def description(self) -> str:
-        return "Classical piano performances dataset (MIDI Aligned Edited Synchronized TRack of Orchestral)"
+        return (
+            "Classical piano performances dataset "
+            "(MIDI Aligned Edited Synchronized TRack of Orchestral)"
+        )

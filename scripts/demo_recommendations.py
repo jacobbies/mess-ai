@@ -11,21 +11,20 @@ Usage:
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, Optional
 
+from mess.probing import resolve_aspects
 from mess.search.search import (
     find_similar,
     load_features,
-    search_by_clip,
     search_by_aspect,
     search_by_aspects,
+    search_by_clip,
 )
-from mess.probing import resolve_aspects
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-def _parse_aspect_weights(raw: str) -> Dict[str, float]:
+def _parse_aspect_weights(raw: str) -> dict[str, float]:
     """
     Parse `aspect=weight,aspect=weight` into a dict.
 
@@ -35,7 +34,7 @@ def _parse_aspect_weights(raw: str) -> Dict[str, float]:
     if not raw or not raw.strip():
         raise ValueError("Empty --aspects value")
 
-    weights: Dict[str, float] = {}
+    weights: dict[str, float] = {}
     entries = [part.strip() for part in raw.split(",") if part.strip()]
     if not entries:
         raise ValueError("No valid aspect entries found")
@@ -71,9 +70,9 @@ def _parse_aspect_weights(raw: str) -> Dict[str, float]:
 
 def main(
     track_name: str,
-    aspect: Optional[str] = None,
-    aspects: Optional[str] = None,
-    clip_start: Optional[float] = None,
+    aspect: str | None = None,
+    aspects: str | None = None,
+    clip_start: float | None = None,
     clip_duration: float = 5.0,
     dedupe_window: float = 5.0,
     k: int = 5,
@@ -153,7 +152,10 @@ def main(
             print("\nAvailable aspects:")
             aspect_mappings = resolve_aspects()
             for asp, info in aspect_mappings.items():
-                print(f"  - {asp}: {info['description']} (layer {info['layer']}, R²={info['r2_score']})")
+                print(
+                    f"  - {asp}: {info['description']} "
+                    f"(layer {info['layer']}, R²={info['r2_score']})"
+                )
             return 1
     elif aspect:
         if not aggregated_features_dir.exists():
@@ -171,7 +173,10 @@ def main(
             print("\nAvailable aspects:")
             aspect_mappings = resolve_aspects()
             for asp, info in aspect_mappings.items():
-                print(f"  - {asp}: {info['description']} (layer {info['layer']}, R²={info['r2_score']})")
+                print(
+                    f"  - {asp}: {info['description']} "
+                    f"(layer {info['layer']}, R²={info['r2_score']})"
+                )
             return 1
     else:
         if not aggregated_features_dir.exists():
@@ -179,7 +184,7 @@ def main(
             print("Run feature extraction first: python scripts/extract_features.py")
             return 1
         # Search using all features
-        print(f"Using: All features (aggregated)")
+        print("Using: All features (aggregated)")
         print(f"{'='*70}\n")
 
         features, track_names = load_features(str(aggregated_features_dir))

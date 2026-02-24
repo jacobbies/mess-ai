@@ -36,6 +36,12 @@ Install from another repository (pinned Git commit):
 pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git@ac675b6"
 ```
 
+Install latest `main` from another backend repo:
+
+```bash
+pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git"
+```
+
 Run commands with `uv run` so the project environment is used:
 
 ```bash
@@ -95,7 +101,7 @@ uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --
 ## Python API Example
 
 ```python
-from mess.search.search import find_similar, load_features, search_by_aspect, search_by_aspects
+from mess.search import find_similar, load_features, search_by_aspect, search_by_aspects
 
 features_dir = "data/embeddings/smd-emb/aggregated"
 features, track_names = load_features(features_dir)
@@ -110,10 +116,10 @@ weighted = search_by_aspects(
 )
 ```
 
-Search-only import path (lightest runtime surface for recommendation services):
+Clip-level search import path:
 
 ```python
-from mess.search.search import load_features, find_similar, search_by_clip
+from mess.search import load_features, find_similar, search_by_clip
 ```
 
 ## Repository Layout

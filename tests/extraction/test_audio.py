@@ -1,7 +1,6 @@
 """Tests for mess.extraction.audio — segment_audio and load_audio."""
 
 import numpy as np
-import pytest
 import torch
 
 from mess.extraction.audio import load_audio, segment_audio, validate_audio_file

@@ -12,10 +12,10 @@ Public API:
     validate_audio_file  - Validate audio file before extraction
 """
 
+from .audio import load_audio, segment_audio, validate_audio_file
 from .extractor import FeatureExtractor
 from .pipeline import ExtractionPipeline
-from .audio import load_audio, segment_audio, validate_audio_file
-from .storage import load_features, save_features, features_exist
+from .storage import features_exist, load_features, save_features
 
 __all__ = [
     'FeatureExtractor',

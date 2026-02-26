@@ -219,6 +219,26 @@ uv run ruff format .
 - `AGENTS.md` is the implementation-oriented guide and source of operational conventions for this repo.
 - `docs/PUBLIC_RELEASE_CHECKLIST.md` contains reproducible public-release audit steps.
 
+## Roadmap
+
+Current baseline: frozen MERT embeddings + cosine similarity via FAISS, with aspect-weighted search using empirically validated layer specializations.
+
+The core research direction is **learned expressive similarity** — moving beyond generic audio cosine toward retrieval geometry optimized for how music is *performed*, not just what notes are played.
+
+Near-term:
+1. MIDI-derived expression targets (rubato, velocity dynamics, articulation) to improve proxy target quality
+2. Human evaluation set for external ground truth
+3. Baseline recall@K measurement against proxy and human labels
+
+Medium-term:
+4. Learned embedding geometry (diagonal weighting → linear projection → MLP) trained with contrastive loss using proxy targets as teacher supervision
+5. Cross-performance passage pairing via MIDI alignment for contrastive training data
+
+Long-term:
+6. Segment-level 5-second gesture retrieval
+7. Content-invariant embedding learning conditioned on symbolic score
+8. Text-guided expressive retrieval
+
 ## License
 
 Add your chosen open-source license in a `LICENSE` file before publishing.

@@ -19,6 +19,7 @@ authors = [
 dependencies = [
     "numpy>=1.26,<3",
     "PyYAML>=6.0",
+    "pretty-midi>=0.2.10",
 ]
 
 [project.optional-dependencies]

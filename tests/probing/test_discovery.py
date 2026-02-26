@@ -3,6 +3,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from mess.probing.discovery import (
     ASPECT_REGISTRY,
@@ -95,6 +96,86 @@ class TestProbeSingle:
         assert results
         assert observed_audio_files["files"] == [str(path) for path in nested_files]
 
+    def test_discover_aligns_features_and_targets_by_common_file_order(self, monkeypatch):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 2
+
+        class DummyDataset:
+            name = "SMD"
+
+            @staticmethod
+            def get_audio_files():
+                return ["a.wav", "b.wav", "c.wav"]
+
+        system.dataset = DummyDataset()
+
+        feat_files = ["b.wav", "a.wav"]
+        tgt_files = ["a.wav", "b.wav"]
+
+        # Rows encode file identity: a->1.0, b->2.0
+        layer_values = np.array([[2.0], [1.0]], dtype=np.float32)
+        target_values = np.array([1.0, 2.0], dtype=np.float32)
+
+        def fake_load_features(_audio_files):
+            per_layer = {layer: layer_values.copy() for layer in range(13)}
+            return per_layer, feat_files
+
+        def fake_load_targets(_audio_files):
+            return {"spectral_centroid": target_values.copy()}, tgt_files
+
+        def assert_aligned_probe(X, y):
+            # With correct alignment, rows should pair as: a->(1,1), b->(2,2)
+            assert np.array_equal(X[:, 0], np.array([1.0, 2.0], dtype=np.float32))
+            assert np.array_equal(y, np.array([1.0, 2.0], dtype=np.float32))
+            return {"r2_score": 1.0, "correlation": 1.0, "rmse": 0.0}
+
+        monkeypatch.setattr(system, "load_features", fake_load_features)
+        monkeypatch.setattr(system, "load_targets", fake_load_targets)
+        monkeypatch.setattr(system, "_probe_single", assert_aligned_probe)
+
+        results = system.discover(n_samples=3)
+        assert results
+
+    def test_discover_filters_targets_with_insufficient_valid_samples(self, monkeypatch):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 3
+
+        class DummyDataset:
+            name = "SMD"
+
+            @staticmethod
+            def get_audio_files():
+                return ["a.wav", "b.wav", "c.wav"]
+
+        system.dataset = DummyDataset()
+
+        def fake_load_features(_audio_files):
+            per_layer = {layer: np.ones((3, 2), dtype=np.float32) for layer in range(13)}
+            return per_layer, ["a.wav", "b.wav", "c.wav"]
+
+        def fake_load_targets(_audio_files):
+            return {
+                "spectral_centroid": np.array([1.0, 2.0, 3.0], dtype=np.float32),
+                "rubato": np.array([0.2, np.nan, np.nan], dtype=np.float32),
+            }, ["a.wav", "b.wav", "c.wav"]
+
+        monkeypatch.setattr(system, "load_features", fake_load_features)
+        monkeypatch.setattr(system, "load_targets", fake_load_targets)
+        monkeypatch.setattr(system, "_probe_single", lambda X, y: {
+            "r2_score": 0.8,
+            "correlation": 0.7,
+            "rmse": 0.2,
+        })
+
+        results = system.discover(n_samples=3)
+
+        assert "spectral_centroid" in results[0]
+        assert "rubato" not in results[0]
+        assert results[0]["spectral_centroid"]["n_valid"] == 3.0
+        assert results[0]["spectral_centroid"]["coverage"] == pytest.approx(1.0)
+
 
 class TestBestLayers:
     def test_empty_input(self):
@@ -152,15 +233,36 @@ class TestResolveAspects:
         )
         assert resolved == {}
 
+    def test_includes_coverage_fields_when_present(self, tmp_path):
+        results_payload = {
+            "0": {
+                "spectral_centroid": {
+                    "r2_score": 0.9,
+                    "correlation": 0.9,
+                    "rmse": 0.1,
+                    "n_valid": 12.0,
+                    "coverage": 0.75,
+                }
+            }
+        }
+        results_path = tmp_path / "results.json"
+        with open(results_path, "w") as f:
+            json.dump(results_payload, f)
+
+        resolved = resolve_aspects(min_r2=0.5, results_path=results_path)
+        assert resolved["brightness"]["n_valid"] == 12
+        assert resolved["brightness"]["coverage"] == pytest.approx(0.75)
+
 
 class TestAspectRegistry:
-    def test_has_10_aspects(self):
-        assert len(ASPECT_REGISTRY) == 10
+    def test_has_13_aspects(self):
+        assert len(ASPECT_REGISTRY) == 13
 
     def test_expected_aspects_present(self):
         expected = {
             "brightness", "texture", "warmth", "tempo", "rhythmic_energy",
             "dynamics", "crescendo", "harmonic_richness", "articulation", "phrasing",
+            "rubato", "expressiveness", "legato",
         }
         assert set(ASPECT_REGISTRY.keys()) == expected
 
@@ -176,5 +278,77 @@ class TestAspectRegistry:
 
 
 class TestScalarTargets:
-    def test_has_15_targets(self):
-        assert len(LayerDiscoverySystem.SCALAR_TARGETS) == 15
+    def test_has_22_targets(self):
+        assert len(LayerDiscoverySystem.SCALAR_TARGETS) == 22
+
+
+class TestLoadTargets:
+    @staticmethod
+    def _build_payload(
+        seed: float,
+        *,
+        include_expression: bool = True,
+        rubato: float = 0.0,
+    ) -> dict[str, dict[str, np.ndarray]]:
+        payload: dict[str, dict[str, np.ndarray]] = {}
+        for name, (category, key, reduction) in LayerDiscoverySystem.SCALAR_TARGETS.items():
+            if category == "expression" and not include_expression:
+                continue
+
+            payload.setdefault(category, {})
+            if name == "rubato":
+                value = np.array([rubato], dtype=np.float32)
+            elif reduction == "mean":
+                value = np.array([seed, seed + 0.1], dtype=np.float32)
+            else:
+                value = np.array([seed], dtype=np.float32)
+            payload[category][key] = value
+        return payload
+
+    def test_load_targets_keeps_optional_target_with_partial_nan(self, tmp_path):
+        system = object.__new__(LayerDiscoverySystem)
+        system.targets_dir = tmp_path
+
+        audio_files = ["track_a.wav", "track_b.wav", "track_c.wav"]
+
+        np.savez_compressed(
+            tmp_path / "track_a_targets.npz",
+            **self._build_payload(1.0, include_expression=True, rubato=0.1),
+        )
+        np.savez_compressed(
+            tmp_path / "track_b_targets.npz",
+            **self._build_payload(2.0, include_expression=False),
+        )
+        np.savez_compressed(
+            tmp_path / "track_c_targets.npz",
+            **self._build_payload(3.0, include_expression=True, rubato=0.3),
+        )
+
+        targets, loaded = system.load_targets(audio_files)
+
+        assert loaded == audio_files
+        assert "rubato" in targets
+        assert targets["rubato"].shape == (3,)
+        assert targets["rubato"][0] == pytest.approx(0.1)
+        assert np.isnan(targets["rubato"][1])
+        assert targets["rubato"][2] == pytest.approx(0.3)
+
+    def test_load_targets_skips_optional_target_when_all_values_missing(self, tmp_path):
+        system = object.__new__(LayerDiscoverySystem)
+        system.targets_dir = tmp_path
+
+        audio_files = ["track_a.wav", "track_b.wav"]
+
+        np.savez_compressed(
+            tmp_path / "track_a_targets.npz",
+            **self._build_payload(1.0, include_expression=False),
+        )
+        np.savez_compressed(
+            tmp_path / "track_b_targets.npz",
+            **self._build_payload(2.0, include_expression=False),
+        )
+
+        targets, loaded = system.load_targets(audio_files)
+
+        assert loaded == audio_files
+        assert "rubato" not in targets

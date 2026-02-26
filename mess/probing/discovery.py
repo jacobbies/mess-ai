@@ -147,28 +147,41 @@ class LayerDiscoverySystem:
     # Scalar targets to extract from proxy target npz files.
     # Format: target_name -> (category_key, field_key, reduction)
     SCALAR_TARGETS = {
-        # Timbre
+        # Timbre (audio-derived)
         'spectral_centroid':   ('timbre', 'spectral_centroid', 'mean'),
         'spectral_rolloff':    ('timbre', 'spectral_rolloff', 'mean'),
         'spectral_bandwidth':  ('timbre', 'spectral_bandwidth', 'mean'),
         'zero_crossing_rate':  ('timbre', 'zero_crossing_rate', 'mean'),
-        # Rhythm
+        # Rhythm (audio-derived)
         'tempo':               ('rhythm', 'tempo', 'first'),
         'onset_density':       ('rhythm', 'onset_density', 'first'),
-        # Dynamics
+        # Dynamics (audio-derived)
         'dynamic_range':       ('dynamics', 'dynamic_range', 'first'),
         'dynamic_variance':    ('dynamics', 'dynamic_variance', 'first'),
         'crescendo_strength':  ('dynamics', 'crescendo_strength', 'first'),
         'diminuendo_strength': ('dynamics', 'diminuendo_strength', 'first'),
-        # Harmony
+        # Harmony (audio-derived)
         'harmonic_complexity': ('harmony', 'harmonic_complexity', 'first'),
-        # Articulation
+        # Articulation (audio-derived)
         'attack_slopes':       ('articulation', 'attack_slopes', 'mean'),
         'attack_sharpness':    ('articulation', 'attack_sharpness', 'mean'),
-        # Phrasing
+        # Phrasing (audio-derived)
         'phrase_regularity':   ('phrasing', 'phrase_regularity', 'first'),
         'num_phrases':         ('phrasing', 'num_phrases', 'first'),
+        # Expression (MIDI-derived, optional)
+        'rubato':              ('expression', 'rubato', 'first'),
+        'velocity_mean':       ('expression', 'velocity_mean', 'first'),
+        'velocity_std':        ('expression', 'velocity_std', 'first'),
+        'velocity_range':      ('expression', 'velocity_range', 'first'),
+        'articulation_ratio':  ('expression', 'articulation_ratio', 'first'),
+        'tempo_variability':   ('expression', 'tempo_variability', 'first'),
+        'onset_timing_std':    ('expression', 'onset_timing_std', 'first'),
     }
+
+    # Categories where missing data is expected (tracks without MIDI).
+    # Tracks missing optional targets are still included for required targets;
+    # optional values are stored as NaN and filtered before probing.
+    OPTIONAL_CATEGORIES: set[str] = {'expression'}
 
     def __init__(self, dataset_name: str = "smd", alpha: float = 1.0, n_folds: int = 5):
         from mess.datasets.factory import DatasetFactory
@@ -223,20 +236,28 @@ class LayerDiscoverySystem:
                         val = float(val)
                     row[name] = val
                 except (KeyError, IndexError, TypeError):
-                    ok = False
-                    break
+                    if category in self.OPTIONAL_CATEGORIES:
+                        row[name] = float('nan')
+                    else:
+                        ok = False
+                        break
 
             if ok:
-                for name, val in row.items():
-                    collectors[name].append(val)
+                for name in self.SCALAR_TARGETS:
+                    collectors[name].append(row.get(name, float('nan')))
                 loaded.append(path)
 
-        # Only keep targets with variance (constant targets can't be probed)
+        # Only keep targets with variance (constant targets can't be probed).
+        # Optional categories may contain NaN for tracks without that metadata.
         targets: dict[str, np.ndarray] = {}
         for name, values in collectors.items():
-            arr = np.array(values)
-            if len(arr) > 0 and np.std(arr) > 1e-10:
+            arr = np.array(values, dtype=float)
+            valid = arr[~np.isnan(arr)]
+
+            if valid.size > 0 and np.std(valid) > 1e-10:
                 targets[name] = arr
+            elif valid.size == 0:
+                logger.warning(f"Skipping target '{name}': no valid values")
             elif len(arr) > 0:
                 logger.warning(f"Skipping target '{name}': constant values")
 
@@ -245,6 +266,10 @@ class LayerDiscoverySystem:
 
     def _probe_single(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Cross-validated Ridge regression for one (layer, target) pair."""
+        # Filter out NaN targets (from optional categories like expression)
+        valid = ~np.isnan(y)
+        if not np.all(valid):
+            X, y = X[valid], y[valid]
         n = len(X)
         if n < self.n_folds:
             return {'r2_score': -999.0, 'correlation': 0.0, 'rmse': 999.0}
@@ -284,8 +309,12 @@ class LayerDiscoverySystem:
             logger.error(f"Only {len(common)} common files, need >= {self.n_folds}")
             return {}
 
-        feat_idx = [i for i, f in enumerate(feat_files) if f in common]
-        tgt_idx = [i for i, f in enumerate(tgt_files) if f in common]
+        # Align feature/target rows by the same sorted `common` order.
+        # Membership-only filtering can misalign rows if load order differs.
+        feat_pos = {path: idx for idx, path in enumerate(feat_files)}
+        tgt_pos = {path: idx for idx, path in enumerate(tgt_files)}
+        feat_idx = [feat_pos[path] for path in common]
+        tgt_idx = [tgt_pos[path] for path in common]
 
         features = {
             layer_idx: values[feat_idx] for layer_idx, values in features.items()
@@ -293,7 +322,31 @@ class LayerDiscoverySystem:
         targets = {name: v[tgt_idx] for name, v in targets.items()}
 
         n_tracks = len(common)
+
+        # Require enough valid rows per target after NaN filtering.
+        min_valid_samples = self.n_folds
+        valid_counts: dict[str, int] = {}
+        filtered_targets: dict[str, np.ndarray] = {}
+        for name, values in targets.items():
+            n_valid = int(np.sum(~np.isnan(values)))
+            if n_valid < min_valid_samples:
+                logger.warning(
+                    f"Skipping target '{name}': only {n_valid} valid samples "
+                    f"(need >= {min_valid_samples})"
+                )
+                continue
+            filtered_targets[name] = values
+            valid_counts[name] = n_valid
+
+        targets = filtered_targets
         n_targets = len(targets)
+        if n_targets == 0:
+            logger.error(
+                "No probeable targets after validity filtering "
+                f"(need >= {min_valid_samples} valid samples per target)"
+            )
+            return {}
+
         logger.info(f"Probing {NUM_LAYERS} layers x {n_targets} targets on {n_tracks} tracks")
 
         # Log experiment parameters to MLflow
@@ -314,6 +367,9 @@ class LayerDiscoverySystem:
             results[layer] = {}
             for target_name, target_values in targets.items():
                 metrics = self._probe_single(features[layer], target_values)
+                n_valid = valid_counts[target_name]
+                metrics['n_valid'] = float(n_valid)
+                metrics['coverage'] = float(n_valid / n_tracks)
                 results[layer][target_name] = metrics
 
                 r2 = metrics['r2_score']
@@ -321,7 +377,8 @@ class LayerDiscoverySystem:
                 logger.info(
                     f"  Layer {layer:2d} | {target_name:25s} | "
                     f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
-                    f"RMSE={metrics['rmse']:8.4f}{marker}"
+                    f"RMSE={metrics['rmse']:8.4f}  "
+                    f"n_valid={n_valid:4d}  cov={metrics['coverage']:.3f}{marker}"
                 )
 
                 # Log per-(layer, target) metrics to MLflow
@@ -331,6 +388,8 @@ class LayerDiscoverySystem:
                         f"{prefix}_r2": metrics['r2_score'],
                         f"{prefix}_corr": metrics['correlation'],
                         f"{prefix}_rmse": metrics['rmse'],
+                        f"{prefix}_n_valid": metrics['n_valid'],
+                        f"{prefix}_coverage": metrics['coverage'],
                     })
 
         # Log best-layer summary metrics
@@ -382,6 +441,11 @@ class LayerDiscoverySystem:
                 'r2_score': round(best_r2, 4),
                 'confidence': confidence,
             }
+            sample_metrics = results[best_layer].get(target, {})
+            if 'n_valid' in sample_metrics:
+                best[target]['n_valid'] = int(sample_metrics['n_valid'])
+            if 'coverage' in sample_metrics:
+                best[target]['coverage'] = float(sample_metrics['coverage'])
 
         return best
 
@@ -460,6 +524,19 @@ ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
         'targets': ['phrase_regularity', 'num_phrases'],
         'description': 'Musical sentence structure and regularity',
     },
+    # Expression aspects (MIDI-derived, available when MIDI data exists)
+    'rubato': {
+        'targets': ['rubato', 'onset_timing_std'],
+        'description': 'Timing flexibility and rhythmic freedom in performance',
+    },
+    'expressiveness': {
+        'targets': ['velocity_std', 'velocity_range'],
+        'description': 'Dynamic expressiveness and velocity contrast',
+    },
+    'legato': {
+        'targets': ['articulation_ratio'],
+        'description': 'Note connectivity: staccato vs legato character from MIDI',
+    },
 }
 
 
@@ -523,6 +600,7 @@ def resolve_aspects(
             else:
                 confidence = 'low'
 
+            best_metrics = results[best_layer][best_target]
             resolved[aspect_name] = {
                 'layer': best_layer,
                 'target': best_target,
@@ -530,6 +608,10 @@ def resolve_aspects(
                 'description': aspect_info['description'],
                 'confidence': confidence,
             }
+            if 'n_valid' in best_metrics:
+                resolved[aspect_name]['n_valid'] = int(best_metrics['n_valid'])
+            if 'coverage' in best_metrics:
+                resolved[aspect_name]['coverage'] = float(best_metrics['coverage'])
         else:
             logger.debug(
                 f"Aspect '{aspect_name}' not validated: best R²={best_r2:.4f} < {min_r2}"

@@ -95,6 +95,47 @@ class TestProbeSingle:
         assert results
         assert observed_audio_files["files"] == [str(path) for path in nested_files]
 
+    def test_discover_aligns_features_and_targets_by_common_file_order(self, monkeypatch):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 2
+
+        class DummyDataset:
+            name = "SMD"
+
+            @staticmethod
+            def get_audio_files():
+                return ["a.wav", "b.wav", "c.wav"]
+
+        system.dataset = DummyDataset()
+
+        feat_files = ["b.wav", "a.wav"]
+        tgt_files = ["a.wav", "b.wav"]
+
+        # Rows encode file identity: a->1.0, b->2.0
+        layer_values = np.array([[2.0], [1.0]], dtype=np.float32)
+        target_values = np.array([1.0, 2.0], dtype=np.float32)
+
+        def fake_load_features(_audio_files):
+            per_layer = {layer: layer_values.copy() for layer in range(13)}
+            return per_layer, feat_files
+
+        def fake_load_targets(_audio_files):
+            return {"spectral_centroid": target_values.copy()}, tgt_files
+
+        def assert_aligned_probe(X, y):
+            # With correct alignment, rows should pair as: a->(1,1), b->(2,2)
+            assert np.array_equal(X[:, 0], np.array([1.0, 2.0], dtype=np.float32))
+            assert np.array_equal(y, np.array([1.0, 2.0], dtype=np.float32))
+            return {"r2_score": 1.0, "correlation": 1.0, "rmse": 0.0}
+
+        monkeypatch.setattr(system, "load_features", fake_load_features)
+        monkeypatch.setattr(system, "load_targets", fake_load_targets)
+        monkeypatch.setattr(system, "_probe_single", assert_aligned_probe)
+
+        results = system.discover(n_samples=3)
+        assert results
+
 
 class TestBestLayers:
     def test_empty_input(self):
@@ -154,13 +195,14 @@ class TestResolveAspects:
 
 
 class TestAspectRegistry:
-    def test_has_10_aspects(self):
-        assert len(ASPECT_REGISTRY) == 10
+    def test_has_13_aspects(self):
+        assert len(ASPECT_REGISTRY) == 13
 
     def test_expected_aspects_present(self):
         expected = {
             "brightness", "texture", "warmth", "tempo", "rhythmic_energy",
             "dynamics", "crescendo", "harmonic_richness", "articulation", "phrasing",
+            "rubato", "expressiveness", "legato",
         }
         assert set(ASPECT_REGISTRY.keys()) == expected
 
@@ -176,5 +218,5 @@ class TestAspectRegistry:
 
 
 class TestScalarTargets:
-    def test_has_15_targets(self):
-        assert len(LayerDiscoverySystem.SCALAR_TARGETS) == 15
+    def test_has_22_targets(self):
+        assert len(LayerDiscoverySystem.SCALAR_TARGETS) == 22

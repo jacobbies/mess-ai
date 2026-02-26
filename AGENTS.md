@@ -283,10 +283,39 @@ Key methods:
 - `_generate_phrasing_targets(audio)`
 
 Dataset-level helper:
-- `create_target_dataset(audio_dir, output_dir, validate=True, use_mlflow=True)`
+- `create_target_dataset(audio_dir, output_dir, validate=True, use_mlflow=True, dataset_id=None)`
+- When `dataset_id` is provided, also generates MIDI expression targets via `midi_targets.py`
 
 CLI:
 - module `main()` accepts `--dataset`, `--no-validate`, `--no-mlflow`.
+
+### `midi_targets.py`
+Class: `MidiExpressionTargets`
+
+Responsibilities:
+- Generate expression proxy targets from MIDI performance data (category: `expression`)
+- Computes: rubato, velocity_mean, velocity_std, velocity_range, articulation_ratio, tempo_variability, onset_timing_std
+- All targets are pre-reduced scalars (single-element arrays with `'first'` reduction)
+- Lazy `import pretty_midi` — graceful when library is not installed
+
+Key methods:
+- `generate_expression_targets(midi_path)` → `{'expression': {field: np.ndarray}}`
+- `_collect_notes(pm)` — all non-drum notes sorted by onset
+- `_compute_rubato(ioi_positive)` — std of consecutive IOI ratios
+- `_compute_articulation_ratio(durations, ioi)` — mean(duration/IOI)
+- `_compute_tempo_variability(ioi_positive)` — std of local BPM
+- `_compute_onset_timing_std(onsets)` — std of deviations from median-IOI grid
+
+Helper function:
+- `resolve_midi_path(audio_path, dataset_id)` → `Path | None`
+  - SMD: sibling `midi/` directory, same stem
+  - MAESTRO: co-located, same stem with `.midi` extension
+  - Returns `None` if no MIDI file found
+
+Design notes:
+- Expression targets are **optional** — `OPTIONAL_CATEGORIES = {'expression'}` in discovery.py
+- Tracks without MIDI are excluded from expression probing but included in audio-derived probing
+- `load_targets` uses NaN for missing optional targets; `_probe_single` filters NaN rows before CV
 
 ## 8) Search Stack (`mess/search/search.py`)
 
@@ -543,9 +572,31 @@ North-star query suite (the system should eventually dominate these):
 - "What's the R2 stability across folds?"
 - "Does fine-tuning collapse expressive variance?"
 
+## Research Roadmap
+
+Ordered experiment sequence toward learned expressive similarity:
+
+1. **MIDI-derived expression targets** — rubato, velocity dynamics, articulation from MIDI. Tests whether MERT layers encode expression separately from content. **(in progress)**
+2. **Human eval set** — 100-300 triplet judgments as external ground truth.
+3. **Baseline recall@K** — Measure cosine retrieval against both proxy and human labels.
+4. **Diagonal weighting** → **linear projection** → **MLP projection** — progressive geometry learning, each validated before advancing.
+5. **Two-stage reranking** — only if recall@K is high but ranking within top-K is poor.
+
+Future MIDI workstreams (after expression targets validated):
+- Cross-performance passage pairing via MIDI alignment (contrastive training pairs)
+- Content-invariant embedding learning (conditioned on MIDI score)
+- Segment-level retrieval (5-second gesture search — the north-star primitive)
+
+Key decision rules:
+- If Recall@K is low → improve embedding geometry, not reranking
+- If proxy targets disagree with human eval → fix proxy quality first
+- If linear projection saturates → try MLP, then consider reranking
+- Two-stage only justified when scorer is non-decomposable AND recall ceiling is high enough
+
 Strategic direction:
 - Prioritize embedding-first retrieval and expressive musical understanding over metadata-first or collaborative-filtering-first approaches.
-- Keep this repository research-first: robust dataset handling, extraction, probing, and search infrastructure in `mess/` that enables rapid experimentation (layer search, fine-tuning, attention/segment-level matching, and future hybrid methods).
+- MIDI data is an anchor for disentangling content from expression — use it as ground truth for what "expressive similarity" means, not just as another feature source.
+- Keep this repository research-first: robust dataset handling, extraction, probing, and search infrastructure in `mess/` that enables rapid experimentation.
 
 Assessment heuristic for roadmap decisions:
 1. Does this change improve expressive user-intent retrieval quality or enable experiments that can improve it?

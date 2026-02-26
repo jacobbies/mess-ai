@@ -17,6 +17,7 @@
 ### Core Focus
 - Feature extraction from audio using MERT
 - Layer discovery and validation (finding which layers encode which musical aspects)
+- **Learned expressive similarity** — moving beyond raw cosine on frozen embeddings toward retrieval geometry optimized for expressive musical attributes
 - Similarity search algorithm development
 - Dataset preprocessing and analysis
 - Research experimentation via Jupyter notebooks
@@ -88,20 +89,24 @@ pip install -e .
 
 ## Layer Discovery System
 
-**15 Proxy Targets Across 6 Musical Dimensions:**
-- **Timbre**: spectral_centroid, spectral_rolloff, spectral_bandwidth, zero_crossing_rate
-- **Rhythm**: tempo, onset_density
-- **Dynamics**: dynamic_range, dynamic_variance, crescendo_strength, diminuendo_strength
-- **Harmony**: harmonic_complexity
-- **Articulation**: attack_slopes, attack_sharpness
-- **Phrasing**: phrase_regularity, num_phrases
+**22 Proxy Targets Across 7 Musical Dimensions:**
+- **Timbre** (audio-derived): spectral_centroid, spectral_rolloff, spectral_bandwidth, zero_crossing_rate
+- **Rhythm** (audio-derived): tempo, onset_density
+- **Dynamics** (audio-derived): dynamic_range, dynamic_variance, crescendo_strength, diminuendo_strength
+- **Harmony** (audio-derived): harmonic_complexity
+- **Articulation** (audio-derived): attack_slopes, attack_sharpness
+- **Phrasing** (audio-derived): phrase_regularity, num_phrases
+- **Expression** (MIDI-derived): rubato, velocity_mean, velocity_std, velocity_range, articulation_ratio, tempo_variability, onset_timing_std
 
-**10 User-Facing Aspects** (in `mess/search/aspects.py`):
+Expression targets are optional — computed only when MIDI data is available for a track. Both SMD (52 MIDI files) and MAESTRO (1,276 MIDI files) have full coverage.
+
+**13 User-Facing Aspects** (in `mess/probing/discovery.py` ASPECT_REGISTRY):
 - brightness, texture, warmth, tempo, rhythmic_energy, dynamics, crescendo, harmonic_richness, articulation, phrasing
+- rubato, expressiveness, legato *(MIDI-derived)*
 
 **Methodology:**
 - Ridge regression with 5-fold cross-validation on frozen MERT embeddings
-- 13 layers × 15 targets = 195 probing experiments per run
+- 13 layers × 22 targets = 286 probing experiments per run (targets with missing data are probed on available tracks only)
 - R² > 0.8 → "high confidence" (excellent for production use)
 - R² > 0.5 → "medium confidence" (experimental)
 
@@ -249,13 +254,18 @@ MERT Feature Extraction (mess.extraction)
     ↓
 Embeddings [13 layers, 768 dims]
     ↓
-Proxy Target Computation (mess.probing.proxy_targets)
+    ├── Proxy Target Computation (mess.probing.proxy_targets)
+    │       ↓
+    │   Layer Discovery (mess.probing.discovery)
+    │       ↓
+    │   Validated Layer Mappings (layer_discovery_results.json)
+    │
+    └── [Future] Learned Projection Head (mess.ranking)
+            ↓  trained via contrastive loss using proxy targets as teacher
+            ↓
+        Projected Embeddings [d' dims, ANN-indexable]
     ↓
-Layer Discovery (mess.probing.discovery)
-    ↓
-Validated Layer Mappings (layer_discovery_results.json)
-    ↓
-Similarity Search (mess.search)
+Similarity Search (mess.search)  ← cosine today, learned geometry future
     ↓
 Recommendations
 ```
@@ -382,14 +392,37 @@ python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
 
 ## Development Status
 
-**🚧 In Progress:**
-- Model fine-tuning on SMD dataset for domain-specific similarity
-- Advanced FAISS indices (IVF, HNSW) for even larger datasets
-- Expanded proxy target validation
+**Current baseline (working):**
+- Frozen MERT embeddings + cosine similarity via FAISS IndexFlatIP
+- Aspect-weighted search using layer discovery (proxy target R2 → best layer → cosine in that layer)
 
-**📋 Planned:**
-- Making feature extraction more robust
-- User preference learning
+**Next research milestone: Learned Expressive Similarity**
+
+The core research problem: cosine on frozen embeddings retrieves by *generic audio similarity* (timbre, content, recording conditions), not *expressive similarity* (rubato, articulation, dynamics, phrasing). Moving from cosine to a learned scoring function is the key unlock.
+
+Experiment sequence (ordered by priority):
+1. **MIDI-derived expression targets** — Add rubato, velocity dynamics, articulation ratio targets from MIDI data. These capture *how* notes are played rather than *what* is played, providing a cleaner teacher signal for everything downstream. Key empirical question: do MERT layers encode expression separately from content? **(in progress)**
+2. **Human eval set** — Build 100-300 triplet judgments ("which clip is more expressively similar?") as a stable external ground truth. Without this, optimization against proxy targets risks circularity.
+3. **Baseline recall measurement** — Measure cosine Recall@K against both proxy-derived and human labels. This establishes whether the bottleneck is retrieval geometry or candidate generation.
+4. **Diagonal weighting** — Learn per-dimension or per-layer weights on the existing 768-dim embeddings. Simplest upgrade, extends current aspect-weighted search, highly interpretable.
+5. **Linear projection head** — Train g(e) = Ae with InfoNCE/SupCon using proxy targets as teacher supervision. Precompute projected embeddings, serve with ANN. Still single-stage.
+6. **Small MLP projection** — Only if linear saturates. Same training regime, slightly more capacity.
+7. **Two-stage reranking** — Only if Recall@K is high but ranking quality inside top-K is poor. Pairwise reranker (RankNet-style) over interaction features on top-K candidates.
+
+Future MIDI-enabled workstreams (after expression targets are validated):
+- **Cross-performance passage pairing** — Use MIDI alignment to find same-passage-different-performer pairs for contrastive training (natural hard positives/negatives for expressive similarity).
+- **Content-invariant embedding learning** — Train projection head to be invariant to content (conditioned on MIDI score) but sensitive to expression.
+
+Key decision rules:
+- If Recall@K is low → improve embedding geometry (steps 3-5), not reranking
+- If proxy target quality is poor (human eval disagrees with proxy labels) → improve proxy targets before learning on them
+- If linear projection saturates → try MLP, then consider reranking
+- Two-stage is only justified when the scorer is non-decomposable AND Recall@K is high enough that reranking can matter
+
+**Planned infrastructure:**
+- `mess/ranking/` — Projection heads, contrastive training loops, evaluation harness
+- `mess/evaluation/` — Leakage-safe splits, Recall@K / MRR@K / nDCG@K computation, paired bootstrap significance testing
+- `data/eval/` — Human triplet judgments and proxy-derived relevance labels
 
 ## Known Issues
 
@@ -408,7 +441,6 @@ The main demo script (`demo_recommendations.py`) works correctly with the curren
 
 ## Notes for Claude
 
-- Ignore AGENTS.md
 - This is an **open source ML research library** intended for public release
 - `mess/` is the core library - keep it clean, well-documented, and modular
 - `scripts/` contains CLI automation, `notebooks/` contains experimentation code

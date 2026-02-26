@@ -100,6 +100,9 @@ class MusicalAspectTargets:
 
         missing = []
         for target_name, (category, key, _) in LayerDiscoverySystem.SCALAR_TARGETS.items():
+            # Skip optional categories (e.g. expression — requires MIDI)
+            if category in LayerDiscoverySystem.OPTIONAL_CATEGORIES:
+                continue
             if category not in targets:
                 missing.append(f"{category}/{key} (for '{target_name}')")
             elif key not in targets[category]:
@@ -375,6 +378,7 @@ def create_target_dataset(
     output_dir: str | Path,
     validate: bool = True,
     use_mlflow: bool = True,
+    dataset_id: str | None = None,
 ) -> dict[str, int]:
     """
     Create proxy target dataset for all audio files.
@@ -383,11 +387,15 @@ def create_target_dataset(
     them as .npz files. Optionally validates against discovery.py's expected
     structure and logs metrics to MLflow.
 
+    When *dataset_id* is provided, also attempts to generate MIDI expression
+    targets for tracks that have corresponding MIDI files.
+
     Args:
         audio_dir: Directory containing .wav audio files.
         output_dir: Directory to save _targets.npz files.
         validate: Whether to validate target structure against discovery.py.
         use_mlflow: Whether to log processing metrics to MLflow.
+        dataset_id: Dataset identifier ('smd', 'maestro') for MIDI lookup.
 
     Returns:
         Dict with 'total', 'success', 'failed' counts.
@@ -397,6 +405,16 @@ def create_target_dataset(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     target_generator = MusicalAspectTargets()
+
+    # Optionally set up MIDI expression target generator
+    midi_generator = None
+    if dataset_id is not None:
+        try:
+            from .midi_targets import MidiExpressionTargets, resolve_midi_path
+            midi_generator = MidiExpressionTargets()
+            logger.info(f"MIDI expression targets enabled for dataset '{dataset_id}'")
+        except ImportError:
+            logger.info("pretty_midi not installed; skipping MIDI expression targets")
 
     # Process all audio files (recursive, case-insensitive extension match)
     audio_files = sorted(
@@ -433,6 +451,18 @@ def create_target_dataset(
 
         try:
             targets = target_generator.generate_all_targets(str(audio_file))
+
+            # Merge MIDI expression targets if available
+            if midi_generator is not None and dataset_id is not None:
+                midi_path = resolve_midi_path(audio_file, dataset_id)
+                if midi_path is not None:
+                    try:
+                        midi_targets = midi_generator.generate_expression_targets(
+                            str(midi_path)
+                        )
+                        targets.update(midi_targets)
+                    except Exception as e:
+                        logger.warning(f"  MIDI targets skipped for {audio_file.name}: {e}")
 
             # Optional validation
             if validate:
@@ -561,6 +591,7 @@ def main():
                 output_dir=output_dir,
                 validate=not args.no_validate,
                 use_mlflow=True,
+                dataset_id=args.dataset,
             )
     else:
         result = create_target_dataset(
@@ -568,6 +599,7 @@ def main():
             output_dir=output_dir,
             validate=not args.no_validate,
             use_mlflow=False,
+            dataset_id=args.dataset,
         )
 
     # Exit code based on success

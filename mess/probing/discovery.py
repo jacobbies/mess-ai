@@ -147,28 +147,41 @@ class LayerDiscoverySystem:
     # Scalar targets to extract from proxy target npz files.
     # Format: target_name -> (category_key, field_key, reduction)
     SCALAR_TARGETS = {
-        # Timbre
+        # Timbre (audio-derived)
         'spectral_centroid':   ('timbre', 'spectral_centroid', 'mean'),
         'spectral_rolloff':    ('timbre', 'spectral_rolloff', 'mean'),
         'spectral_bandwidth':  ('timbre', 'spectral_bandwidth', 'mean'),
         'zero_crossing_rate':  ('timbre', 'zero_crossing_rate', 'mean'),
-        # Rhythm
+        # Rhythm (audio-derived)
         'tempo':               ('rhythm', 'tempo', 'first'),
         'onset_density':       ('rhythm', 'onset_density', 'first'),
-        # Dynamics
+        # Dynamics (audio-derived)
         'dynamic_range':       ('dynamics', 'dynamic_range', 'first'),
         'dynamic_variance':    ('dynamics', 'dynamic_variance', 'first'),
         'crescendo_strength':  ('dynamics', 'crescendo_strength', 'first'),
         'diminuendo_strength': ('dynamics', 'diminuendo_strength', 'first'),
-        # Harmony
+        # Harmony (audio-derived)
         'harmonic_complexity': ('harmony', 'harmonic_complexity', 'first'),
-        # Articulation
+        # Articulation (audio-derived)
         'attack_slopes':       ('articulation', 'attack_slopes', 'mean'),
         'attack_sharpness':    ('articulation', 'attack_sharpness', 'mean'),
-        # Phrasing
+        # Phrasing (audio-derived)
         'phrase_regularity':   ('phrasing', 'phrase_regularity', 'first'),
         'num_phrases':         ('phrasing', 'num_phrases', 'first'),
+        # Expression (MIDI-derived, optional)
+        'rubato':              ('expression', 'rubato', 'first'),
+        'velocity_mean':       ('expression', 'velocity_mean', 'first'),
+        'velocity_std':        ('expression', 'velocity_std', 'first'),
+        'velocity_range':      ('expression', 'velocity_range', 'first'),
+        'articulation_ratio':  ('expression', 'articulation_ratio', 'first'),
+        'tempo_variability':   ('expression', 'tempo_variability', 'first'),
+        'onset_timing_std':    ('expression', 'onset_timing_std', 'first'),
     }
+
+    # Categories where missing data is expected (tracks without MIDI).
+    # Tracks missing optional targets are still included for required targets;
+    # optional values are stored as NaN and filtered before probing.
+    OPTIONAL_CATEGORIES: set[str] = {'expression'}
 
     def __init__(self, dataset_name: str = "smd", alpha: float = 1.0, n_folds: int = 5):
         from mess.datasets.factory import DatasetFactory
@@ -223,12 +236,15 @@ class LayerDiscoverySystem:
                         val = float(val)
                     row[name] = val
                 except (KeyError, IndexError, TypeError):
-                    ok = False
-                    break
+                    if category in self.OPTIONAL_CATEGORIES:
+                        row[name] = float('nan')
+                    else:
+                        ok = False
+                        break
 
             if ok:
-                for name, val in row.items():
-                    collectors[name].append(val)
+                for name in self.SCALAR_TARGETS:
+                    collectors[name].append(row.get(name, float('nan')))
                 loaded.append(path)
 
         # Only keep targets with variance (constant targets can't be probed)
@@ -245,6 +261,10 @@ class LayerDiscoverySystem:
 
     def _probe_single(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Cross-validated Ridge regression for one (layer, target) pair."""
+        # Filter out NaN targets (from optional categories like expression)
+        valid = ~np.isnan(y)
+        if not np.all(valid):
+            X, y = X[valid], y[valid]
         n = len(X)
         if n < self.n_folds:
             return {'r2_score': -999.0, 'correlation': 0.0, 'rmse': 999.0}
@@ -284,8 +304,12 @@ class LayerDiscoverySystem:
             logger.error(f"Only {len(common)} common files, need >= {self.n_folds}")
             return {}
 
-        feat_idx = [i for i, f in enumerate(feat_files) if f in common]
-        tgt_idx = [i for i, f in enumerate(tgt_files) if f in common]
+        # Align feature/target rows by the same sorted `common` order.
+        # Membership-only filtering can misalign rows if load order differs.
+        feat_pos = {path: idx for idx, path in enumerate(feat_files)}
+        tgt_pos = {path: idx for idx, path in enumerate(tgt_files)}
+        feat_idx = [feat_pos[path] for path in common]
+        tgt_idx = [tgt_pos[path] for path in common]
 
         features = {
             layer_idx: values[feat_idx] for layer_idx, values in features.items()
@@ -459,6 +483,19 @@ ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
     'phrasing': {
         'targets': ['phrase_regularity', 'num_phrases'],
         'description': 'Musical sentence structure and regularity',
+    },
+    # Expression aspects (MIDI-derived, available when MIDI data exists)
+    'rubato': {
+        'targets': ['rubato', 'onset_timing_std'],
+        'description': 'Timing flexibility and rhythmic freedom in performance',
+    },
+    'expressiveness': {
+        'targets': ['velocity_std', 'velocity_range'],
+        'description': 'Dynamic expressiveness and velocity contrast',
+    },
+    'legato': {
+        'targets': ['articulation_ratio'],
+        'description': 'Note connectivity: staccato vs legato character from MIDI',
     },
 }
 

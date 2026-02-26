@@ -247,12 +247,17 @@ class LayerDiscoverySystem:
                     collectors[name].append(row.get(name, float('nan')))
                 loaded.append(path)
 
-        # Only keep targets with variance (constant targets can't be probed)
+        # Only keep targets with variance (constant targets can't be probed).
+        # Optional categories may contain NaN for tracks without that metadata.
         targets: dict[str, np.ndarray] = {}
         for name, values in collectors.items():
-            arr = np.array(values)
-            if len(arr) > 0 and np.std(arr) > 1e-10:
+            arr = np.array(values, dtype=float)
+            valid = arr[~np.isnan(arr)]
+
+            if valid.size > 0 and np.std(valid) > 1e-10:
                 targets[name] = arr
+            elif valid.size == 0:
+                logger.warning(f"Skipping target '{name}': no valid values")
             elif len(arr) > 0:
                 logger.warning(f"Skipping target '{name}': constant values")
 
@@ -317,7 +322,31 @@ class LayerDiscoverySystem:
         targets = {name: v[tgt_idx] for name, v in targets.items()}
 
         n_tracks = len(common)
+
+        # Require enough valid rows per target after NaN filtering.
+        min_valid_samples = self.n_folds
+        valid_counts: dict[str, int] = {}
+        filtered_targets: dict[str, np.ndarray] = {}
+        for name, values in targets.items():
+            n_valid = int(np.sum(~np.isnan(values)))
+            if n_valid < min_valid_samples:
+                logger.warning(
+                    f"Skipping target '{name}': only {n_valid} valid samples "
+                    f"(need >= {min_valid_samples})"
+                )
+                continue
+            filtered_targets[name] = values
+            valid_counts[name] = n_valid
+
+        targets = filtered_targets
         n_targets = len(targets)
+        if n_targets == 0:
+            logger.error(
+                "No probeable targets after validity filtering "
+                f"(need >= {min_valid_samples} valid samples per target)"
+            )
+            return {}
+
         logger.info(f"Probing {NUM_LAYERS} layers x {n_targets} targets on {n_tracks} tracks")
 
         # Log experiment parameters to MLflow
@@ -338,6 +367,9 @@ class LayerDiscoverySystem:
             results[layer] = {}
             for target_name, target_values in targets.items():
                 metrics = self._probe_single(features[layer], target_values)
+                n_valid = valid_counts[target_name]
+                metrics['n_valid'] = float(n_valid)
+                metrics['coverage'] = float(n_valid / n_tracks)
                 results[layer][target_name] = metrics
 
                 r2 = metrics['r2_score']
@@ -345,7 +377,8 @@ class LayerDiscoverySystem:
                 logger.info(
                     f"  Layer {layer:2d} | {target_name:25s} | "
                     f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
-                    f"RMSE={metrics['rmse']:8.4f}{marker}"
+                    f"RMSE={metrics['rmse']:8.4f}  "
+                    f"n_valid={n_valid:4d}  cov={metrics['coverage']:.3f}{marker}"
                 )
 
                 # Log per-(layer, target) metrics to MLflow
@@ -355,6 +388,8 @@ class LayerDiscoverySystem:
                         f"{prefix}_r2": metrics['r2_score'],
                         f"{prefix}_corr": metrics['correlation'],
                         f"{prefix}_rmse": metrics['rmse'],
+                        f"{prefix}_n_valid": metrics['n_valid'],
+                        f"{prefix}_coverage": metrics['coverage'],
                     })
 
         # Log best-layer summary metrics
@@ -406,6 +441,11 @@ class LayerDiscoverySystem:
                 'r2_score': round(best_r2, 4),
                 'confidence': confidence,
             }
+            sample_metrics = results[best_layer].get(target, {})
+            if 'n_valid' in sample_metrics:
+                best[target]['n_valid'] = int(sample_metrics['n_valid'])
+            if 'coverage' in sample_metrics:
+                best[target]['coverage'] = float(sample_metrics['coverage'])
 
         return best
 
@@ -560,6 +600,7 @@ def resolve_aspects(
             else:
                 confidence = 'low'
 
+            best_metrics = results[best_layer][best_target]
             resolved[aspect_name] = {
                 'layer': best_layer,
                 'target': best_target,
@@ -567,6 +608,10 @@ def resolve_aspects(
                 'description': aspect_info['description'],
                 'confidence': confidence,
             }
+            if 'n_valid' in best_metrics:
+                resolved[aspect_name]['n_valid'] = int(best_metrics['n_valid'])
+            if 'coverage' in best_metrics:
+                resolved[aspect_name]['coverage'] = float(best_metrics['coverage'])
         else:
             logger.debug(
                 f"Aspect '{aspect_name}' not validated: best R²={best_r2:.4f} < {min_r2}"

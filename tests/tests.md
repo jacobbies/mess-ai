@@ -6,6 +6,7 @@
 uv run pytest -v                          # all tests verbose
 uv run pytest --cov=mess --cov-report=term-missing  # with coverage
 uv run pytest -m unit                     # only unit markers
+uv run pytest -m integration              # filesystem / multi-module tests
 uv run pytest tests/test_config.py -v     # single module
 uv run pytest --run-gpu                   # include GPU-marked tests
 uv run ruff check .                       # lint checks
@@ -18,26 +19,32 @@ uv run mypy mess                          # type checks
 ```
 tests/
 ├── conftest.py              # Root fixtures + GPU skip hook
-├── test_config.py           # MESSConfig (23 tests)
+├── test_config.py           # MESSConfig behavior and env overrides
 ├── datasets/
 │   ├── conftest.py          # autouse: saves/restores DatasetFactory._datasets
-│   ├── test_base.py         # BaseDataset via ConcreteTestDataset subclass (13)
-│   ├── test_factory.py      # DatasetFactory registration/lookup (7)
-│   ├── test_smd.py          # SMDDataset properties (4)
-│   └── test_maestro.py      # MAESTRODataset properties (4)
+│   ├── test_base.py         # BaseDataset contract checks
+│   ├── test_factory.py      # DatasetFactory registration/lookup
+│   ├── test_smd.py          # SMDDataset properties
+│   └── test_maestro.py      # MAESTRODataset properties
 ├── extraction/
 │   ├── conftest.py          # long_audio_array fixture (10s sine)
-│   ├── test_audio.py        # segment_audio pure logic, load_audio mocked (10)
-│   ├── test_extractor.py    # cache paths, OOM recovery, delegation, safe errors (6)
-│   ├── test_pipeline.py     # discovery fallback, worker statuses, run orchestration (7)
-│   └── test_storage.py      # path helpers, save/load roundtrip (16)
+│   ├── test_audio.py        # segment_audio logic, load_audio mocked
+│   ├── test_extractor.py    # cache paths, OOM recovery, fallback/delegation
+│   ├── test_pipeline.py     # discovery fallback, worker statuses, run orchestration
+│   └── test_storage.py      # path helpers, save/load roundtrip
 ├── probing/
 │   ├── conftest.py
-│   ├── test_discovery.py    # _probe_single, discover flow, best_layers, resolve_aspects, registries (17)
-│   └── test_targets.py      # create_target_dataset nested/case-insensitive discovery (1)
+│   ├── test_discovery.py            # probing flow, best_layers, resolve_aspects, SEGMENT_TARGETS
+│   ├── test_midi_targets.py         # MIDI expression target generation
+│   ├── test_segment_targets.py      # segment-level targets, expression slicing, segment probing
+│   ├── test_targets.py              # nested/case-insensitive discovery path
+│   └── test_targets_additional.py   # validation, MLflow workflow, fixed target computations
 └── search/
-    └── test_search.py       # track/clip/aspect FAISS search behavior (21)
+    ├── test_search.py       # track/clip/aspect FAISS search behavior
+    └── test_faiss_index.py  # artifact persistence + S3 publishing helpers
 ```
+
+Current count: run `uv run pytest --collect-only` to see the exact number of tests.
 
 ## Root Fixtures (tests/conftest.py)
 
@@ -55,6 +62,10 @@ Defined in `pyproject.toml [tool.pytest.ini_options]`:
 - `integration` — filesystem or multi-module
 - `slow` — >5s (model loading, large data)
 - `gpu` — requires CUDA/MPS; auto-skipped unless `--run-gpu`
+
+Marker policy:
+- Add a module-level `pytestmark` in each test module (`unit` or `integration`).
+- Reserve per-test marker overrides for exceptional cases only.
 
 ## Design Principles
 

@@ -22,6 +22,8 @@ from mess.search.faiss_index import (
     upload_artifact_to_s3,
 )
 
+pytestmark = pytest.mark.integration
+
 
 class TestFAISSArtifactPersistence:
     def test_track_artifact_round_trip(self, tmp_path):

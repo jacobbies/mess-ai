@@ -4,6 +4,8 @@ import pytest
 
 from mess.config import MESSConfig
 
+pytestmark = pytest.mark.unit
+
 
 class TestDefaults:
     def test_default_device_is_cpu(self):

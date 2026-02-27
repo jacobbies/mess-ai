@@ -3,8 +3,11 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from mess.extraction.pipeline import ExtractionPipeline
+
+pytestmark = pytest.mark.integration
 
 
 class _FakeExtractor:

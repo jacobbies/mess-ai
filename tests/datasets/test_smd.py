@@ -1,6 +1,10 @@
 """Tests for mess.datasets.smd.SMDDataset."""
 
+import pytest
+
 from mess.datasets.smd import SMDDataset
+
+pytestmark = pytest.mark.unit
 
 
 class TestSMDDataset:

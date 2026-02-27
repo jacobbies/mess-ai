@@ -14,6 +14,8 @@ from mess.search.search import (
     search_by_clip,
 )
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def search_data():

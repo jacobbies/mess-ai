@@ -6,6 +6,8 @@ import pytest
 
 from mess.datasets.base import BaseDataset
 
+pytestmark = pytest.mark.unit
+
 
 class ConcreteTestDataset(BaseDataset):
     """Concrete subclass for testing abstract BaseDataset."""

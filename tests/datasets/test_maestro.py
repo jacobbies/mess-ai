@@ -1,6 +1,10 @@
 """Tests for mess.datasets.maestro.MAESTRODataset."""
 
+import pytest
+
 from mess.datasets.maestro import MAESTRODataset
+
+pytestmark = pytest.mark.unit
 
 
 class TestMAESTRODataset:

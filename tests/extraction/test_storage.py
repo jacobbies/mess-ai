@@ -1,6 +1,7 @@
 """Tests for mess.extraction.storage — path helpers and save/load roundtrip."""
 
 import numpy as np
+import pytest
 
 from mess.extraction.storage import (
     _resolve_base_dir,
@@ -11,6 +12,8 @@ from mess.extraction.storage import (
     load_selected_features,
     save_features,
 )
+
+pytestmark = pytest.mark.integration
 
 
 class TestResolveBaseDir:

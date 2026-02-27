@@ -259,45 +259,44 @@ class MusicalAspectTargets:
     
     def _generate_articulation_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate articulation-related targets (attack characteristics)."""
-        # Attack slope (how quickly energy rises)
-        stft = librosa.stft(audio, hop_length=512)
-        magnitude = np.abs(stft)
-        
-        # Energy envelope
-        energy = np.sum(magnitude**2, axis=0)
-        
+        # Compute energy envelope in dB for stable slope measurement
+        hop_length = 512
+        rms = librosa.feature.rms(y=audio, hop_length=hop_length)[0]
+        energy_db = librosa.power_to_db(rms**2, ref=np.max)
+
         # Find note onsets
         onsets = librosa.onset.onset_detect(
             y=audio,
             sr=self.sample_rate,
-            hop_length=512,
+            hop_length=hop_length,
             units='frames'
         )
-        
-        # Calculate attack slopes at onsets
+
+        # Calculate attack slopes over first 200ms after onset (in dB domain)
+        # 200ms ≈ ceil(0.2 * sr / hop_length) frames
+        window_frames = max(2, int(np.ceil(0.2 * self.sample_rate / hop_length)))
+
         attack_slopes = []
-        window_size = 5  # frames
-        
         for onset in onsets:
-            if onset + window_size < len(energy):
-                # Slope of energy increase after onset
-                energy_window = energy[onset:onset + window_size]
-                if len(energy_window) > 1:
-                    slope = np.polyfit(range(len(energy_window)), energy_window, 1)[0]
+            end = onset + window_frames
+            if end <= len(energy_db):
+                window = energy_db[onset:end]
+                if len(window) > 1:
+                    slope = np.polyfit(range(len(window)), window, 1)[0]
                     attack_slopes.append(max(0, slope))  # Only positive slopes
-        
-        # Attack sharpness (derivative of energy at onsets)
-        energy_diff = np.diff(energy)
+
+        # Attack sharpness (derivative of dB energy at onsets)
+        energy_diff = np.diff(energy_db)
         attack_sharpness = []
         for onset in onsets:
             if onset < len(energy_diff):
                 attack_sharpness.append(abs(energy_diff[onset]))
-        
+
         return {
             'attack_slopes': np.array(attack_slopes) if attack_slopes else np.array([0.0]),
             'attack_sharpness': np.array(attack_sharpness) if attack_sharpness else np.array([0.0]),
             'onset_density': np.array([len(onsets) / (len(audio) / self.sample_rate)]),
-            'energy_envelope': energy
+            'energy_envelope': rms
         }
     
     def _generate_dynamics_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
@@ -311,19 +310,21 @@ class MusicalAspectTargets:
         # Dynamic range
         dynamic_range = np.max(rms) - np.min(rms)
         
-        # Dynamic variance (how much dynamics change)
-        dynamic_variance = np.var(rms)
-        
+        # Dynamic variance — normalize by mean so it's recording-level-invariant
+        rms_mean = np.mean(rms)
+        rms_normalized = rms / (rms_mean + 1e-8)
+        dynamic_variance = np.var(rms_normalized)
+
         # Dynamic trajectory (overall shape)
         # Smooth RMS to see overall dynamic arc
-        smoothed_rms = scipy.signal.savgol_filter(rms, 51, 3)
-        
-        # Crescendo/diminuendo detection
-        rms_diff = np.diff(smoothed_rms)
-        crescendo_strength = np.mean(rms_diff[rms_diff > 0]) if np.any(rms_diff > 0) else 0.0
-        diminuendo_strength = (
-            np.mean(np.abs(rms_diff[rms_diff < 0])) if np.any(rms_diff < 0) else 0.0
-        )
+        window_len = min(51, len(rms) if len(rms) % 2 == 1 else len(rms) - 1)
+        if window_len >= 5:
+            smoothed_rms = scipy.signal.savgol_filter(rms, window_len, 3)
+        else:
+            smoothed_rms = rms
+
+        # Crescendo/diminuendo detection — longest monotonic run
+        crescendo_strength, diminuendo_strength = self._longest_monotonic_runs(smoothed_rms)
         
         return {
             'rms_energy': rms,
@@ -334,6 +335,43 @@ class MusicalAspectTargets:
             'diminuendo_strength': np.array([diminuendo_strength])
         }
     
+    @staticmethod
+    def _longest_monotonic_runs(smoothed_rms: np.ndarray) -> tuple[float, float]:
+        """Find longest monotonic increasing/decreasing runs in smoothed RMS.
+
+        Returns (crescendo_strength, diminuendo_strength) where each is
+        ``amplitude_change * run_length`` for the longest run found.
+        """
+        if len(smoothed_rms) < 2:
+            return 0.0, 0.0
+
+        diffs = np.diff(smoothed_rms)
+
+        def _best_run(positive: bool) -> float:
+            mask = diffs > 0 if positive else diffs < 0
+            best_len = 0
+            best_start = 0
+            cur_len = 0
+            cur_start = 0
+            for i, m in enumerate(mask):
+                if m:
+                    if cur_len == 0:
+                        cur_start = i
+                    cur_len += 1
+                    if cur_len > best_len:
+                        best_len = cur_len
+                        best_start = cur_start
+                else:
+                    cur_len = 0
+            if best_len == 0:
+                return 0.0
+            amp_change = abs(
+                float(smoothed_rms[best_start + best_len] - smoothed_rms[best_start])
+            )
+            return amp_change * best_len
+
+        return _best_run(True), _best_run(False)
+
     def _generate_phrasing_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate phrasing-related targets (musical sentence structure)."""
         # Novelty function for phrase boundary detection
@@ -350,17 +388,26 @@ class MusicalAspectTargets:
             # Fallback to older API or manual calculation
             novelty = np.diag(similarity_matrix)
         
+        # Dynamic k based on track duration
+        duration_seconds = len(audio) / self.sample_rate
+        k = max(4, min(12, int(duration_seconds / 15)))
+
         # Phrase boundaries (peaks in novelty)
         boundaries = librosa.segment.agglomerative(
             chroma,
-            k=8  # Assume ~8 phrases per piece
+            k=k
         )
-        
+
         # Phrase lengths
         phrase_lengths = np.diff(boundaries)
-        
-        # Phrase regularity (variance in phrase lengths)
-        phrase_regularity = 1.0 / (1.0 + np.var(phrase_lengths))
+
+        # Phrase regularity — coefficient of variation (higher = more irregular)
+        if len(phrase_lengths) > 1:
+            phrase_regularity = float(
+                np.std(phrase_lengths) / (np.mean(phrase_lengths) + 1e-8)
+            )
+        else:
+            phrase_regularity = 0.0
         
         return {
             'novelty_curve': novelty,

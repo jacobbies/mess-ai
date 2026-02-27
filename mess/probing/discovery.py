@@ -38,6 +38,23 @@ logger = logging.getLogger(__name__)
 NUM_LAYERS = 13
 EMBEDDING_DIM = 768
 
+# Targets viable at 5s segment duration for segment-level probing.
+# Excludes tempo (needs >5s for beat tracking), phrase_regularity,
+# num_phrases (need whole piece), onset_density (too noisy at 5s).
+SEGMENT_TARGETS: set[str] = {
+    'spectral_centroid',
+    'spectral_rolloff',
+    'spectral_bandwidth',
+    'zero_crossing_rate',
+    'dynamic_range',
+    'dynamic_variance',
+    'crescendo_strength',
+    'diminuendo_strength',
+    'harmonic_complexity',
+    'attack_slopes',
+    'attack_sharpness',
+}
+
 
 # =============================================================================
 # Model inspection utilities (require mess-ai[ml])
@@ -448,6 +465,251 @@ class LayerDiscoverySystem:
                 best[target]['coverage'] = float(sample_metrics['coverage'])
 
         return best
+
+    def load_segment_features(
+        self, audio_files: list[str],
+    ) -> tuple[dict[int, np.ndarray], list[str], np.ndarray]:
+        """Load per-segment MERT embeddings from the segments/ directory.
+
+        Returns:
+            Tuple of (features_per_layer, loaded_files, segment_counts) where:
+            - features_per_layer: ``{layer: np.ndarray[total_segments, 768]}``
+            - loaded_files: list of audio file paths that had features
+            - segment_counts: array of segment count per track (for alignment)
+        """
+        segments_dir = self.features_dir.parent / "segments"
+        per_layer: dict[int, list[np.ndarray]] = {i: [] for i in range(NUM_LAYERS)}
+        loaded: list[str] = []
+        seg_counts: list[int] = []
+
+        for path in audio_files:
+            feat_file = segments_dir / f"{Path(path).stem}.npy"
+            if not feat_file.exists():
+                continue
+            raw = np.load(feat_file)  # [num_segments, 13, 768]
+            n_seg = raw.shape[0]
+            for layer in range(NUM_LAYERS):
+                per_layer[layer].append(raw[:, layer, :])  # [n_seg, 768]
+            loaded.append(path)
+            seg_counts.append(n_seg)
+
+        if not loaded:
+            features = {i: np.empty((0, EMBEDDING_DIM)) for i in range(NUM_LAYERS)}
+            return features, loaded, np.array([], dtype=int)
+
+        features = {
+            layer: np.concatenate(values, axis=0) for layer, values in per_layer.items()
+        }
+        logger.info(
+            f"Loaded segment features for {len(loaded)}/{len(audio_files)} files "
+            f"({features[0].shape[0]} total segments)"
+        )
+        return features, loaded, np.array(seg_counts, dtype=int)
+
+    def load_segment_targets(
+        self, audio_files: list[str],
+    ) -> tuple[dict[str, np.ndarray], list[str], np.ndarray]:
+        """Load per-segment proxy targets from segment target npz files.
+
+        Returns:
+            Tuple of (targets, loaded_files, segment_counts) where:
+            - targets: ``{target_name: np.ndarray[total_segments]}``
+            - loaded_files: list of audio file paths that had targets
+            - segment_counts: array of segment count per track
+        """
+        seg_targets_dir = mess_config.proxy_targets_segments_dir
+
+        collectors: dict[str, list[np.ndarray]] = {
+            name: [] for name in SEGMENT_TARGETS
+        }
+        loaded: list[str] = []
+        seg_counts: list[int] = []
+
+        for path in audio_files:
+            target_file = seg_targets_dir / f"{Path(path).stem}_segment_targets.npz"
+            if not target_file.exists():
+                continue
+
+            data = np.load(target_file, allow_pickle=True)
+
+            # Determine segment count from first available target
+            first_count = None
+            row: dict[str, np.ndarray] = {}
+            ok = True
+
+            for name, (category, key, reduction) in self.SCALAR_TARGETS.items():
+                if name not in SEGMENT_TARGETS:
+                    continue
+                try:
+                    cat_data = data[category].item()
+                    arr = cat_data[key]
+                    if not isinstance(arr, np.ndarray) or arr.ndim == 0:
+                        ok = False
+                        break
+                    if first_count is None:
+                        first_count = len(arr)
+                    elif len(arr) != first_count:
+                        ok = False
+                        break
+                    row[name] = arr
+                except (KeyError, IndexError, TypeError):
+                    ok = False
+                    break
+
+            if ok and first_count is not None and first_count > 0:
+                for name in SEGMENT_TARGETS:
+                    if name in row:
+                        collectors[name].append(row[name])
+                loaded.append(path)
+                seg_counts.append(first_count)
+
+        if not loaded:
+            targets = {name: np.array([]) for name in SEGMENT_TARGETS}
+            return targets, loaded, np.array([], dtype=int)
+
+        targets: dict[str, np.ndarray] = {}
+        for name, arrays in collectors.items():
+            if arrays:
+                combined = np.concatenate(arrays)
+                valid = combined[~np.isnan(combined)]
+                if valid.size > 0 and np.std(valid) > 1e-10:
+                    targets[name] = combined
+
+        logger.info(
+            f"Loaded {len(targets)} segment targets for {len(loaded)} files"
+        )
+        return targets, loaded, np.array(seg_counts, dtype=int)
+
+    def discover_segments(
+        self, n_samples: int = 50,
+    ) -> dict[int, dict[str, dict[str, float]]]:
+        """Run segment-level discovery: probe layers against segment targets.
+
+        Same Ridge regression pipeline as ``discover()`` but uses individual
+        5s segment embeddings as samples instead of track-level averages.
+
+        Returns:
+            ``{layer_idx: {target_name: {'r2_score', 'correlation', 'rmse'}}}``
+        """
+        audio_files = sorted(str(f) for f in self.dataset.get_audio_files())[:n_samples]
+        logger.info(f"Running segment discovery with up to {len(audio_files)} audio files")
+
+        features, feat_files, feat_seg_counts = self.load_segment_features(audio_files)
+        targets, tgt_files, tgt_seg_counts = self.load_segment_targets(audio_files)
+
+        # Align to files with both features and targets
+        common = sorted(set(feat_files) & set(tgt_files))
+        if not common:
+            logger.error("No files have both segment features and segment targets")
+            return {}
+
+        # Align and verify segment counts match per track
+        feat_pos = {path: idx for idx, path in enumerate(feat_files)}
+        tgt_pos = {path: idx for idx, path in enumerate(tgt_files)}
+
+        aligned_feat_slices: list[tuple[int, int]] = []
+        aligned_tgt_slices: list[tuple[int, int]] = []
+        total_segments = 0
+
+        feat_cumsum = np.cumsum(np.concatenate([[0], feat_seg_counts]))
+        tgt_cumsum = np.cumsum(np.concatenate([[0], tgt_seg_counts]))
+
+        mismatched = []
+        for path in common:
+            fi = feat_pos[path]
+            ti = tgt_pos[path]
+            f_count = int(feat_seg_counts[fi])
+            t_count = int(tgt_seg_counts[ti])
+            if f_count != t_count:
+                mismatched.append((path, f_count, t_count))
+                continue
+            aligned_feat_slices.append((int(feat_cumsum[fi]), int(feat_cumsum[fi + 1])))
+            aligned_tgt_slices.append((int(tgt_cumsum[ti]), int(tgt_cumsum[ti + 1])))
+            total_segments += f_count
+
+        if mismatched:
+            logger.warning(
+                f"Skipped {len(mismatched)} tracks with segment count mismatches"
+            )
+
+        if total_segments < self.n_folds:
+            logger.error(
+                f"Only {total_segments} aligned segments, need >= {self.n_folds}"
+            )
+            return {}
+
+        # Build aligned feature/target arrays
+        aligned_features = {}
+        for layer in range(NUM_LAYERS):
+            parts = [features[layer][s:e] for s, e in aligned_feat_slices]
+            aligned_features[layer] = np.concatenate(parts, axis=0)
+
+        aligned_targets: dict[str, np.ndarray] = {}
+        for name, arr in targets.items():
+            parts = [arr[s:e] for s, e in aligned_tgt_slices]
+            aligned_targets[name] = np.concatenate(parts, axis=0)
+
+        n_tracks = len(aligned_feat_slices)
+        n_targets = len(aligned_targets)
+
+        if n_targets == 0:
+            logger.error("No viable segment targets after filtering")
+            return {}
+
+        logger.info(
+            f"Segment probing: {NUM_LAYERS} layers x {n_targets} targets "
+            f"on {total_segments} segments from {n_tracks} tracks"
+        )
+
+        # Log to MLflow
+        if mlflow.active_run():
+            mlflow.log_params({
+                'mode': 'segment',
+                'alpha': self.alpha,
+                'n_folds': self.n_folds,
+                'n_samples': n_samples,
+                'n_tracks_used': n_tracks,
+                'n_total_segments': total_segments,
+                'n_targets': n_targets,
+                'dataset': self.dataset.name if hasattr(self.dataset, 'name') else 'unknown',
+                'targets': ','.join(sorted(aligned_targets.keys())),
+            })
+
+        results: dict[int, dict[str, dict[str, float]]] = {}
+
+        for layer in range(NUM_LAYERS):
+            results[layer] = {}
+            for target_name, target_values in aligned_targets.items():
+                metrics = self._probe_single(aligned_features[layer], target_values)
+                metrics['n_valid'] = float(total_segments)
+                metrics['n_tracks'] = float(n_tracks)
+                results[layer][target_name] = metrics
+
+                r2 = metrics['r2_score']
+                marker = ' ***' if r2 > 0.9 else ' **' if r2 > 0.8 else ' *' if r2 > 0.7 else ''
+                logger.info(
+                    f"  Layer {layer:2d} | {target_name:25s} | "
+                    f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
+                    f"RMSE={metrics['rmse']:8.4f}  "
+                    f"n_seg={total_segments:5d}  n_trk={n_tracks:3d}{marker}"
+                )
+
+                if mlflow.active_run():
+                    prefix = f"seg_L{layer}_{target_name}"
+                    mlflow.log_metrics({
+                        f"{prefix}_r2": metrics['r2_score'],
+                        f"{prefix}_corr": metrics['correlation'],
+                        f"{prefix}_rmse": metrics['rmse'],
+                    })
+
+        # Log best-layer summary
+        if mlflow.active_run():
+            best = self.best_layers(results)
+            for target_name, info in best.items():
+                mlflow.log_metric(f"seg_best_r2_{target_name}", info['r2_score'])
+                mlflow.log_metric(f"seg_best_layer_{target_name}", info['layer'])
+
+        return results
 
     def discover_and_save(
         self,

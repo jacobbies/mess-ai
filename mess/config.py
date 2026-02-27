@@ -184,6 +184,11 @@ class MESSConfig:
     def proxy_targets_dir(self) -> Path:
         """Proxy target storage for layer validation experiments."""
         return self.data_root / "proxy_targets"
+
+    @property
+    def proxy_targets_segments_dir(self) -> Path:
+        """Segment-level proxy target storage for segment probing experiments."""
+        return self.data_root / "proxy_targets_segments"
     
     # =========================================================================
     # Validation and Utilities

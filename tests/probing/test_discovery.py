@@ -281,6 +281,16 @@ class TestScalarTargets:
     def test_has_22_targets(self):
         assert len(LayerDiscoverySystem.SCALAR_TARGETS) == 22
 
+    def test_segment_targets_is_subset(self):
+        from mess.probing.discovery import SEGMENT_TARGETS
+        scalar_names = set(LayerDiscoverySystem.SCALAR_TARGETS.keys())
+        assert SEGMENT_TARGETS.issubset(scalar_names)
+
+    def test_segment_targets_excludes_track_level(self):
+        from mess.probing.discovery import SEGMENT_TARGETS
+        for excluded in ('tempo', 'phrase_regularity', 'num_phrases', 'onset_density'):
+            assert excluded not in SEGMENT_TARGETS
+
 
 class TestLoadTargets:
     @staticmethod

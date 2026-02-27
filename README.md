@@ -30,6 +30,18 @@ Current pipeline:
 uv sync --group dev
 ```
 
+Install full extraction/probing stack (MERT + probing deps):
+
+```bash
+uv sync --group dev --extra ml --extra search
+```
+
+Install lightweight serving runtime (search only):
+
+```bash
+uv sync --extra search
+```
+
 Install from another repository (pinned Git commit):
 
 ```bash

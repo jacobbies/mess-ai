@@ -20,23 +20,72 @@ Usage:
 
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import mlflow
 import numpy as np
-from sklearn.linear_model import Ridge
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import KFold, cross_val_predict
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 from ..config import mess_config
 
 logger = logging.getLogger(__name__)
 
+try:
+    import mlflow  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+    class _MlflowStub:
+        """No-op MLflow shim when mlflow is not installed."""
+
+        @staticmethod
+        def active_run() -> None:
+            return None
+
+        @staticmethod
+        def log_params(_params: dict[str, Any]) -> None:
+            return None
+
+        @staticmethod
+        def log_metrics(_metrics: dict[str, float]) -> None:
+            return None
+
+        @staticmethod
+        def log_metric(_name: str, _value: float) -> None:
+            return None
+
+        @staticmethod
+        def log_artifact(_path: str) -> None:
+            return None
+
+    mlflow = _MlflowStub()
+
 NUM_LAYERS = 13
 EMBEDDING_DIM = 768
+
+
+@lru_cache(maxsize=1)
+def _require_sklearn() -> tuple[Any, ...]:
+    """Import sklearn probe primitives lazily for lightweight serving installs."""
+    try:
+        from sklearn.linear_model import Ridge
+        from sklearn.metrics import mean_squared_error, r2_score
+        from sklearn.model_selection import KFold, cross_val_predict
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "scikit-learn is required for layer probing. "
+            "Install with `mess-ai[ml]`."
+        ) from exc
+
+    return (
+        Ridge,
+        mean_squared_error,
+        r2_score,
+        KFold,
+        cross_val_predict,
+        make_pipeline,
+        StandardScaler,
+    )
 
 # Targets viable at 5s segment duration for segment-level probing.
 # Excludes tempo (needs >5s for beat tracking), phrase_regularity,
@@ -287,6 +336,16 @@ class LayerDiscoverySystem:
 
     def _probe_single(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
         """Cross-validated Ridge regression for one (layer, target) pair."""
+        (
+            Ridge,
+            mean_squared_error,
+            r2_score,
+            KFold,
+            cross_val_predict,
+            make_pipeline,
+            StandardScaler,
+        ) = _require_sklearn()
+
         # Filter out NaN targets (from optional categories like expression)
         valid = ~np.isnan(y)
         if not np.all(valid):

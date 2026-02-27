@@ -19,12 +19,7 @@ import logging
 import time
 from pathlib import Path
 
-import librosa
 import numpy as np
-import scipy.signal
-
-from ..config import mess_config
-from ..extraction.audio import segment_audio
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +76,8 @@ def generate_segment_targets(
     import torch
     import torchaudio
 
+    from ..extraction.audio import segment_audio
+
     audio_tensor, sr = torchaudio.load(str(audio_path))
     if sr != sample_rate:
         resampler = torchaudio.transforms.Resample(sr, sample_rate)
@@ -95,8 +92,6 @@ def generate_segment_targets(
         overlap_ratio=overlap_ratio,
         sample_rate=sample_rate,
     )
-    n_segments = len(segments)
-
     # Compute targets per segment
     timbre = _compute_timbre_segments(segments, sample_rate)
     dynamics = _compute_dynamics_segments(segments, sample_rate)
@@ -238,6 +233,8 @@ def get_segment_boundaries(
 def _compute_timbre_segments(
     segments: list[np.ndarray], sample_rate: int,
 ) -> dict[str, np.ndarray]:
+    import librosa
+
     n = len(segments)
     centroid = np.zeros(n)
     rolloff = np.zeros(n)
@@ -269,6 +266,9 @@ def _compute_timbre_segments(
 def _compute_dynamics_segments(
     segments: list[np.ndarray], sample_rate: int,
 ) -> dict[str, np.ndarray]:
+    import librosa
+    import scipy.signal
+
     n = len(segments)
     dyn_range = np.zeros(n)
     dyn_variance = np.zeros(n)
@@ -309,6 +309,8 @@ def _compute_dynamics_segments(
 def _compute_harmony_segments(
     segments: list[np.ndarray], sample_rate: int,
 ) -> dict[str, np.ndarray]:
+    import librosa
+
     n = len(segments)
     complexity = np.zeros(n)
 
@@ -324,6 +326,8 @@ def _compute_harmony_segments(
 def _compute_articulation_segments(
     segments: list[np.ndarray], sample_rate: int,
 ) -> dict[str, np.ndarray]:
+    import librosa
+
     n = len(segments)
     slopes = np.zeros(n)
     sharpness = np.zeros(n)

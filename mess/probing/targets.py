@@ -26,17 +26,56 @@ Targets Generated:
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
-import librosa
-import mlflow
 import numpy as np
-import scipy.signal
-import torch
-import torchaudio
 
 from ..config import mess_config
 
 logger = logging.getLogger(__name__)
+
+try:
+    import mlflow  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+    class _MlflowStub:
+        """No-op MLflow shim when mlflow is not installed."""
+
+        @staticmethod
+        def active_run() -> None:
+            return None
+
+        @staticmethod
+        def log_params(_params: dict[str, Any]) -> None:
+            return None
+
+        @staticmethod
+        def log_metrics(_metrics: dict[str, float]) -> None:
+            return None
+
+        @staticmethod
+        def log_artifact(_path: str) -> None:
+            return None
+
+        @staticmethod
+        def set_experiment(_name: str) -> None:
+            return None
+
+        class _RunContext:
+            def __enter__(self) -> "_MlflowStub._RunContext":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+
+        @staticmethod
+        def start_run() -> "_MlflowStub._RunContext":
+            return _MlflowStub._RunContext()
+
+        @staticmethod
+        def set_tag(_key: str, _value: str) -> None:
+            return None
+
+    mlflow = _MlflowStub()
 
 
 class MusicalAspectTargets:
@@ -59,6 +98,9 @@ class MusicalAspectTargets:
     
     def generate_all_targets(self, audio_path: str) -> dict[str, dict[str, np.ndarray]]:
         """Generate all proxy targets for a given audio file."""
+        import torch
+        import torchaudio
+
         # Load audio
         audio, sr = torchaudio.load(audio_path)
         if sr != self.sample_rate:
@@ -123,6 +165,9 @@ class MusicalAspectTargets:
 
     def _generate_rhythm_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate rhythm-related targets."""
+        import librosa
+        import scipy.signal
+
         # Tempo estimation
         tempo, beats = librosa.beat.beat_track(
             y=audio, 
@@ -157,6 +202,8 @@ class MusicalAspectTargets:
     
     def _generate_harmony_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate harmony-related targets."""
+        import librosa
+
         # Chroma features (pitch class profiles)
         chroma = librosa.feature.chroma_cqt(
             y=audio,
@@ -209,6 +256,8 @@ class MusicalAspectTargets:
     
     def _generate_timbre_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate timbre-related targets."""
+        import librosa
+
         # MFCCs (classic timbre descriptors)
         mfccs = librosa.feature.mfcc(
             y=audio,
@@ -259,6 +308,8 @@ class MusicalAspectTargets:
     
     def _generate_articulation_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate articulation-related targets (attack characteristics)."""
+        import librosa
+
         # Compute energy envelope in dB for stable slope measurement
         hop_length = 512
         rms = librosa.feature.rms(y=audio, hop_length=hop_length)[0]
@@ -301,6 +352,9 @@ class MusicalAspectTargets:
     
     def _generate_dynamics_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate dynamics-related targets."""
+        import librosa
+        import scipy.signal
+
         # RMS energy (dynamic level)
         rms = librosa.feature.rms(
             y=audio,
@@ -374,6 +428,8 @@ class MusicalAspectTargets:
 
     def _generate_phrasing_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate phrasing-related targets (musical sentence structure)."""
+        import librosa
+
         # Novelty function for phrase boundary detection
         chroma = librosa.feature.chroma_cqt(y=audio, sr=self.sample_rate)
         

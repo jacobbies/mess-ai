@@ -206,6 +206,10 @@ class LayerDiscoverySystem:
         self.dataset = DatasetFactory.get_dataset(dataset_name)
         self.features_dir = self.dataset.embeddings_dir / "raw"
         self.targets_dir = mess_config.proxy_targets_dir
+        # Optional explicit override for segment-level targets directory.
+        # When unset, segment discovery uses config defaults while still
+        # honoring custom ``targets_dir`` overrides in tests/workflows.
+        self.segment_targets_dir: Path | None = None
         self.alpha = alpha
         self.n_folds = n_folds
 
@@ -517,7 +521,7 @@ class LayerDiscoverySystem:
             - loaded_files: list of audio file paths that had targets
             - segment_counts: array of segment count per track
         """
-        seg_targets_dir = mess_config.proxy_targets_segments_dir
+        seg_targets_dir = self._resolve_segment_targets_dir()
 
         collectors: dict[str, list[np.ndarray]] = {
             name: [] for name in SEGMENT_TARGETS
@@ -537,7 +541,7 @@ class LayerDiscoverySystem:
             row: dict[str, np.ndarray] = {}
             ok = True
 
-            for name, (category, key, reduction) in self.SCALAR_TARGETS.items():
+            for name, (category, key, _reduction) in self.SCALAR_TARGETS.items():
                 if name not in SEGMENT_TARGETS:
                     continue
                 try:
@@ -579,6 +583,18 @@ class LayerDiscoverySystem:
             f"Loaded {len(targets)} segment targets for {len(loaded)} files"
         )
         return targets, loaded, np.array(seg_counts, dtype=int)
+
+    def _resolve_segment_targets_dir(self) -> Path:
+        """Resolve segment target path with instance-level overrides."""
+        segment_targets_dir = getattr(self, "segment_targets_dir", None)
+        if segment_targets_dir is not None:
+            return Path(segment_targets_dir)
+
+        targets_dir = getattr(self, "targets_dir", None)
+        if targets_dir is not None and Path(targets_dir) != mess_config.proxy_targets_dir:
+            return Path(targets_dir)
+
+        return mess_config.proxy_targets_segments_dir
 
     def discover_segments(
         self, n_samples: int = 50,

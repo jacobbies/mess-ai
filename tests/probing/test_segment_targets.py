@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -260,7 +259,11 @@ class TestDiscoverSegments:
 
         def fake_load_segment_targets(_audio_files):
             targets = {
-                "spectral_centroid": np.random.default_rng(0).standard_normal(total).astype(np.float32),
+                "spectral_centroid": (
+                    np.random.default_rng(0)
+                    .standard_normal(total)
+                    .astype(np.float32)
+                ),
                 "dynamic_range": np.random.default_rng(1).standard_normal(total).astype(np.float32),
             }
             return targets, ["a.wav", "b.wav"], np.array([n_seg_a, n_seg_b])
@@ -295,7 +298,10 @@ class TestDiscoverSegments:
 
         def fake_seg_features(_):
             return (
-                {l: rng.standard_normal((20, 768)).astype(np.float32) for l in range(13)},
+                {
+                    layer_idx: rng.standard_normal((20, 768)).astype(np.float32)
+                    for layer_idx in range(13)
+                },
                 ["t.wav"],
                 np.array([20]),
             )
@@ -337,7 +343,10 @@ class TestDiscoverSegments:
         def fake_seg_features(_):
             # a.wav: 10 segments, b.wav: 15 segments
             return (
-                {l: rng.standard_normal((25, 768)).astype(np.float32) for l in range(13)},
+                {
+                    layer_idx: rng.standard_normal((25, 768)).astype(np.float32)
+                    for layer_idx in range(13)
+                },
                 ["a.wav", "b.wav"],
                 np.array([10, 15]),
             )
@@ -358,6 +367,66 @@ class TestDiscoverSegments:
         # b.wav should be skipped due to mismatch, only a.wav used (10 segments)
         assert results
         assert results[0]["spectral_centroid"]["n_valid"] == 10.0
+
+
+# =========================================================================
+# TestLoadSegmentTargets
+# =========================================================================
+
+
+class TestLoadSegmentTargets:
+    """Test segment target loading path resolution and parsing."""
+
+    @staticmethod
+    def _segment_payload(n_segments: int = 3) -> dict[str, dict[str, np.ndarray]]:
+        payload: dict[str, dict[str, np.ndarray]] = {}
+        for idx, name in enumerate(sorted(SEGMENT_TARGETS)):
+            category, key, _ = LayerDiscoverySystem.SCALAR_TARGETS[name]
+            payload.setdefault(category, {})
+            payload[category][key] = np.linspace(
+                idx,
+                idx + 1.0,
+                n_segments,
+                dtype=np.float32,
+            )
+        return payload
+
+    def test_load_segment_targets_uses_custom_targets_dir(self, tmp_path):
+        system = object.__new__(LayerDiscoverySystem)
+        custom_dir = tmp_path / "custom_segment_targets"
+        custom_dir.mkdir(parents=True)
+        system.targets_dir = custom_dir
+
+        audio_files = ["track_a.wav"]
+        np.savez_compressed(
+            custom_dir / "track_a_segment_targets.npz",
+            **self._segment_payload(),
+        )
+
+        targets, loaded, seg_counts = system.load_segment_targets(audio_files)
+
+        assert loaded == audio_files
+        assert seg_counts.tolist() == [3]
+        assert SEGMENT_TARGETS.issubset(set(targets.keys()))
+
+    def test_load_segment_targets_prefers_explicit_segment_targets_dir(self, tmp_path):
+        system = object.__new__(LayerDiscoverySystem)
+        system.targets_dir = tmp_path / "wrong_dir"
+        system.targets_dir.mkdir(parents=True)
+        system.segment_targets_dir = tmp_path / "right_dir"
+        system.segment_targets_dir.mkdir(parents=True)
+
+        audio_files = ["track_b.wav"]
+        np.savez_compressed(
+            system.segment_targets_dir / "track_b_segment_targets.npz",
+            **self._segment_payload(),
+        )
+
+        targets, loaded, seg_counts = system.load_segment_targets(audio_files)
+
+        assert loaded == audio_files
+        assert seg_counts.tolist() == [3]
+        assert SEGMENT_TARGETS.issubset(set(targets.keys()))
 
 
 # =========================================================================

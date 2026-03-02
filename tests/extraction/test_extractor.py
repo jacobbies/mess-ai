@@ -7,6 +7,8 @@ import pytest
 
 from mess.extraction.extractor import FeatureExtractor
 
+pytestmark = pytest.mark.unit
+
 
 def _make_extractor() -> FeatureExtractor:
     """Build a FeatureExtractor instance without running __init__."""
@@ -78,6 +80,75 @@ class TestOOMRecovery:
         assert calls["n"] == 2
         assert calls["cleared"] == 1
         assert extractor.batch_size == 8
+
+    def test_oom_recovery_re_raises_non_oom_errors(self, monkeypatch):
+        extractor = _make_extractor()
+        extractor.device = "cuda"
+        extractor.batch_size = 8
+
+        monkeypatch.setattr(
+            "mess.config.mess_config.MERT_CUDA_AUTO_OOM_RECOVERY", True
+        )
+
+        def fail_non_oom(_segments):
+            raise RuntimeError("kernel launch failed")
+
+        extractor._extract_mert_features_batched = fail_non_oom
+
+        with pytest.raises(RuntimeError, match="kernel launch failed"):
+            extractor._extract_mert_features_batched_with_oom_recovery([np.zeros(16)])
+
+        assert extractor.batch_size == 8
+
+
+class TestDeviceFallback:
+    def test_move_to_device_falls_back_to_cpu(self, monkeypatch):
+        extractor = _make_extractor()
+        extractor.device = "cuda"
+
+        class FakeModel:
+            def to(self, device):
+                if device in {"cuda", "mps"}:
+                    raise RuntimeError("device unavailable")
+                return self
+
+        class FakeTensor:
+            def to(self, device):
+                if device in {"cuda", "mps"}:
+                    raise RuntimeError("device unavailable")
+                return self
+
+            def __add__(self, _other):
+                return self
+
+        extractor.model = FakeModel()
+        monkeypatch.setattr("mess.extraction.extractor.torch.randn", lambda *_a, **_k: FakeTensor())
+
+        extractor._move_to_device()
+        assert extractor.device == "cpu"
+
+    def test_move_to_device_raises_if_all_devices_fail(self, monkeypatch):
+        extractor = _make_extractor()
+        extractor.device = "cpu"
+
+        class AlwaysFailModel:
+            @staticmethod
+            def to(_device):
+                raise RuntimeError("no device works")
+
+        class FakeTensor:
+            @staticmethod
+            def to(_device):
+                raise RuntimeError("no device works")
+
+            def __add__(self, _other):
+                return self
+
+        extractor.model = AlwaysFailModel()
+        monkeypatch.setattr("mess.extraction.extractor.torch.randn", lambda *_a, **_k: FakeTensor())
+
+        with pytest.raises(RuntimeError, match="Failed to load model on any device"):
+            extractor._move_to_device()
 
 
 class TestExtractTrackFeatures:

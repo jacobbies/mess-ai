@@ -1,8 +1,11 @@
 """Tests for mess.probing.targets dataset-level target creation."""
 
 import numpy as np
+import pytest
 
 from mess.probing.targets import create_target_dataset
+
+pytestmark = pytest.mark.integration
 
 
 class _FakeTargets:

@@ -7,6 +7,8 @@ from mess.datasets.factory import DatasetFactory
 from mess.datasets.maestro import MAESTRODataset
 from mess.datasets.smd import SMDDataset
 
+pytestmark = pytest.mark.unit
+
 
 class TestGetDataset:
     def test_smd_returns_smd_dataset(self, tmp_path):

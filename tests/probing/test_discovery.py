@@ -11,6 +11,8 @@ from mess.probing.discovery import (
     resolve_aspects,
 )
 
+pytestmark = pytest.mark.unit
+
 
 class TestProbeSingle:
     """_probe_single uses sklearn only — no heavy model deps."""

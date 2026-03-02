@@ -9,6 +9,8 @@ import pytest
 
 from mess.probing.midi_targets import MidiExpressionTargets, resolve_midi_path
 
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

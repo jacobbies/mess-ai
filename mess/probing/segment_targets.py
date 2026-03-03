@@ -211,6 +211,9 @@ def get_segment_boundaries(
     Returns:
         List of ``(start_seconds, end_seconds)`` tuples.
     """
+    if audio_length_samples <= 0:
+        return []
+
     segment_samples = int(segment_duration * sample_rate)
     hop_samples = int(segment_samples * (1 - overlap_ratio))
 
@@ -221,7 +224,10 @@ def get_segment_boundaries(
     # Final segment (if remainder)
     if audio_length_samples % hop_samples != 0:
         end = audio_length_samples / sample_rate
-        boundaries.append((end - segment_duration, end))
+        start = max(0.0, end - segment_duration)
+        final_boundary = (start, end)
+        if not boundaries or boundaries[-1] != final_boundary:
+            boundaries.append(final_boundary)
 
     return boundaries
 

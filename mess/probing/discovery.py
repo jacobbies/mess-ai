@@ -68,16 +68,17 @@ def _require_sklearn() -> tuple[Any, ...]:
     try:
         from sklearn.linear_model import Ridge
         from sklearn.metrics import mean_squared_error, r2_score
-        from sklearn.model_selection import KFold, cross_val_predict
+        from sklearn.model_selection import GroupKFold, KFold, cross_val_predict
         from sklearn.pipeline import make_pipeline
         from sklearn.preprocessing import StandardScaler
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "scikit-learn is required for layer probing. "
-            "Install with `mess-ai[ml]`."
+            "Install MESS with full dependencies."
         ) from exc
 
     return (
+        GroupKFold,
         Ridge,
         mean_squared_error,
         r2_score,
@@ -106,7 +107,7 @@ SEGMENT_TARGETS: set[str] = {
 
 
 # =============================================================================
-# Model inspection utilities (require mess-ai[ml])
+# Model inspection utilities
 # =============================================================================
 
 def inspect_model(model_name: str | None = None) -> dict[str, Any]:
@@ -114,7 +115,7 @@ def inspect_model(model_name: str | None = None) -> dict[str, Any]:
     Inventory MERT model: layer names, parameter counts, shapes.
 
     Returns dict with total_params, trainable_params, and per-module breakdown.
-    Requires mess-ai[ml] dependencies (transformers, torch).
+    Requires transformers and torch dependencies.
     """
     from transformers import AutoModel
 
@@ -156,7 +157,7 @@ def trace_activations(
     Useful for verifying the model produces expected output dimensions before
     running full feature extraction.
 
-    Requires mess-ai[ml] dependencies (transformers, torch, torchaudio).
+    Requires transformers, torch, and torchaudio dependencies.
     """
     import torch
     import torchaudio
@@ -334,9 +335,15 @@ class LayerDiscoverySystem:
         logger.info(f"Loaded {len(targets)} targets for {len(loaded)} files")
         return targets, loaded
 
-    def _probe_single(self, X: np.ndarray, y: np.ndarray) -> dict[str, float]:
+    def _probe_single(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        groups: np.ndarray | None = None,
+    ) -> dict[str, float]:
         """Cross-validated Ridge regression for one (layer, target) pair."""
         (
+            GroupKFold,
             Ridge,
             mean_squared_error,
             r2_score,
@@ -350,20 +357,46 @@ class LayerDiscoverySystem:
         valid = ~np.isnan(y)
         if not np.all(valid):
             X, y = X[valid], y[valid]
+            if groups is not None:
+                groups = groups[valid]
         n = len(X)
         if n < self.n_folds:
             return {'r2_score': -999.0, 'correlation': 0.0, 'rmse': 999.0}
 
-        kf = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
+        if groups is not None:
+            unique_groups = np.unique(groups)
+            n_groups = len(unique_groups)
+            if n_groups >= 2:
+                n_splits = min(self.n_folds, n_groups)
+                cv = GroupKFold(n_splits=n_splits)
+                uses_grouped_cv = True
+            else:
+                logger.warning(
+                    "Segment probe has only one track group after filtering; "
+                    "falling back to ungrouped KFold."
+                )
+                cv = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
+                uses_grouped_cv = False
+        else:
+            cv = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
+            uses_grouped_cv = False
+
         probe = make_pipeline(
             StandardScaler(),
             Ridge(alpha=self.alpha, random_state=42),
         )
 
-        y_pred = cross_val_predict(probe, X, y, cv=kf)
+        if groups is not None and uses_grouped_cv:
+            y_pred = cross_val_predict(probe, X, y, cv=cv, groups=groups)
+        else:
+            y_pred = cross_val_predict(probe, X, y, cv=cv)
 
         r2 = float(r2_score(y, y_pred))
-        corr = float(np.corrcoef(y, y_pred)[0, 1]) if np.std(y_pred) > 1e-10 else 0.0
+        corr = (
+            float(np.corrcoef(y, y_pred)[0, 1])
+            if np.std(y) > 1e-10 and np.std(y_pred) > 1e-10
+            else 0.0
+        )
         rmse = float(np.sqrt(mean_squared_error(y, y_pred)))
 
         return {'r2_score': r2, 'correlation': corr, 'rmse': rmse}
@@ -713,6 +746,15 @@ class LayerDiscoverySystem:
             )
             return {}
 
+        # Track-group labels for leakage-safe segment CV.
+        # GroupKFold keeps all segments from a track in the same fold.
+        segment_groups = np.concatenate(
+            [
+                np.full(end - start, group_idx, dtype=np.int32)
+                for group_idx, (start, end) in enumerate(aligned_feat_slices)
+            ]
+        )
+
         # Build aligned feature/target arrays
         aligned_features = {}
         for layer in range(NUM_LAYERS):
@@ -725,6 +767,30 @@ class LayerDiscoverySystem:
             aligned_targets[name] = np.concatenate(parts, axis=0)
 
         n_tracks = len(aligned_feat_slices)
+        min_valid_samples = self.n_folds
+        valid_counts: dict[str, int] = {}
+        valid_group_counts: dict[str, int] = {}
+        filtered_targets: dict[str, np.ndarray] = {}
+        for name, values in aligned_targets.items():
+            valid_mask = ~np.isnan(values)
+            n_valid = int(np.sum(valid_mask))
+            n_valid_groups = int(np.unique(segment_groups[valid_mask]).size) if n_valid else 0
+            if n_valid < min_valid_samples:
+                logger.warning(
+                    f"Skipping segment target '{name}': only {n_valid} valid segments "
+                    f"(need >= {min_valid_samples})"
+                )
+                continue
+            if n_valid_groups < 2:
+                logger.warning(
+                    f"Segment target '{name}' has {n_valid_groups} valid track group(s); "
+                    "using ungrouped KFold fallback for this target."
+                )
+            filtered_targets[name] = values
+            valid_counts[name] = n_valid
+            valid_group_counts[name] = n_valid_groups
+
+        aligned_targets = filtered_targets
         n_targets = len(aligned_targets)
 
         if n_targets == 0:
@@ -755,8 +821,15 @@ class LayerDiscoverySystem:
         for layer in range(NUM_LAYERS):
             results[layer] = {}
             for target_name, target_values in aligned_targets.items():
-                metrics = self._probe_single(aligned_features[layer], target_values)
-                metrics['n_valid'] = float(total_segments)
+                metrics = self._probe_single(
+                    aligned_features[layer],
+                    target_values,
+                    groups=segment_groups,
+                )
+                n_valid = valid_counts[target_name]
+                metrics['n_valid'] = float(n_valid)
+                metrics['coverage'] = float(n_valid / total_segments)
+                metrics['n_groups'] = float(valid_group_counts[target_name])
                 metrics['n_tracks'] = float(n_tracks)
                 results[layer][target_name] = metrics
 
@@ -766,7 +839,8 @@ class LayerDiscoverySystem:
                     f"  Layer {layer:2d} | {target_name:25s} | "
                     f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
                     f"RMSE={metrics['rmse']:8.4f}  "
-                    f"n_seg={total_segments:5d}  n_trk={n_tracks:3d}{marker}"
+                    f"n_valid={n_valid:5d}  n_trk={n_tracks:3d}  "
+                    f"cov={metrics['coverage']:.3f}{marker}"
                 )
 
                 if mlflow.active_run():
@@ -775,6 +849,9 @@ class LayerDiscoverySystem:
                         f"{prefix}_r2": metrics['r2_score'],
                         f"{prefix}_corr": metrics['correlation'],
                         f"{prefix}_rmse": metrics['rmse'],
+                        f"{prefix}_n_valid": metrics['n_valid'],
+                        f"{prefix}_coverage": metrics['coverage'],
+                        f"{prefix}_n_groups": metrics['n_groups'],
                     })
 
         # Log best-layer summary

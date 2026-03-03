@@ -222,6 +222,15 @@ class TestGetSegmentBoundaries:
         assert boundaries[0] == pytest.approx((0.0, 5.0))
         assert boundaries[1] == pytest.approx((2.5, 7.5))
 
+    def test_short_audio_boundaries_are_non_negative(self):
+        boundaries = get_segment_boundaries(
+            audio_length_samples=3 * 24000,  # 3s at 24kHz
+            segment_duration=5.0,
+            overlap_ratio=0.5,
+            sample_rate=24000,
+        )
+        assert boundaries == pytest.approx([(0.0, 3.0)])
+
 
 # =========================================================================
 # TestDiscoverSegments
@@ -367,6 +376,117 @@ class TestDiscoverSegments:
         # b.wav should be skipped due to mismatch, only a.wav used (10 segments)
         assert results
         assert results[0]["spectral_centroid"]["n_valid"] == 10.0
+
+    def test_discover_segments_passes_group_labels_to_probe(self, monkeypatch):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 2
+
+        class DummyDataset:
+            name = "test"
+
+            @staticmethod
+            def get_audio_files():
+                return ["a.wav", "b.wav"]
+
+        system.dataset = DummyDataset()
+
+        n_seg_a, n_seg_b = 4, 6
+        total = n_seg_a + n_seg_b
+        rng = np.random.default_rng(123)
+        captured_groups = []
+
+        def fake_seg_features(_):
+            return (
+                {
+                    layer_idx: rng.standard_normal((total, 768)).astype(np.float32)
+                    for layer_idx in range(13)
+                },
+                ["a.wav", "b.wav"],
+                np.array([n_seg_a, n_seg_b]),
+            )
+
+        def fake_seg_targets(_):
+            return (
+                {"spectral_centroid": rng.standard_normal(total).astype(np.float32)},
+                ["a.wav", "b.wav"],
+                np.array([n_seg_a, n_seg_b]),
+            )
+
+        def fake_probe(_x, _y, groups=None):
+            assert groups is not None
+            captured_groups.append(np.array(groups))
+            return {"r2_score": 0.1, "correlation": 0.2, "rmse": 0.3}
+
+        monkeypatch.setattr(system, "load_segment_features", fake_seg_features)
+        monkeypatch.setattr(system, "load_segment_targets", fake_seg_targets)
+        monkeypatch.setattr(system, "_probe_single", fake_probe)
+
+        results = system.discover_segments(n_samples=2)
+
+        assert results
+        assert captured_groups
+        groups = captured_groups[0]
+        assert groups.shape == (total,)
+        assert np.unique(groups).tolist() == [0, 1]
+        assert np.sum(groups == 0) == n_seg_a
+        assert np.sum(groups == 1) == n_seg_b
+
+    def test_discover_segments_reports_nan_filtered_valid_count(self, monkeypatch):
+        system = object.__new__(LayerDiscoverySystem)
+        system.alpha = 1.0
+        system.n_folds = 2
+
+        class DummyDataset:
+            name = "test"
+
+            @staticmethod
+            def get_audio_files():
+                return ["a.wav", "b.wav"]
+
+        system.dataset = DummyDataset()
+
+        n_seg_a, n_seg_b = 5, 5
+        total = n_seg_a + n_seg_b
+        rng = np.random.default_rng(321)
+
+        def fake_seg_features(_):
+            return (
+                {
+                    layer_idx: rng.standard_normal((total, 768)).astype(np.float32)
+                    for layer_idx in range(13)
+                },
+                ["a.wav", "b.wav"],
+                np.array([n_seg_a, n_seg_b]),
+            )
+
+        def fake_seg_targets(_):
+            values = rng.standard_normal(total).astype(np.float32)
+            values[[1, 7]] = np.nan
+            return (
+                {"spectral_centroid": values},
+                ["a.wav", "b.wav"],
+                np.array([n_seg_a, n_seg_b]),
+            )
+
+        monkeypatch.setattr(system, "load_segment_features", fake_seg_features)
+        monkeypatch.setattr(system, "load_segment_targets", fake_seg_targets)
+        monkeypatch.setattr(
+            system,
+            "_probe_single",
+            lambda _x, _y, groups=None: {
+                "r2_score": 0.4,
+                "correlation": 0.5,
+                "rmse": 0.6,
+            },
+        )
+
+        results = system.discover_segments(n_samples=2)
+
+        assert results
+        metrics = results[0]["spectral_centroid"]
+        assert metrics["n_valid"] == 8.0
+        assert metrics["coverage"] == pytest.approx(0.8)
 
 
 # =========================================================================

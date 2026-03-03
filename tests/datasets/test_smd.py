@@ -1,8 +1,8 @@
-"""Tests for mess.datasets.smd.SMDDataset."""
+"""Tests for mess.datasets.factory.SMDDataset."""
 
 import pytest
 
-from mess.datasets.smd import SMDDataset
+from mess.datasets.factory import SMDDataset
 
 pytestmark = pytest.mark.unit
 

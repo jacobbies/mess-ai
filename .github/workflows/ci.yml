@@ -22,6 +22,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Install FFmpeg runtime libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Sync dependencies
         run: uv sync --group dev --extra search --extra probing
 

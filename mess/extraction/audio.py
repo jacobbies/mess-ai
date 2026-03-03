@@ -14,11 +14,13 @@ Usage:
 """
 
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import torch
+import soundfile as sf
+from scipy import signal
 
 try:
     from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
@@ -48,14 +50,18 @@ def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
             waveform = samples.data
             return np.asarray(waveform.squeeze(0).cpu().numpy(), dtype=np.float32)
 
-        import torchaudio  # type: ignore[import-untyped]
-
-        audio, orig_sr = torchaudio.load(str(audio_path))
-        if audio.shape[0] > 1:
-            audio = torch.mean(audio, dim=0, keepdim=True)
+        audio, orig_sr = sf.read(
+            str(audio_path),
+            dtype="float32",
+            always_2d=True,
+        )
+        mono = audio.mean(axis=1)
         if orig_sr != target_sr:
-            audio = torchaudio.functional.resample(audio, orig_sr, target_sr)
-        return np.asarray(audio.squeeze(0).cpu().numpy(), dtype=np.float32)
+            gcd = math.gcd(orig_sr, target_sr)
+            up = target_sr // gcd
+            down = orig_sr // gcd
+            mono = signal.resample_poly(mono, up=up, down=down)
+        return np.asarray(mono, dtype=np.float32)
 
     except Exception as e:
         logging.error(f"Error preprocessing audio {audio_path}: {e}")
@@ -190,13 +196,11 @@ def validate_audio_file(
                     errors.append(f"Audio file corrupted: {str(e)}")
                     result['valid'] = False
         else:
-            import torchaudio  # type: ignore[import-untyped]
-
             try:
-                metadata = torchaudio.info(str(audio_path))
-                result['sample_rate'] = metadata.sample_rate
-                result['channels'] = metadata.num_channels
-                result['duration'] = metadata.num_frames / metadata.sample_rate
+                metadata = sf.info(str(audio_path))
+                result['sample_rate'] = int(metadata.samplerate)
+                result['channels'] = int(metadata.channels)
+                result['duration'] = float(metadata.duration)
                 result['readable'] = True
 
                 if result['duration'] < min_duration:
@@ -212,8 +216,14 @@ def validate_audio_file(
             if check_corruption and result['readable']:
                 try:
                     num_probe_frames = max(1, int(float(result['sample_rate']) * 0.1))
-                    probe, _ = torchaudio.load(str(audio_path), num_frames=num_probe_frames)
-                    if probe.shape[1] == 0:
+                    probe, _ = sf.read(
+                        str(audio_path),
+                        dtype="float32",
+                        always_2d=True,
+                        start=0,
+                        frames=num_probe_frames,
+                    )
+                    if probe.shape[0] == 0:
                         errors.append("Audio file is empty (zero samples)")
                         result['valid'] = False
                 except Exception as e:

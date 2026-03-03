@@ -3,9 +3,7 @@
 import pytest
 
 from mess.datasets.base import BaseDataset
-from mess.datasets.factory import DatasetFactory
-from mess.datasets.maestro import MAESTRODataset
-from mess.datasets.smd import SMDDataset
+from mess.datasets.factory import DatasetFactory, MAESTRODataset, SMDDataset
 
 pytestmark = pytest.mark.unit
 

@@ -4,8 +4,73 @@ Dataset factory for creating dataset instances
 from pathlib import Path
 
 from .base import BaseDataset
-from .maestro import MAESTRODataset
-from .smd import SMDDataset
+
+
+class SMDDataset(BaseDataset):
+    """
+    Saarland Music Dataset - 50 classical piano pieces at 44kHz.
+
+    Self-contained dataset with its own directory structure:
+    - Audio: data_root/audio/smd/wav-44/
+    - Embeddings: data_root/embeddings/smd-emb/
+    """
+
+    @property
+    def dataset_id(self) -> str:
+        return "smd"
+
+    @property
+    def audio_dir(self) -> Path:
+        """Directory containing SMD audio files."""
+        return self.data_root / "audio" / "smd" / "wav-44"
+
+    @property
+    def embeddings_dir(self) -> Path:
+        """Directory for SMD MERT embeddings."""
+        return self.data_root / "embeddings" / "smd-emb"
+
+    @property
+    def name(self) -> str:
+        return "Saarland Music Dataset (SMD)"
+
+    @property
+    def description(self) -> str:
+        return "Classical piano dataset with 50 recordings (44kHz WAV)"
+
+
+class MAESTRODataset(BaseDataset):
+    """
+    MAESTRO Dataset - Large-scale classical piano performances.
+
+    Self-contained dataset with its own directory structure:
+    - Audio: data_root/audio/maestro/
+    - Embeddings: data_root/embeddings/maestro-emb/
+    """
+
+    @property
+    def dataset_id(self) -> str:
+        return "maestro"
+
+    @property
+    def audio_dir(self) -> Path:
+        """Directory containing MAESTRO audio files."""
+        return self.data_root / "audio" / "maestro"
+
+    @property
+    def embeddings_dir(self) -> Path:
+        """Directory for MAESTRO MERT embeddings."""
+        return self.data_root / "embeddings" / "maestro-emb"
+
+    @property
+    def name(self) -> str:
+        return "MAESTRO Dataset"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Classical piano performances dataset "
+            "(MIDI Aligned Edited Synchronized TRack of Orchestral)"
+        )
 
 
 class DatasetFactory:

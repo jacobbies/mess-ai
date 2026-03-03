@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 import numpy as np
-from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
+
+try:
+    from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
+except Exception:
+    AudioDecoder = None  # type: ignore[assignment,misc]
 
 from .clip_index import ClipIndex, ClipRecord
 
@@ -74,6 +78,11 @@ class TorchCodecAudioStore(_IndexBackedStore):
         num_channels: int = 1,
     ) -> None:
         super().__init__(index)
+        if AudioDecoder is None:
+            raise RuntimeError(
+                "TorchCodec AudioDecoder is unavailable. Install FFmpeg shared libraries "
+                "compatible with torchcodec in this runtime."
+            )
         if audio_path_resolver is None and audio_root is None:
             raise ValueError("Provide either audio_path_resolver or audio_root")
 
@@ -128,6 +137,7 @@ class TorchCodecAudioStore(_IndexBackedStore):
         key = str(audio_path)
         decoder = self._decoder_cache.get(key)
         if decoder is None:
+            assert AudioDecoder is not None
             decoder = AudioDecoder(
                 str(audio_path),
                 sample_rate=self.sample_rate,

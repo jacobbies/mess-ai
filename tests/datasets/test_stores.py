@@ -200,11 +200,15 @@ class TestTorchCodecAudioStore:
         )
         assert value.shape == (10,)
 
-    def test_missing_audio_raises_file_not_found(self, tmp_path):
+    def test_missing_audio_raises_file_not_found(self, tmp_path, mocker):
         embedding_path = tmp_path / "track_a.npy"
         np.save(embedding_path, np.zeros((1, 13, 768), dtype=np.float32))
         index = _index_for_file(str(embedding_path), n_segments=1)
 
+        decoder_cls = mocker.patch("mess.datasets.stores.AudioDecoder")
+        decoder_cls.return_value.get_samples_played_in_range.return_value = SimpleNamespace(
+            data=torch.ones(1, 10, dtype=torch.float32)
+        )
         store = TorchCodecAudioStore(index=index, audio_root=tmp_path / "audio")
         with pytest.raises(FileNotFoundError, match="No audio file found"):
             store.get("smd:track_a:00000")

@@ -18,7 +18,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
+import torch
+
+try:
+    from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
+except Exception:
+    AudioDecoder = None  # type: ignore[assignment,misc]
 
 
 def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
@@ -33,14 +38,24 @@ def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
         Audio array (1D, target sample rate)
     """
     try:
-        decoder = AudioDecoder(
-            str(audio_path),
-            sample_rate=target_sr,
-            num_channels=1,
-        )
-        samples = decoder.get_all_samples()
-        waveform = samples.data
-        return np.asarray(waveform.squeeze(0).cpu().numpy(), dtype=np.float32)
+        if AudioDecoder is not None:
+            decoder = AudioDecoder(
+                str(audio_path),
+                sample_rate=target_sr,
+                num_channels=1,
+            )
+            samples = decoder.get_all_samples()
+            waveform = samples.data
+            return np.asarray(waveform.squeeze(0).cpu().numpy(), dtype=np.float32)
+
+        import torchaudio  # type: ignore[import-untyped]
+
+        audio, orig_sr = torchaudio.load(str(audio_path))
+        if audio.shape[0] > 1:
+            audio = torch.mean(audio, dim=0, keepdim=True)
+        if orig_sr != target_sr:
+            audio = torchaudio.functional.resample(audio, orig_sr, target_sr)
+        return np.asarray(audio.squeeze(0).cpu().numpy(), dtype=np.float32)
 
     except Exception as e:
         logging.error(f"Error preprocessing audio {audio_path}: {e}")
@@ -128,51 +143,82 @@ def validate_audio_file(
     else:
         result['file_exists'] = True
 
-        decoder: AudioDecoder | None = None
-        # Try to load metadata
-        try:
-            decoder = AudioDecoder(str(audio_path))
-            metadata = decoder.metadata
-            result['sample_rate'] = metadata.sample_rate
-            duration = getattr(metadata, "duration_seconds", None)
-            if duration is None:
-                duration = getattr(metadata, "duration_seconds_from_header", None)
-            result['duration'] = float(duration) if duration is not None else None
-            result['channels'] = metadata.num_channels
-            result['readable'] = True
-
-            # Check minimum duration
-            if result['duration'] is None:
-                errors.append("Audio metadata missing duration")
-                result['valid'] = False
-            elif result['duration'] < min_duration:
-                errors.append(
-                    f"Duration too short: {result['duration']:.2f}s < {min_duration}s"
-                )
-                result['valid'] = False
-
-        except Exception as e:
-            errors.append(f"Failed to read audio metadata: {str(e)}")
-            result['valid'] = False
-            result['readable'] = False
-
-        # Check for corruption by decoding a small range
-        if check_corruption and result['readable']:
+        if AudioDecoder is not None:
+            decoder: Any | None = None
+            # Try to load metadata
             try:
-                if decoder is None or result['duration'] is None:
-                    raise RuntimeError("Cannot probe corruption without metadata")
-                probe_stop = min(float(result['duration']), 0.1)
-                if probe_stop <= 0:
-                    errors.append("Audio file is empty (zero samples)")
+                decoder = AudioDecoder(str(audio_path))
+                metadata = decoder.metadata
+                result['sample_rate'] = metadata.sample_rate
+                duration = getattr(metadata, "duration_seconds", None)
+                if duration is None:
+                    duration = getattr(metadata, "duration_seconds_from_header", None)
+                result['duration'] = float(duration) if duration is not None else None
+                result['channels'] = metadata.num_channels
+                result['readable'] = True
+
+                # Check minimum duration
+                if result['duration'] is None:
+                    errors.append("Audio metadata missing duration")
                     result['valid'] = False
-                else:
-                    probe = decoder.get_samples_played_in_range(0.0, probe_stop)
-                    if probe.data.shape[1] == 0:
+                elif result['duration'] < min_duration:
+                    errors.append(
+                        f"Duration too short: {result['duration']:.2f}s < {min_duration}s"
+                    )
+                    result['valid'] = False
+
+            except Exception as e:
+                errors.append(f"Failed to read audio metadata: {str(e)}")
+                result['valid'] = False
+                result['readable'] = False
+
+            # Check for corruption by decoding a small range
+            if check_corruption and result['readable']:
+                try:
+                    if decoder is None or result['duration'] is None:
+                        raise RuntimeError("Cannot probe corruption without metadata")
+                    probe_stop = min(float(result['duration']), 0.1)
+                    if probe_stop <= 0:
                         errors.append("Audio file is empty (zero samples)")
                         result['valid'] = False
+                    else:
+                        probe = decoder.get_samples_played_in_range(0.0, probe_stop)
+                        if probe.data.shape[1] == 0:
+                            errors.append("Audio file is empty (zero samples)")
+                            result['valid'] = False
+                except Exception as e:
+                    errors.append(f"Audio file corrupted: {str(e)}")
+                    result['valid'] = False
+        else:
+            import torchaudio  # type: ignore[import-untyped]
+
+            try:
+                metadata = torchaudio.info(str(audio_path))
+                result['sample_rate'] = metadata.sample_rate
+                result['channels'] = metadata.num_channels
+                result['duration'] = metadata.num_frames / metadata.sample_rate
+                result['readable'] = True
+
+                if result['duration'] < min_duration:
+                    errors.append(
+                        f"Duration too short: {result['duration']:.2f}s < {min_duration}s"
+                    )
+                    result['valid'] = False
             except Exception as e:
-                errors.append(f"Audio file corrupted: {str(e)}")
+                errors.append(f"Failed to read audio metadata: {str(e)}")
                 result['valid'] = False
+                result['readable'] = False
+
+            if check_corruption and result['readable']:
+                try:
+                    num_probe_frames = max(1, int(float(result['sample_rate']) * 0.1))
+                    probe, _ = torchaudio.load(str(audio_path), num_frames=num_probe_frames)
+                    if probe.shape[1] == 0:
+                        errors.append("Audio file is empty (zero samples)")
+                        result['valid'] = False
+                except Exception as e:
+                    errors.append(f"Audio file corrupted: {str(e)}")
+                    result['valid'] = False
 
     result['errors'] = errors
     return result

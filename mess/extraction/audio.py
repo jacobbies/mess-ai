@@ -15,29 +15,10 @@ Usage:
 
 import logging
 from pathlib import Path
-from threading import Lock
 from typing import Any
 
 import numpy as np
-import torch
-import torchaudio
-
-_RESAMPLER_CACHE: dict[tuple[int, int], torchaudio.transforms.Resample] = {}
-_RESAMPLER_CACHE_LOCK = Lock()
-
-
-def _get_resampler(orig_sr: int, target_sr: int) -> torchaudio.transforms.Resample:
-    """Get cached resampler for a sample-rate pair."""
-    key = (orig_sr, target_sr)
-    with _RESAMPLER_CACHE_LOCK:
-        resampler = _RESAMPLER_CACHE.get(key)
-        if resampler is None:
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=orig_sr,
-                new_freq=target_sr
-            )
-            _RESAMPLER_CACHE[key] = resampler
-    return resampler
+from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
 
 
 def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
@@ -52,21 +33,14 @@ def load_audio(audio_path: str | Path, target_sr: int = 24000) -> np.ndarray:
         Audio array (1D, target sample rate)
     """
     try:
-        audio, orig_sr = torchaudio.load(str(audio_path))
-
-        # Convert to mono if stereo
-        if audio.shape[0] > 1:
-            audio = torch.mean(audio, dim=0, keepdim=True)
-
-        # Resample if needed
-        if orig_sr != target_sr:
-            resampler = _get_resampler(orig_sr, target_sr)
-            audio = resampler(audio)
-
-        # Convert to numpy and squeeze
-        audio = audio.squeeze().numpy()
-
-        return audio
+        decoder = AudioDecoder(
+            str(audio_path),
+            sample_rate=target_sr,
+            num_channels=1,
+        )
+        samples = decoder.get_all_samples()
+        waveform = samples.data
+        return np.asarray(waveform.squeeze(0).cpu().numpy(), dtype=np.float32)
 
     except Exception as e:
         logging.error(f"Error preprocessing audio {audio_path}: {e}")
@@ -116,8 +90,8 @@ def validate_audio_file(
 
     Checks:
       - File exists and readable
-      - Valid audio format (torchaudio compatible)
-      - Not corrupted (can load audio data)
+      - Valid audio format (torchcodec compatible)
+      - Not corrupted (can decode a small sample window)
       - Sufficient duration (>= min_duration)
 
     Args:
@@ -137,7 +111,7 @@ def validate_audio_file(
     """
     audio_path = Path(audio_path)
     errors = []
-    result = {
+    result: dict[str, Any] = {
         'valid': True,
         'file_exists': False,
         'readable': False,
@@ -154,16 +128,24 @@ def validate_audio_file(
     else:
         result['file_exists'] = True
 
+        decoder: AudioDecoder | None = None
         # Try to load metadata
         try:
-            metadata = torchaudio.info(str(audio_path))
+            decoder = AudioDecoder(str(audio_path))
+            metadata = decoder.metadata
             result['sample_rate'] = metadata.sample_rate
-            result['duration'] = metadata.num_frames / metadata.sample_rate
+            duration = getattr(metadata, "duration_seconds", None)
+            if duration is None:
+                duration = getattr(metadata, "duration_seconds_from_header", None)
+            result['duration'] = float(duration) if duration is not None else None
             result['channels'] = metadata.num_channels
             result['readable'] = True
 
             # Check minimum duration
-            if result['duration'] < min_duration:
+            if result['duration'] is None:
+                errors.append("Audio metadata missing duration")
+                result['valid'] = False
+            elif result['duration'] < min_duration:
                 errors.append(
                     f"Duration too short: {result['duration']:.2f}s < {min_duration}s"
                 )
@@ -174,13 +156,20 @@ def validate_audio_file(
             result['valid'] = False
             result['readable'] = False
 
-        # Check for corruption by trying to load audio
+        # Check for corruption by decoding a small range
         if check_corruption and result['readable']:
             try:
-                audio, sr = torchaudio.load(str(audio_path))
-                if audio.shape[1] == 0:
+                if decoder is None or result['duration'] is None:
+                    raise RuntimeError("Cannot probe corruption without metadata")
+                probe_stop = min(float(result['duration']), 0.1)
+                if probe_stop <= 0:
                     errors.append("Audio file is empty (zero samples)")
                     result['valid'] = False
+                else:
+                    probe = decoder.get_samples_played_in_range(0.0, probe_stop)
+                    if probe.data.shape[1] == 0:
+                        errors.append("Audio file is empty (zero samples)")
+                        result['valid'] = False
             except Exception as e:
                 errors.append(f"Audio file corrupted: {str(e)}")
                 result['valid'] = False

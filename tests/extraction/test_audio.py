@@ -1,5 +1,7 @@
 """Tests for mess.extraction.audio — segment_audio and load_audio."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 import torch
@@ -80,32 +82,31 @@ class TestSegmentAudio:
 
 
 class TestLoadAudio:
-    """load_audio requires torchaudio mocking to avoid real file I/O."""
+    """load_audio requires AudioDecoder mocking to avoid real file I/O."""
 
-    def test_mono_passthrough(self, mocker):
-        """Mono audio passes through without channel averaging."""
-        mono = torch.randn(1, 24000)
-        mocker.patch("mess.extraction.audio.torchaudio.load", return_value=(mono, 24000))
+    def test_configures_decoder_for_mono_resampled_output(self, mocker):
+        samples = SimpleNamespace(data=torch.randn(1, 24000))
+        decoder_cls = mocker.patch("mess.extraction.audio.AudioDecoder")
+        decoder_cls.return_value.get_all_samples.return_value = samples
 
         result = load_audio("fake.wav", target_sr=24000)
-        assert result.shape == (24000,)
 
-    def test_stereo_to_mono(self, mocker):
-        """Stereo audio gets averaged to mono."""
-        stereo = torch.randn(2, 24000)
-        mocker.patch("mess.extraction.audio.torchaudio.load", return_value=(stereo, 24000))
+        decoder_cls.assert_called_once_with(
+            "fake.wav",
+            sample_rate=24000,
+            num_channels=1,
+        )
+        assert result.shape == (24000,)
+        assert result.dtype == np.float32
+
+    def test_decoder_output_is_squeezed_to_1d(self, mocker):
+        samples = SimpleNamespace(data=torch.randn(1, 1234))
+        decoder_cls = mocker.patch("mess.extraction.audio.AudioDecoder")
+        decoder_cls.return_value.get_all_samples.return_value = samples
 
         result = load_audio("fake.wav", target_sr=24000)
         assert result.ndim == 1
-
-    def test_resampling_called(self, mocker):
-        """If orig_sr != target_sr, resampler is invoked."""
-        audio = torch.randn(1, 44100)
-        mocker.patch("mess.extraction.audio.torchaudio.load", return_value=(audio, 44100))
-
-        result = load_audio("fake.wav", target_sr=24000)
-        # After resampling 44100 -> 24000, length should change
-        assert result.shape[0] != 44100
+        assert result.shape == (1234,)
 
 
 class TestValidateAudioFile:
@@ -113,3 +114,45 @@ class TestValidateAudioFile:
         result = validate_audio_file(tmp_path / "nonexistent.wav")
         assert result["valid"] is False
         assert result["file_exists"] is False
+
+    def test_metadata_and_probe_decode_success(self, tmp_path, mocker):
+        path = tmp_path / "ok.wav"
+        path.write_bytes(b"fake")
+
+        metadata = SimpleNamespace(
+            sample_rate=24000,
+            num_channels=1,
+            duration_seconds=2.0,
+        )
+        probe = SimpleNamespace(data=torch.ones(1, 128))
+        decoder = mocker.Mock(metadata=metadata)
+        decoder.get_samples_played_in_range.return_value = probe
+        decoder_cls = mocker.patch("mess.extraction.audio.AudioDecoder", return_value=decoder)
+
+        result = validate_audio_file(path)
+
+        decoder_cls.assert_called_once_with(str(path))
+        decoder.get_samples_played_in_range.assert_called_once_with(0.0, 0.1)
+        assert result["valid"] is True
+        assert result["readable"] is True
+        assert result["sample_rate"] == 24000
+        assert result["channels"] == 1
+        assert result["duration"] == pytest.approx(2.0)
+
+    def test_probe_failure_marks_file_invalid(self, tmp_path, mocker):
+        path = tmp_path / "bad.wav"
+        path.write_bytes(b"fake")
+
+        metadata = SimpleNamespace(
+            sample_rate=24000,
+            num_channels=1,
+            duration_seconds=2.0,
+        )
+        decoder = mocker.Mock(metadata=metadata)
+        decoder.get_samples_played_in_range.side_effect = RuntimeError("decode failed")
+        mocker.patch("mess.extraction.audio.AudioDecoder", return_value=decoder)
+
+        result = validate_audio_file(path)
+
+        assert result["valid"] is False
+        assert any("corrupted" in err.lower() for err in result["errors"])

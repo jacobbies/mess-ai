@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
+import torch
 
 from mess.datasets.clip_index import ClipIndex, ClipRecord
-from mess.datasets.stores import NpySegmentEmbeddingStore, NPZSegmentTargetStore
+from mess.datasets.stores import (
+    NpySegmentEmbeddingStore,
+    NPZSegmentTargetStore,
+    TorchCodecAudioStore,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -128,3 +135,76 @@ class TestNPZSegmentTargetStore:
         assert store.get("smd:track_a:00000") is None
         values = store.get("smd:track_a:00001")
         assert values == {"expression.rubato": 0.5}
+
+
+class TestTorchCodecAudioStore:
+    def test_decodes_clip_ranges_with_custom_path_resolver(self, tmp_path, mocker):
+        embedding_path = tmp_path / "track_a.npy"
+        np.save(embedding_path, np.zeros((2, 13, 768), dtype=np.float32))
+        index = _index_for_file(str(embedding_path), n_segments=2)
+
+        audio_path = tmp_path / "track_a.wav"
+        audio_path.write_bytes(b"audio")
+
+        decoder_cls = mocker.patch("mess.datasets.stores.AudioDecoder")
+        decoder = decoder_cls.return_value
+        decoder.get_samples_played_in_range.return_value = SimpleNamespace(
+            data=torch.ones(1, 500, dtype=torch.float32)
+        )
+
+        store = TorchCodecAudioStore(
+            index=index,
+            audio_path_resolver=lambda _record: audio_path,
+            sample_rate=100,
+            num_channels=1,
+        )
+
+        first = store.get("smd:track_a:00000")
+        second = store.get("smd:track_a:00001")
+
+        decoder_cls.assert_called_once_with(
+            str(audio_path),
+            sample_rate=100,
+            num_channels=1,
+        )
+        assert decoder.get_samples_played_in_range.call_count == 2
+        decoder.get_samples_played_in_range.assert_any_call(0.0, 5.0)
+        decoder.get_samples_played_in_range.assert_any_call(2.5, 7.5)
+        assert first.shape == (500,)
+        assert second.shape == (500,)
+
+    def test_audio_root_resolution_finds_track_audio(self, tmp_path, mocker):
+        embedding_path = tmp_path / "track_a.npy"
+        np.save(embedding_path, np.zeros((1, 13, 768), dtype=np.float32))
+        index = _index_for_file(str(embedding_path), n_segments=1)
+
+        audio_root = tmp_path / "audio"
+        nested = audio_root / "nested"
+        nested.mkdir(parents=True)
+        audio_path = nested / "track_a.wav"
+        audio_path.write_bytes(b"audio")
+
+        decoder_cls = mocker.patch("mess.datasets.stores.AudioDecoder")
+        decoder = decoder_cls.return_value
+        decoder.get_samples_played_in_range.return_value = SimpleNamespace(
+            data=torch.ones(1, 10, dtype=torch.float32)
+        )
+
+        store = TorchCodecAudioStore(index=index, audio_root=audio_root)
+        value = store.get("smd:track_a:00000")
+
+        decoder_cls.assert_called_once_with(
+            str(audio_path),
+            sample_rate=24000,
+            num_channels=1,
+        )
+        assert value.shape == (10,)
+
+    def test_missing_audio_raises_file_not_found(self, tmp_path):
+        embedding_path = tmp_path / "track_a.npy"
+        np.save(embedding_path, np.zeros((1, 13, 768), dtype=np.float32))
+        index = _index_for_file(str(embedding_path), n_segments=1)
+
+        store = TorchCodecAudioStore(index=index, audio_root=tmp_path / "audio")
+        with pytest.raises(FileNotFoundError, match="No audio file found"):
+            store.get("smd:track_a:00000")

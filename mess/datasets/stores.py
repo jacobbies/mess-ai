@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 import numpy as np
+from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]
 
 from .clip_index import ClipIndex, ClipRecord
 
@@ -57,6 +58,106 @@ class _IndexBackedStore:
             raise KeyError(f"Unknown clip_id: {clip_id}") from exc
 
 
+AudioPathResolver = Callable[[ClipRecord], str | Path]
+
+
+class TorchCodecAudioStore(_IndexBackedStore):
+    """Decode clip windows with TorchCodec using clip index time bounds."""
+
+    def __init__(
+        self,
+        index: ClipIndex,
+        audio_path_resolver: AudioPathResolver | None = None,
+        audio_root: str | Path | None = None,
+        audio_extensions: Sequence[str] = (".wav", ".flac", ".mp3", ".ogg", ".m4a"),
+        sample_rate: int = 24000,
+        num_channels: int = 1,
+    ) -> None:
+        super().__init__(index)
+        if audio_path_resolver is None and audio_root is None:
+            raise ValueError("Provide either audio_path_resolver or audio_root")
+
+        self.audio_path_resolver = audio_path_resolver
+        self.audio_root = Path(audio_root) if audio_root is not None else None
+        self.audio_extensions = tuple(
+            suffix if suffix.startswith(".") else f".{suffix}"
+            for suffix in audio_extensions
+        )
+        self.sample_rate = sample_rate
+        self.num_channels = num_channels
+
+        self._decoder_cache: dict[str, AudioDecoder] = {}
+        self._audio_path_cache: dict[str, Path] = {}
+
+    def _record_cache_key(self, record: ClipRecord) -> str:
+        return f"{record.dataset_id}:{record.track_id}"
+
+    def _resolve_audio_path(self, record: ClipRecord) -> Path:
+        if self.audio_path_resolver is not None:
+            candidate = Path(self.audio_path_resolver(record))
+            if not candidate.exists():
+                raise FileNotFoundError(f"Audio file not found: {candidate}")
+            return candidate
+
+        assert self.audio_root is not None
+        key = self._record_cache_key(record)
+        cached = self._audio_path_cache.get(key)
+        if cached is not None:
+            return cached
+
+        matches = [
+            path
+            for path in self.audio_root.rglob(f"{record.track_id}.*")
+            if path.is_file() and path.suffix.lower() in self.audio_extensions
+        ]
+        if not matches:
+            raise FileNotFoundError(
+                f"No audio file found for track_id={record.track_id} under {self.audio_root}"
+            )
+        if len(matches) > 1:
+            sample = ", ".join(str(path) for path in sorted(matches)[:3])
+            raise ValueError(
+                f"Multiple audio files found for track_id={record.track_id}: {sample}"
+            )
+
+        resolved = matches[0]
+        self._audio_path_cache[key] = resolved
+        return resolved
+
+    def _decoder_for_path(self, audio_path: Path) -> AudioDecoder:
+        key = str(audio_path)
+        decoder = self._decoder_cache.get(key)
+        if decoder is None:
+            decoder = AudioDecoder(
+                str(audio_path),
+                sample_rate=self.sample_rate,
+                num_channels=self.num_channels,
+            )
+            self._decoder_cache[key] = decoder
+        return decoder
+
+    def get(self, clip_id: str) -> np.ndarray:
+        record = self._resolve_record(clip_id)
+        if record.end_sec <= record.start_sec:
+            raise ValueError(
+                f"Invalid clip bounds for {clip_id}: start={record.start_sec}, end={record.end_sec}"
+            )
+
+        audio_path = self._resolve_audio_path(record)
+        decoder = self._decoder_for_path(audio_path)
+        samples = decoder.get_samples_played_in_range(record.start_sec, record.end_sec)
+        waveform = samples.data
+
+        if waveform.ndim != 2:
+            raise ValueError(
+                f"Expected decoded waveform shape [channels, samples], got {waveform.shape}"
+            )
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+
+        return np.asarray(waveform.squeeze(0).cpu().numpy(), dtype=np.float32)
+
+
 class NpySegmentEmbeddingStore(_IndexBackedStore):
     """Load clip embeddings from per-track numpy files referenced by clip index rows."""
 
@@ -75,7 +176,7 @@ class NpySegmentEmbeddingStore(_IndexBackedStore):
 
     def _load_file(self, path: str) -> np.ndarray:
         if path not in self._file_cache:
-            mmap_mode = "r" if self.mmap else None
+            mmap_mode: Literal["r"] | None = "r" if self.mmap else None
             self._file_cache[path] = np.load(path, mmap_mode=mmap_mode)
         return self._file_cache[path]
 

@@ -2053,14 +2053,16 @@ name = "mess-ai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "boto3" },
-    { name = "faiss-cpu" },
+    { name = "numpy" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+ml = [
     { name = "huggingface-hub" },
     { name = "librosa" },
     { name = "mlflow" },
-    { name = "numpy" },
     { name = "pretty-midi" },
-    { name = "pyyaml" },
     { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -2074,13 +2076,33 @@ dependencies = [
     { name = "tqdm" },
     { name = "transformers" },
 ]
-
-[package.optional-dependencies]
 notebooks = [
     { name = "ipywidgets" },
     { name = "jupyter" },
     { name = "matplotlib" },
     { name = "seaborn" },
+]
+probing = [
+    { name = "huggingface-hub" },
+    { name = "librosa" },
+    { name = "mlflow" },
+    { name = "pretty-midi" },
+    { name = "safetensors" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "soundfile" },
+    { name = "tokenizers" },
+    { name = "torch", version = "2.10.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "torchaudio", version = "2.10.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torchaudio", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "torchcodec" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+search = [
+    { name = "boto3" },
+    { name = "faiss-cpu" },
 ]
 
 [package.dev-dependencies]
@@ -2094,32 +2116,48 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", specifier = ">=1.34" },
-    { name = "faiss-cpu", specifier = ">=1.7" },
-    { name = "huggingface-hub" },
+    { name = "boto3", marker = "extra == 'search'", specifier = ">=1.34" },
+    { name = "faiss-cpu", marker = "extra == 'search'", specifier = ">=1.7" },
+    { name = "huggingface-hub", marker = "extra == 'ml'" },
+    { name = "huggingface-hub", marker = "extra == 'probing'" },
     { name = "ipywidgets", marker = "extra == 'notebooks'" },
     { name = "jupyter", marker = "extra == 'notebooks'" },
-    { name = "librosa", specifier = ">=0.10" },
+    { name = "librosa", marker = "extra == 'ml'", specifier = ">=0.10" },
+    { name = "librosa", marker = "extra == 'probing'", specifier = ">=0.10" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
-    { name = "mlflow", specifier = ">=2.10" },
+    { name = "mlflow", marker = "extra == 'ml'", specifier = ">=2.10" },
+    { name = "mlflow", marker = "extra == 'probing'", specifier = ">=2.10" },
     { name = "numpy", specifier = ">=1.26,<3" },
-    { name = "pretty-midi", specifier = ">=0.2.10" },
+    { name = "pretty-midi", marker = "extra == 'ml'", specifier = ">=0.2.10" },
+    { name = "pretty-midi", marker = "extra == 'probing'", specifier = ">=0.2.10" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "safetensors" },
-    { name = "scikit-learn", specifier = ">=1.4" },
-    { name = "scipy", specifier = ">=1.11" },
+    { name = "safetensors", marker = "extra == 'ml'" },
+    { name = "safetensors", marker = "extra == 'probing'" },
+    { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.4" },
+    { name = "scikit-learn", marker = "extra == 'probing'", specifier = ">=1.4" },
+    { name = "scipy", marker = "extra == 'ml'", specifier = ">=1.11" },
+    { name = "scipy", marker = "extra == 'probing'", specifier = ">=1.11" },
     { name = "seaborn", marker = "extra == 'notebooks'" },
-    { name = "soundfile" },
-    { name = "tokenizers" },
-    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.10.0" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torchaudio", marker = "sys_platform != 'linux'", specifier = "==2.10.0" },
-    { name = "torchaudio", marker = "sys_platform == 'linux'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torchcodec", specifier = "==0.10.0" },
-    { name = "tqdm", specifier = ">=4.66" },
-    { name = "transformers", specifier = "==4.38" },
+    { name = "soundfile", marker = "extra == 'ml'" },
+    { name = "soundfile", marker = "extra == 'probing'" },
+    { name = "tokenizers", marker = "extra == 'ml'" },
+    { name = "tokenizers", marker = "extra == 'probing'" },
+    { name = "torch", marker = "sys_platform == 'linux' and extra == 'ml'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform == 'linux' and extra == 'probing'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform != 'linux' and extra == 'ml'", specifier = "==2.10.0" },
+    { name = "torch", marker = "sys_platform != 'linux' and extra == 'probing'", specifier = "==2.10.0" },
+    { name = "torchaudio", marker = "sys_platform == 'linux' and extra == 'ml'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torchaudio", marker = "sys_platform == 'linux' and extra == 'probing'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torchaudio", marker = "sys_platform != 'linux' and extra == 'ml'", specifier = "==2.10.0" },
+    { name = "torchaudio", marker = "sys_platform != 'linux' and extra == 'probing'", specifier = "==2.10.0" },
+    { name = "torchcodec", marker = "extra == 'ml'", specifier = "==0.10.0" },
+    { name = "torchcodec", marker = "extra == 'probing'", specifier = "==0.10.0" },
+    { name = "tqdm", marker = "extra == 'ml'", specifier = ">=4.66" },
+    { name = "tqdm", marker = "extra == 'probing'", specifier = ">=4.66" },
+    { name = "transformers", marker = "extra == 'ml'", specifier = "==4.38" },
+    { name = "transformers", marker = "extra == 'probing'", specifier = "==4.38" },
 ]
-provides-extras = ["notebooks"]
+provides-extras = ["search", "probing", "ml", "notebooks"]
 
 [package.metadata.requires-dev]
 dev = [

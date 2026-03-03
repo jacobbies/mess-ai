@@ -74,7 +74,7 @@ def _require_sklearn() -> tuple[Any, ...]:
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "scikit-learn is required for layer probing. "
-            "Install MESS with full dependencies."
+            "Install with `mess-ai[probing]`."
         ) from exc
 
     return (

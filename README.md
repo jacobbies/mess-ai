@@ -30,7 +30,17 @@ Current pipeline:
 uv sync --group dev
 ```
 
-Default `mess-ai` includes full extraction/probing/search dependencies.
+Install search-only runtime dependencies:
+
+```bash
+uv sync --extra search
+```
+
+Install full extraction/probing/search dependencies:
+
+```bash
+uv sync --group dev --extra search --extra probing
+```
 
 Install from another repository (pinned Git commit):
 
@@ -42,6 +52,12 @@ Install latest `main` from another backend repo:
 
 ```bash
 pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git"
+```
+
+Install search-only from another repo:
+
+```bash
+pip install "mess-ai[search] @ git+https://github.com/jacobbies/mess-ai.git"
 ```
 
 Install lightweight search-only package from this repo:

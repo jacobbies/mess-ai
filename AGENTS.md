@@ -334,14 +334,17 @@ Design notes:
 
 Functions:
 - `load_features(features_dir, layer=None)`
+- `load_segment_features(features_dir, layer=None, segment_duration=5.0, overlap_ratio=0.5)`
 - `build_index(features)`
 - `find_similar(query_track, features, track_names, k=10, exclude_self=True)`
+- `search_by_clip(query_track, clip_start, features_dir, k=10, clip_duration=5.0, layer=None, ...)`
 - `search_by_aspect(query_track, aspect, features_dir, k=10)`
 - `search_by_aspects(query_track, aspect_weights, features_dir, k=10, min_r2=0.5, scale_by_r2=True)`
 
 Search mechanics:
 - Uses `faiss.IndexFlatIP`.
 - Applies L2 normalization for cosine similarity equivalence.
+- Supports clip-level retrieval over segment embeddings with timestamped results.
 - `search_by_aspect` imports `resolve_aspects` from probing package.
 - `search_by_aspects` resolves multiple aspects to layers and fuses normalized layer vectors via weighted combination.
 
@@ -409,7 +412,7 @@ Linting scope note:
 Reference: `tests/tests.md`
 
 Current suite:
-- 213 tests (as of 2026-03-03; update periodically)
+- 238 tests collected (as of 2026-03-05; update periodically)
 - fast runtime (~5s local target)
 - pytest markers: `unit`, `integration`, `slow`, `gpu`
 
@@ -438,7 +441,7 @@ Package + build:
 Core libs:
 - numpy, scipy, scikit-learn, pandas
 - torch 2.10.0, torchaudio 2.10.0, torchcodec 0.10.0
-- transformers >= 4.38, safetensors
+- transformers 4.38.0 (pinned), safetensors
 - librosa, soundfile, nnaudio
 - faiss-cpu
 - mlflow >= 2.10

@@ -80,11 +80,10 @@ _LAZY_MODULES = {"datasets", "extraction", "probing", "search", "training"}
 
 
 def _resolve_version() -> str:
-    for package_name in ("mess-ai", "mess-ai-search"):
-        try:
-            return version(package_name)
-        except PackageNotFoundError:
-            continue
+    try:
+        return version("mess-ai")
+    except PackageNotFoundError:
+        pass
     return "0.0.0+local"
 
 

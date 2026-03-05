@@ -1,80 +1,52 @@
 # MESS-AI
 
-MESS-AI is a Python library for music similarity research with MERT embeddings.
-It focuses on expressive, content-based retrieval: extract features, probe layer behavior, and run similarity search with FAISS.
+MESS-AI is an open-source Python library for expressive, content-based music similarity research using MERT embeddings.
 
-## What You Can Do
+Core workflow:
+
+`Audio WAV -> MERT features -> proxy targets -> layer discovery -> aspect-layer mapping -> FAISS retrieval`
+
+## Capabilities
 
 - Extract MERT features from local audio datasets
-- Build proxy musical targets and run layer discovery
-- Search by cosine similarity, single aspect, or weighted multi-aspect queries
-- Track extraction and probing runs with MLflow
+- Generate proxy musical targets and run layer discovery
+- Retrieve by cosine similarity, single aspect, weighted multi-aspect, or 5-second clip query
+- Build and publish FAISS artifacts for serving (local + S3)
+- Train retrieval projection-head baselines on precomputed clip embeddings
 
-## Project Scope
+## Scope
 
-This is a research-first repository. The core library is in `mess/`, with scripts in `scripts/` for common workflows.
-
-Current pipeline:
-
-`Audio WAV -> MERT features -> proxy targets -> layer discovery -> aspect-layer mapping -> FAISS search`
-
-## Requirements
-
-- Python 3.11+
-- `uv` for environment and dependency management
-- Local access to supported datasets (SMD and/or MAESTRO)
+This is a research-first repository. The core library lives in `mess/`, and workflow scripts live in `scripts/`.
 
 ## Installation
+
+Requirements:
+
+- Python 3.11+
+- `uv` for dependency and environment management
+- Do NOT use slim base install
+
+Local development (full stack: extraction, probing, search, training, tests):
 
 ```bash
 uv sync --group dev
 ```
 
-Install search-only runtime dependencies:
+Slim base install (DO NOT USE):
 
 ```bash
-uv sync --extra search
+pip install mess-ai
 ```
 
-Install full extraction/probing/search dependencies:
-
-```bash
-uv sync --group dev --extra search --extra probing
-```
-
-Install from another repository (pinned Git commit):
-
-```bash
-pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git@ac675b6"
-```
-
-Install latest `main` from another backend repo:
-
-```bash
-pip install "mess-ai @ git+https://github.com/jacobbies/mess-ai.git"
-```
-
-Install search-only from another repo:
+Install from GitHub (search runtime):
 
 ```bash
 pip install "mess-ai[search] @ git+https://github.com/jacobbies/mess-ai.git"
 ```
 
-Install lightweight search-only package from this repo:
-
-```bash
-pip install "mess-ai-search @ git+https://github.com/jacobbies/mess-ai.git#subdirectory=packages/mess-ai-search"
-```
-
-Run commands with `uv run` so the project environment is used:
-
-```bash
-uv run python --version
-```
-
 ## Data Layout
 
-Default data root is `data/`. Expected structure:
+Default data root is `data/`.
 
 ```text
 data/
@@ -92,39 +64,16 @@ data/
       aggregated/*.npy
   proxy_targets/
     *_targets.npz
+  indices/
+  metadata/
 ```
 
-## EC2 + S3 Deployment
+Feature shape contracts:
 
-`mess-ai` is designed to be imported as a dependency by a production music-recsys service (for example on EC2).
-In that flow, workers can pull audio/embeddings/index artifacts from S3 and publish newly built artifacts back to S3.
-
-Core artifact helpers:
-
-```python
-from mess.search import (
-    build_clip_artifact,
-    save_artifact,
-    upload_artifact_to_s3,
-    download_artifact_from_s3,
-    load_latest_from_s3,
-)
-```
-
-Artifact integrity model:
-- immutable `artifact_version_id` in manifest/pointer
-- checksum validation on load
-- `latest.json` pointer written only after upload validation succeeds
-
-CLI example for build + publish:
-
-```bash
-uv run python scripts/publish_faiss_index.py \
-  --dataset smd \
-  --kind clip \
-  --s3-bucket <BUCKET> \
-  --s3-prefix mess/faiss
-```
+- `raw`: `[num_segments, 13, time_steps, 768]`
+- `segments`: `[num_segments, 13, 768]`
+- `aggregated`: `[13, 768]`
+- `mess.search.load_features()` returns `(features, track_names)` where `features` is `(n_tracks, feature_dim)`
 
 ## Quickstart
 
@@ -134,39 +83,33 @@ uv run python scripts/publish_faiss_index.py \
 uv run python scripts/extract_features.py --dataset smd
 ```
 
-2. Run probing / layer discovery:
+2. Run layer discovery:
 
 ```bash
-uv run python scripts/run_probing.py
+uv run python scripts/run_probing.py --dataset smd
 ```
 
-3. Start MLflow UI (optional):
-
-```bash
-uv run mlflow ui
-```
-
-4. Run recommendations:
+3. Run recommendations:
 
 ```bash
 uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01"
 uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspect brightness
 uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspects "brightness=0.7,phrasing=0.3"
+uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --clip-start 30 --k 10
 ```
 
-Retrieval-augmented projection-head training (PR #1 baseline):
+Optional MLflow UI:
 
 ```bash
-uv run python scripts/train_retrieval_ssl.py \
-  --clip-index data/metadata/smd_clip_index.csv \
-  --output-dir data/indices/retrieval_ssl/smd_run01 \
-  --steps 500 --batch-size 64 --layer 0
+uv run mlflow ui
 ```
 
-## Python API Example
+## Python API
+
+Track-level retrieval:
 
 ```python
-from mess.search import find_similar, load_features, search_by_aspect, search_by_aspects
+from mess import find_similar, load_features, search_by_aspect, search_by_aspects
 
 features_dir = "data/embeddings/smd-emb/aggregated"
 features, track_names = load_features(features_dir)
@@ -181,34 +124,76 @@ weighted = search_by_aspects(
 )
 ```
 
-Clip-level search import path:
+Clip-level retrieval:
 
 ```python
-from mess.search import load_features, find_similar, search_by_clip
+from mess import search_by_clip
+
+results = search_by_clip(
+    query_track="Beethoven_Op027No1-01",
+    clip_start=30.0,
+    features_dir="data/embeddings/smd-emb/segments",
+    k=5,
+)
 ```
 
-## Repository Layout
+## Retrieval Training Baseline
 
-```text
-mess/
-  extraction/   # Audio loading, segmentation, and MERT feature extraction
-  probing/      # Proxy targets and layer discovery
-  search/       # FAISS search and aspect-aware retrieval
-  datasets/     # Dataset abstractions (SMD, MAESTRO)
-  training/     # Retrieval-augmented metric learning utilities
-scripts/
-  build_clip_index.py
-  extract_features.py
-  run_probing.py
-  demo_recommendations.py
-  publish_faiss_index.py
-  train_retrieval_ssl.py
-tests/
+1. Build clip index metadata from segment embeddings:
+
+```bash
+uv run python scripts/build_clip_index.py \
+  --dataset-id smd \
+  --segments-dir data/embeddings/smd-emb/segments \
+  --output data/metadata/smd_clip_index.csv \
+  --assign-splits
+```
+
+2. Train projection head:
+
+```bash
+uv run python scripts/train_retrieval_ssl.py \
+  --clip-index data/metadata/smd_clip_index.csv \
+  --output-dir data/indices/retrieval_ssl/smd_run01 \
+  --steps 500 --batch-size 64 --layer 0
+```
+
+## Production Artifact Workflow (EC2 + S3)
+
+`mess-ai` is built to be imported as a dependency in serving systems where data/artifacts are retrieved from S3 at runtime.
+
+Core helpers:
+
+```python
+from mess.search import (
+    build_clip_artifact,
+    save_artifact,
+    upload_artifact_to_s3,
+    download_artifact_from_s3,
+    load_latest_from_s3,
+)
+```
+
+Artifact integrity model:
+
+- immutable `artifact_version_id`
+- checksum validation for downloaded files
+- `latest.json` pointer updated only after upload validation succeeds
+
+Build + publish example:
+
+```bash
+uv run python scripts/publish_faiss_index.py \
+  --dataset smd \
+  --kind clip \
+  --s3-bucket <BUCKET> \
+  --s3-prefix mess/faiss
 ```
 
 ## Script Status
 
-Maintained:
+Maintained scripts:
+
 - `scripts/build_clip_index.py`
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
@@ -216,70 +201,71 @@ Maintained:
 - `scripts/publish_faiss_index.py`
 - `scripts/train_retrieval_ssl.py`
 
-Experimental / needs update:
+Research utility (not part of production path):
+
+- `scripts/evaluate_clip_retrieval.py`
+
+Experimental / needs refactor:
+
 - `scripts/build_layer_indices.py`
 - `scripts/demo_layer_search.py`
 - `scripts/evaluate_layer_indices.py`
 - `scripts/evaluate_similarity.py`
-- `scripts/evaluate_clip_retrieval.py` (research evaluation utility)
 
-See `scripts/_NEEDS_UPDATE.txt` for details.
+See `scripts/_NEEDS_UPDATE.txt` for outdated-script details.
 
-## Testing
+## Drift Corrections (Current Canonical Modules)
+
+When docs drift, treat implementation in `mess/` and tests in `tests/` as source of truth.
+
+Current canonical module locations:
+
+- Aspect registry + resolver: `mess/probing/discovery.py` (`ASPECT_REGISTRY`, `resolve_aspects`)
+- Primary search implementation: `mess/search/search.py`
+- Public search/runtime exports: `mess/search/__init__.py`
+
+Outdated references you may still see in older notes:
+
+- `mess/search/aspects.py`
+- `mess/search/layer_based_recommender.py`
+
+## Development Checks
+
+Tests:
 
 ```bash
 uv run pytest -v
 ```
 
-For focused runs:
-
-```bash
-uv run pytest tests/search/test_search.py -v
-uv run pytest tests/probing/test_discovery.py -v
-```
-
-## Linting and Type Checking
+Lint and format checks:
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
+```
+
+Type checking:
+
+```bash
 uv run mypy mess
 ```
 
-To auto-fix lint/import issues and format code:
+## Repository Layout
 
-```bash
-uv run ruff check . --fix
-uv run ruff format .
+```text
+mess/
+  extraction/
+  probing/
+  search/
+  datasets/
+  training/
+scripts/
+tests/
+docs/
 ```
 
 ## Notes
 
-- `scripts/_NEEDS_UPDATE.txt` lists older scripts that are currently outdated.
-- `AGENTS.md` is the implementation-oriented guide and source of operational conventions for this repo.
+- `AGENTS.md` contains implementation-oriented operational guidance for maintainers/agents.
 - `docs/PUBLIC_RELEASE_CHECKLIST.md` contains reproducible public-release audit steps.
-
-## Roadmap
-
-Current baseline: frozen MERT embeddings + cosine similarity via FAISS, with aspect-weighted search using empirically validated layer specializations.
-
-The core research direction is **learned expressive similarity** — moving beyond generic audio cosine toward retrieval geometry optimized for how music is *performed*, not just what notes are played.
-
-Near-term:
-1. Clip-index contract + recording-level leakage-safe splits for training/eval
-2. MIDI-derived expression targets (rubato, velocity dynamics, articulation) to improve proxy quality
-3. Baseline clip retrieval recall@K/MRR + small human audit set
-4. Retrieval-augmented metric learning (frozen MERT + projection head + EMA target + periodic FAISS refresh)
-
-Medium-term:
-5. Progressive geometry learning (diagonal weighting → linear projection → MLP)
-6. Cross-performance passage pairing via MIDI alignment for higher-quality positives
-7. Selective upper-layer MERT fine-tuning if head-only training plateaus
-
-Long-term:
-8. Content-invariant embedding learning conditioned on symbolic score
-9. Text-guided expressive retrieval as a secondary interface layer
-
-## License
-
-Add your chosen open-source license in a `LICENSE` file before publishing.
+- `LICENSE` contains project license terms.

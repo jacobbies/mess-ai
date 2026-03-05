@@ -470,6 +470,8 @@ Language/style:
 Code organization:
 - Put reusable logic in `mess/`.
 - Put user workflows and orchestration in `scripts/`.
+- Do not use top-level `notebooks/`; keep tracked notebooks in `scripts/` as `.ipynb`.
+- Name notebooks descriptively in snake_case (example: `scripts/clip_retrieval_error_analysis.ipynb`).
 - Keep notebook code exploratory, not library-critical.
 - Keep user-facing documentation in `docs/`; keep implementation-oriented references near module code when they primarily serve maintainers.
 

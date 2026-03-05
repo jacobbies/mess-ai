@@ -36,9 +36,11 @@ mess/
   config.py
   datasets/
     base.py
+    clip_index.py
     factory.py
-    smd.py
-    maestro.py
+    stores.py
+    torch_clip_dataset.py
+    torch_dataset.py
   extraction/
     __init__.py
     audio.py
@@ -51,13 +53,23 @@ mess/
     targets.py
     DISCOVERY_REFERENCE.md
   search/
+    __init__.py
     faiss_index.py
     search.py
+  training/
+    __init__.py
+    config.py
+    index.py
+    losses.py
+    mining.py
+    trainer.py
 scripts/
+  build_clip_index.py
   extract_features.py
   run_probing.py
   demo_recommendations.py
   publish_faiss_index.py
+  train_retrieval_ssl.py
   _NEEDS_UPDATE.txt
 tests/
   test_config.py
@@ -65,6 +77,7 @@ tests/
   extraction/
   probing/
   search/
+  training/
   tests.md
 ```
 
@@ -333,8 +346,24 @@ Search mechanics:
 - `search_by_aspects` resolves multiple aspects to layers and fuses normalized layer vectors via weighted combination.
 
 Operational note:
-- No `mess/search/__init__.py` currently.
-- Import directly from `mess.search.search`.
+- `mess/search/__init__.py` re-exports public search and artifact helpers.
+- Direct imports from `mess.search.search` remain valid for low-level usage.
+
+## 8.5) Training Stack (`mess/training`)
+
+Purpose:
+- Retrieval-augmented metric learning on precomputed clip embeddings.
+- Keep backbone frozen by default (projection-head-first workflow).
+
+Core modules:
+- `config.py` -> `RetrievalSSLConfig`
+- `mining.py` -> retrieval-neighbor positive/negative selection with leakage guards
+- `losses.py` -> multi-positive InfoNCE
+- `index.py` -> FAISS index build/rebuild utilities
+- `trainer.py` -> projection-head training loop with EMA target encoder + periodic index refresh
+
+CLI:
+- `scripts/train_retrieval_ssl.py`
 
 ## 9) Dataset Layer (`mess/datasets`)
 
@@ -359,9 +388,11 @@ Concrete datasets:
 ## 10) CLI Scripts And Status
 
 Stable scripts:
+- `scripts/build_clip_index.py`
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
 - `scripts/demo_recommendations.py`
+- `scripts/train_retrieval_ssl.py`
 
 Known outdated scripts (`scripts/_NEEDS_UPDATE.txt`):
 - `build_layer_indices.py`
@@ -378,18 +409,20 @@ Linting scope note:
 Reference: `tests/tests.md`
 
 Current suite:
-- 99 tests
-- fast runtime (~3.5s target)
+- 213 tests (as of 2026-03-03; update periodically)
+- fast runtime (~5s local target)
 - pytest markers: `unit`, `integration`, `slow`, `gpu`
 
 Hard testing principles:
 - Do not load real MERT model in unit tests.
 - Use mocks for heavy deps and model calls.
 - Use `tmp_path` for filesystem I/O.
+- Keep tool roles explicit: `pytest` executes tests, `mypy` checks types, `ruff` handles lint/style checks.
 - Keep tests mirrored by module domain:
   - `mess/extraction` -> `tests/extraction`
   - `mess/probing` -> `tests/probing`
   - `mess/search` -> `tests/search`
+  - `mess/training` -> `tests/training`
 
 Important fixture patterns:
 - Root fixtures in `tests/conftest.py`.
@@ -472,6 +505,12 @@ For search tasks:
 2. Validate query-track existence checks and result ordering.
 3. Test layer-specific loading paths when changing aspect search.
 
+For retrieval-training tasks:
+1. Keep clip split boundaries leakage-safe (recording-level).
+2. Validate mining guardrails (self-exclusion, near-time exclusion, recording constraints).
+3. Keep index refresh deterministic and reproducible from saved config/seed.
+4. Start with frozen-backbone projection head before considering MERT fine-tuning.
+
 ## 15) Operational Command Cheatsheet
 
 Environment:
@@ -514,6 +553,14 @@ uv run python scripts/demo_recommendations.py --track "<TRACK_ID>" --aspect brig
 uv run python scripts/demo_recommendations.py --track "<TRACK_ID>" --aspects "brightness=0.7,phrasing=0.3" --k 10
 ```
 
+Retrieval-augmented projection training:
+```bash
+uv run python scripts/train_retrieval_ssl.py \
+  --clip-index data/metadata/smd_clip_index.csv \
+  --output-dir data/indices/retrieval_ssl/smd_run01 \
+  --steps 500 --batch-size 64 --layer 0
+```
+
 MLflow:
 ```bash
 uv run mlflow ui
@@ -532,10 +579,10 @@ uv run mlflow ui
 
 ## 0) North-Star Product Goal
 
-MESS-AI should evolve toward a modern AI music streaming experience centered on expressive, content-based similarity search over MERT embeddings.
+MESS-AI should evolve toward an audio-first system for expressive, content-based similarity search over MERT-derived clip embeddings.
 
 North-star capability statement:
-MESS should allow a user to select a 5-second musical gesture and retrieve passages across performances and composers that match its expressive character, optionally constrained by interpretable aspects (rubato, dynamics, articulation, harmony), and eventually guided by natural-language descriptions of mood or structure.
+MESS should let a user select a 5-second gesture and retrieve matching passages across performances/composers by expressive character, with optional aspect controls (rubato, dynamics, articulation, harmony). Natural-language querying is a later interface layer, not a prerequisite for core capability.
 
 North-star query suite (the system should eventually dominate these):
 
@@ -545,26 +592,26 @@ North-star query suite (the system should eventually dominate these):
 - "Find a similar emotional build-up but more restrained."
 - "Find something like this but darker in tone."
 
-2. Aspect-constrained similarity
+2. Cross-performance comparison
+- "How does Argerich's phrasing differ from Zimerman here?"
+- "Compare the same timestamp across two performances."
+- "Who stretches this cadence the most?"
+
+3. Aspect-constrained similarity
 - "Find pieces similar in phrasing but not tempo."
 - "Similar rubato profile, ignore tempo differences."
 - "Same dynamic contour but different harmonic density."
 - "More legato than this passage."
 
-3. Cross-performance comparison
-- "How does Argerich's phrasing differ from Zimerman here?"
-- "Compare the same timestamp across two performances."
-- "Who stretches this cadence the most?"
-
-4. Text-guided expressive retrieval (future multimodal)
-- "Find something that feels like a rainy Paris evening."
-- "Melancholic but hopeful."
-- "Heroic but restrained."
-
-5. Structure-aware search
+4. Structure-aware search
 - "Find climaxes similar to this one."
 - "Find cadences with similar harmonic resolution."
 - "Find transitions that modulate similarly."
+
+5. Text-guided expressive retrieval (future multimodal)
+- "Find something that feels like a rainy Paris evening."
+- "Melancholic but hopeful."
+- "Heroic but restrained."
 
 6. Research/debug queries (internal quality gate)
 - "Which MERT layer best encodes articulation?"
@@ -576,13 +623,14 @@ North-star query suite (the system should eventually dominate these):
 
 Ordered experiment sequence toward learned expressive similarity:
 
-1. **MIDI-derived expression targets** — rubato, velocity dynamics, articulation from MIDI. Tests whether MERT layers encode expression separately from content. **(in progress)**
-2. **Human eval set** — 100-300 triplet judgments as external ground truth.
-3. **Baseline recall@K** — Measure cosine retrieval against both proxy and human labels.
-4. **Diagonal weighting** → **linear projection** → **MLP projection** — progressive geometry learning, each validated before advancing.
-5. **Two-stage reranking** — only if recall@K is high but ranking within top-K is poor.
+1. **Clip contract + leakage-safe splits** — clip index metadata (`clip_id`, `recording_id`, timestamps, split) and guardrails for train/val/test by recording.
+2. **MIDI-derived expression targets** — rubato, velocity dynamics, articulation from MIDI. Tests whether layers encode expression separately from content. **(in progress)**
+3. **Baseline quality gates** — Recall@K/MRR on clip retrieval plus a small human-eval set.
+4. **Retrieval-augmented metric learning (PR #1)** — frozen MERT clip vectors + projection head, EMA target encoder, periodic FAISS refresh, multi-positive InfoNCE from retrieved neighbors.
+5. **Progressive geometry learning** — diagonal weighting → linear projection → MLP projection, then selective upper-layer MERT unfreezing only if head-only training plateaus.
+6. **Two-stage reranking** — only if recall@K is high but ordering within top-K remains poor.
 
-Future MIDI workstreams (after expression targets validated):
+Future MIDI workstreams (after expression targets + clip training baseline):
 - Cross-performance passage pairing via MIDI alignment (contrastive training pairs)
 - Content-invariant embedding learning (conditioned on MIDI score)
 - Segment-level retrieval (5-second gesture search — the north-star primitive)
@@ -590,11 +638,13 @@ Future MIDI workstreams (after expression targets validated):
 Key decision rules:
 - If Recall@K is low → improve embedding geometry, not reranking
 - If proxy targets disagree with human eval → fix proxy quality first
+- If retrieval positives are noisy → improve mining/filtering rules before scaling model size
 - If linear projection saturates → try MLP, then consider reranking
 - Two-stage only justified when scorer is non-decomposable AND recall ceiling is high enough
 
 Strategic direction:
 - Prioritize embedding-first retrieval and expressive musical understanding over metadata-first or collaborative-filtering-first approaches.
+- Prioritize audio-to-audio expressive retrieval first; text guidance is an optional future layer.
 - MIDI data is an anchor for disentangling content from expression — use it as ground truth for what "expressive similarity" means, not just as another feature source.
 - Keep this repository research-first: robust dataset handling, extraction, probing, and search infrastructure in `mess/` that enables rapid experimentation.
 

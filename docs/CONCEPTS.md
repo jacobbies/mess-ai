@@ -2,7 +2,7 @@
 
 This document describes the concepts MESS uses today, based on the current code in `mess/`.
 
-Current productionized core is still track-level FAISS retrieval, with aspect-driven layer routing.
+Current productionized core supports both track-level and clip-level FAISS retrieval, with aspect-driven layer routing.
 
 ## 2) Representation Contracts
 
@@ -83,13 +83,14 @@ Notes:
 
 Implemented:
 - track-level similarity retrieval,
+- clip-level timestamp-aware retrieval,
 - probing-validated aspect routing,
 - weighted multi-aspect track retrieval.
+- retrieval-augmented projection-head training on clip embeddings (`mess/training`).
 
 Not implemented yet:
-- clip-level index and recommendation,
-- timestamp-aware retrieval outputs,
 - natural language query parser,
+- end-to-end audio fine-tuning loop with online clip decode in training,
 - learned reranker and personalization.
 
 ## 7) Practical Query Patterns (Current)
@@ -122,10 +123,10 @@ python scripts/demo_recommendations.py --track "<TRACK_ID>" --aspects "brightnes
 
 ## 9) What To Build Next
 
-If the goal is expressive 5-second recommendations, the next milestone is clip indexing:
-- index unit: clip (not full track),
-- schema: `track_id`, `clip_idx`, `start_sec`, `end_sec`, vector,
-- retrieval output includes timestamp spans.
+If the goal is expressive 5-second recommendations, the next milestone is retrieval-augmented metric learning:
+- index unit stays clip (already implemented),
+- positives/negatives come from clip-level retrieval with leakage-safe filters,
+- train a projection head (then optional partial encoder fine-tuning) so distance matches expressive similarity.
 
 That unlocks the core product primitive:
 "I like this 5-second moment, find more like it."

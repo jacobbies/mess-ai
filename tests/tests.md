@@ -39,9 +39,14 @@ tests/
 │   ├── test_segment_targets.py      # segment-level targets, expression slicing, segment probing
 │   ├── test_targets.py              # nested/case-insensitive discovery path
 │   └── test_targets_additional.py   # validation, MLflow workflow, fixed target computations
-└── search/
+├── search/
     ├── test_search.py       # track/clip/aspect FAISS search behavior
     └── test_faiss_index.py  # artifact persistence + S3 publishing helpers
+└── training/
+    ├── test_losses.py       # multi-positive InfoNCE behavior
+    ├── test_mining.py       # neighbor mining guardrails
+    ├── test_index.py        # FAISS index build/rebuild scheduling
+    └── test_trainer_smoke.py  # short retrieval-augmented training run
 ```
 
 Current count: run `uv run pytest --collect-only` to see the exact number of tests.

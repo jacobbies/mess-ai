@@ -154,6 +154,15 @@ uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --
 uv run python scripts/demo_recommendations.py --track "Beethoven_Op027No1-01" --aspects "brightness=0.7,phrasing=0.3"
 ```
 
+Retrieval-augmented projection-head training (PR #1 baseline):
+
+```bash
+uv run python scripts/train_retrieval_ssl.py \
+  --clip-index data/metadata/smd_clip_index.csv \
+  --output-dir data/indices/retrieval_ssl/smd_run01 \
+  --steps 500 --batch-size 64 --layer 0
+```
+
 ## Python API Example
 
 ```python
@@ -186,19 +195,26 @@ mess/
   probing/      # Proxy targets and layer discovery
   search/       # FAISS search and aspect-aware retrieval
   datasets/     # Dataset abstractions (SMD, MAESTRO)
+  training/     # Retrieval-augmented metric learning utilities
 scripts/
+  build_clip_index.py
   extract_features.py
   run_probing.py
   demo_recommendations.py
+  publish_faiss_index.py
+  train_retrieval_ssl.py
 tests/
 ```
 
 ## Script Status
 
 Maintained:
+- `scripts/build_clip_index.py`
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
 - `scripts/demo_recommendations.py`
+- `scripts/publish_faiss_index.py`
+- `scripts/train_retrieval_ssl.py`
 
 Experimental / needs update:
 - `scripts/build_layer_indices.py`
@@ -250,18 +266,19 @@ Current baseline: frozen MERT embeddings + cosine similarity via FAISS, with asp
 The core research direction is **learned expressive similarity** — moving beyond generic audio cosine toward retrieval geometry optimized for how music is *performed*, not just what notes are played.
 
 Near-term:
-1. MIDI-derived expression targets (rubato, velocity dynamics, articulation) to improve proxy target quality
-2. Human evaluation set for external ground truth
-3. Baseline recall@K measurement against proxy and human labels
+1. Clip-index contract + recording-level leakage-safe splits for training/eval
+2. MIDI-derived expression targets (rubato, velocity dynamics, articulation) to improve proxy quality
+3. Baseline clip retrieval recall@K/MRR + small human audit set
+4. Retrieval-augmented metric learning (frozen MERT + projection head + EMA target + periodic FAISS refresh)
 
 Medium-term:
-4. Learned embedding geometry (diagonal weighting → linear projection → MLP) trained with contrastive loss using proxy targets as teacher supervision
-5. Cross-performance passage pairing via MIDI alignment for contrastive training data
+5. Progressive geometry learning (diagonal weighting → linear projection → MLP)
+6. Cross-performance passage pairing via MIDI alignment for higher-quality positives
+7. Selective upper-layer MERT fine-tuning if head-only training plateaus
 
 Long-term:
-6. Segment-level 5-second gesture retrieval
-7. Content-invariant embedding learning conditioned on symbolic score
-8. Text-guided expressive retrieval
+8. Content-invariant embedding learning conditioned on symbolic score
+9. Text-guided expressive retrieval as a secondary interface layer
 
 ## License
 

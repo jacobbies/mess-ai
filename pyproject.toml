@@ -17,6 +17,7 @@ authors = [
 
 # Project dependencies
 dependencies = [
+    "nnaudio>=0.3.4",
     "numpy>=1.26,<3",
     "PyYAML>=6.0",
 ]
@@ -35,7 +36,7 @@ probing = [
     "torch==2.10.0",
     "torchaudio==2.10.0",
     "torchcodec==0.10.0",
-    "transformers==4.38",
+    "transformers==4.38.0",
     "safetensors",
     "soundfile",
     "huggingface-hub",
@@ -52,7 +53,7 @@ ml = [
     "torch==2.10.0",
     "torchaudio==2.10.0",
     "torchcodec==0.10.0",
-    "transformers==4.38",
+    "transformers==4.38.0",
     "safetensors",
     "soundfile",
     "huggingface-hub",
@@ -86,8 +87,6 @@ markers = [
 ]
 addopts = ["-ra", "--strict-markers", "--tb=short", "-q"]
 filterwarnings = [
-    "ignore::DeprecationWarning:transformers.*",
-    "ignore::FutureWarning:torch.*",
     "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
     "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
     "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
@@ -106,9 +105,12 @@ target-version = "py311"
 include = [
     "mess/**/*.py",
     "tests/**/*.py",
+    "scripts/build_clip_index.py",
+    "scripts/publish_faiss_index.py",
     "scripts/extract_features.py",
     "scripts/run_probing.py",
     "scripts/demo_recommendations.py",
+    "scripts/train_retrieval_ssl.py",
 ]
 exclude = [
     "data",

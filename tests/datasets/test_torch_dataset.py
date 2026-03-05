@@ -47,6 +47,7 @@ class TestGeneralTorchDataset:
         sample = dataset[0]
         assert sample["clip_id"] == "smd:track_a:00000"
         assert sample["meta"]["track_id"] == "track_a"
+        assert sample["meta"]["work_id"] == ""
         assert "embedding" not in sample
 
     def test_uses_resolvers(self):

@@ -7,8 +7,7 @@ import csv
 import numpy as np
 import pytest
 
-from mess.datasets.clip_index import ClipIndex, ClipRecord
-from scripts.build_clip_index import build_clip_records
+from mess.datasets.clip_index import ClipIndex, ClipRecord, build_clip_records
 
 pytestmark = pytest.mark.unit
 
@@ -19,6 +18,7 @@ def _make_records() -> list[ClipRecord]:
             clip_id="smd:a:00000",
             dataset_id="smd",
             recording_id="rec_a",
+            work_id="work_x",
             track_id="a",
             segment_idx=0,
             start_sec=0.0,
@@ -30,6 +30,7 @@ def _make_records() -> list[ClipRecord]:
             clip_id="smd:a:00001",
             dataset_id="smd",
             recording_id="rec_a",
+            work_id="work_x",
             track_id="a",
             segment_idx=1,
             start_sec=2.5,
@@ -41,6 +42,7 @@ def _make_records() -> list[ClipRecord]:
             clip_id="smd:b:00000",
             dataset_id="smd",
             recording_id="rec_b",
+            work_id="work_y",
             track_id="b",
             segment_idx=0,
             start_sec=0.0,
@@ -62,6 +64,12 @@ class TestClipIndex:
         filtered = index.filter(track_ids={"a"})
         assert len(filtered) == 2
         assert {row.track_id for row in filtered} == {"a"}
+
+    def test_filter_by_work_id(self):
+        index = ClipIndex(_make_records())
+        filtered = index.filter(work_ids={"work_y"})
+        assert len(filtered) == 1
+        assert filtered[0].track_id == "b"
 
     def test_assign_recording_splits_is_recording_consistent(self):
         index = ClipIndex(_make_records())
@@ -118,6 +126,18 @@ class TestBuildClipRecords:
         )
         assert records[0].recording_id == "recording_1"
 
+    def test_build_clip_records_uses_work_map(self, tmp_path):
+        segments_dir = tmp_path / "segments"
+        segments_dir.mkdir()
+        np.save(segments_dir / "track_a.npy", np.zeros((1, 13, 768), dtype=np.float32))
+
+        records = build_clip_records(
+            "smd",
+            segments_dir,
+            work_map={"track_a": "work_1"},
+        )
+        assert records[0].work_id == "work_1"
+
 
 class TestIndexCsvManual:
     def test_from_csv_with_manual_rows(self, tmp_path):
@@ -155,3 +175,4 @@ class TestIndexCsvManual:
         index = ClipIndex.from_csv(path)
         assert len(index) == 1
         assert index[0].split == "train"
+        assert index[0].work_id == ""

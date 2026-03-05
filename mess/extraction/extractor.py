@@ -24,7 +24,7 @@ from transformers.models.auto.modeling_auto import AutoModel
 from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor
 
 from ..config import mess_config
-from .audio import load_audio, segment_audio, validate_audio_file
+from .audio import load_audio_segments, validate_audio_file
 from .storage import features_exist, load_selected_features, save_features
 
 
@@ -109,8 +109,8 @@ class FeatureExtractor:
         if not segments:
             raise ValueError("No audio segments available for extraction")
 
-        raw_batches = [] if include_raw else None
-        segment_batches = [] if include_segments else None
+        raw_batches: list[np.ndarray] = []
+        segment_batches: list[np.ndarray] = []
 
         aggregated_sum: np.ndarray | None = None
         total_segments = 0
@@ -419,15 +419,12 @@ class FeatureExtractor:
 
             logging.info(f"Extracting features for: {audio_path}")
 
-            # Preprocess audio (delegated to audio.py)
-            audio = load_audio(audio_path, target_sr=self.target_sample_rate)
-
-            # Segment audio (delegated to audio.py)
-            segments = segment_audio(
-                audio,
+            # Decode + segment audio (delegated to audio.py)
+            segments = load_audio_segments(
+                audio_path,
+                target_sr=self.target_sample_rate,
                 segment_duration=self.segment_duration,
                 overlap_ratio=self.overlap_ratio,
-                sample_rate=self.target_sample_rate
             )
 
             # Extract features in memory-safe batches.

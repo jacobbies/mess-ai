@@ -6,7 +6,12 @@ import numpy as np
 import pytest
 import torch
 
-from mess.extraction.audio import load_audio, segment_audio, validate_audio_file
+from mess.extraction.audio import (
+    load_audio,
+    load_audio_segments,
+    segment_audio,
+    validate_audio_file,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -156,3 +161,49 @@ class TestValidateAudioFile:
 
         assert result["valid"] is False
         assert any("corrupted" in err.lower() for err in result["errors"])
+
+
+class TestLoadAudioSegments:
+    def test_torchcodec_range_decode_builds_overlapping_segments(self, mocker):
+        metadata = SimpleNamespace(duration_seconds=10.0)
+        decoder = mocker.Mock(metadata=metadata)
+
+        def _fake_range(start_sec, end_sec):
+            n = int(round((end_sec - start_sec) * 10))
+            return SimpleNamespace(data=torch.ones(1, n, dtype=torch.float32))
+
+        decoder.get_samples_played_in_range.side_effect = _fake_range
+        decoder_cls = mocker.patch("mess.extraction.audio.AudioDecoder", return_value=decoder)
+
+        segments = load_audio_segments(
+            "fake.wav",
+            target_sr=10,
+            segment_duration=5.0,
+            overlap_ratio=0.5,
+        )
+
+        decoder_cls.assert_called_once_with("fake.wav", sample_rate=10, num_channels=1)
+        assert decoder.get_samples_played_in_range.call_count == 3
+        decoder.get_samples_played_in_range.assert_any_call(0.0, 5.0)
+        decoder.get_samples_played_in_range.assert_any_call(2.5, 7.5)
+        decoder.get_samples_played_in_range.assert_any_call(5.0, 10.0)
+        assert [len(segment) for segment in segments] == [50, 50, 50]
+
+    def test_fallback_uses_load_audio_and_segment_audio(self, monkeypatch):
+        monkeypatch.setattr("mess.extraction.audio.AudioDecoder", None)
+        monkeypatch.setattr(
+            "mess.extraction.audio.load_audio",
+            lambda *_a, **_k: np.ones(12, dtype=np.float32),
+        )
+        monkeypatch.setattr(
+            "mess.extraction.audio.segment_audio",
+            lambda *_a, **_k: [np.ones(4, dtype=np.float32), np.ones(4, dtype=np.float32)],
+        )
+
+        segments = load_audio_segments(
+            "fake.wav",
+            target_sr=24000,
+            segment_duration=5.0,
+            overlap_ratio=0.5,
+        )
+        assert len(segments) == 2

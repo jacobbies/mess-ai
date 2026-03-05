@@ -76,10 +76,7 @@ class TestPreprocessWorker:
             "mess.extraction.pipeline.features_exist_for_types", lambda *_a, **_k: False
         )
         monkeypatch.setattr(
-            "mess.extraction.pipeline.load_audio", lambda *_a, **_k: np.ones(24, dtype=np.float32)
-        )
-        monkeypatch.setattr(
-            "mess.extraction.pipeline.segment_audio",
+            "mess.extraction.pipeline.load_audio_segments",
             lambda *_a, **_k: [np.ones((13, 768), dtype=np.float32)],
         )
 
@@ -103,7 +100,7 @@ class TestPreprocessWorker:
             "mess.extraction.pipeline.features_exist_for_types", lambda *_a, **_k: False
         )
         monkeypatch.setattr(
-            "mess.extraction.pipeline.load_audio",
+            "mess.extraction.pipeline.load_audio_segments",
             lambda *_a, **_k: (_ for _ in ()).throw(ValueError("bad audio")),
         )
 

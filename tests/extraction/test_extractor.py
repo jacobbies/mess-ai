@@ -166,9 +166,9 @@ class TestExtractTrackFeatures:
 
         def fail_if_called(*_args, **_kwargs):
             audio_called["n"] += 1
-            raise AssertionError("load_audio should not be called for cached features")
+            raise AssertionError("load_audio_segments should not be called for cached features")
 
-        monkeypatch.setattr("mess.extraction.extractor.load_audio", fail_if_called)
+        monkeypatch.setattr("mess.extraction.extractor.load_audio_segments", fail_if_called)
 
         result = extractor.extract_track_features(
             audio_path=tmp_path / "track.wav",

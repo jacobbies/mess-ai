@@ -8,6 +8,7 @@ Public API:
     save_features        - Save features to disk as .npy files
     features_exist       - Check if features already exist
     load_audio           - Load and preprocess audio (no model needed)
+    load_audio_segments  - Decode overlapping segments from an audio file
     segment_audio        - Segment audio into overlapping windows
     validate_audio_file  - Validate audio file before extraction
 """
@@ -24,6 +25,7 @@ __all__ = [
     "save_features",
     "features_exist",
     "load_audio",
+    "load_audio_segments",
     "segment_audio",
     "validate_audio_file",
 ]
@@ -35,6 +37,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "save_features": (".storage", "save_features"),
     "features_exist": (".storage", "features_exist"),
     "load_audio": (".audio", "load_audio"),
+    "load_audio_segments": (".audio", "load_audio_segments"),
     "segment_audio": (".audio", "segment_audio"),
     "validate_audio_file": (".audio", "validate_audio_file"),
 }

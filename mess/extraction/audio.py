@@ -101,6 +101,98 @@ def segment_audio(
     return segments
 
 
+def _segment_bounds(
+    total_samples: int,
+    segment_samples: int,
+    hop_samples: int,
+) -> list[tuple[int, int]]:
+    """Compute sample bounds matching segment_audio overlap behavior."""
+    bounds: list[tuple[int, int]] = []
+    for start in range(0, total_samples - segment_samples + 1, hop_samples):
+        bounds.append((start, start + segment_samples))
+
+    if total_samples % hop_samples != 0:
+        if total_samples >= segment_samples:
+            start = total_samples - segment_samples
+            end = total_samples
+        else:
+            start = 0
+            end = total_samples
+        if not bounds or bounds[-1] != (start, end):
+            bounds.append((start, end))
+
+    return bounds
+
+
+def _match_expected_length(samples: np.ndarray, expected_len: int) -> np.ndarray:
+    """Pad/trim decoded samples so segment lengths are deterministic."""
+    if expected_len <= 0:
+        return samples
+    current_len = len(samples)
+    if current_len == expected_len:
+        return samples
+    if current_len > expected_len:
+        return samples[:expected_len]
+    return np.pad(samples, (0, expected_len - current_len), mode="constant")
+
+
+def load_audio_segments(
+    audio_path: str | Path,
+    target_sr: int = 24000,
+    segment_duration: float = 5.0,
+    overlap_ratio: float = 0.5,
+) -> list[np.ndarray]:
+    """
+    Decode overlapping audio segments.
+
+    Uses TorchCodec range decoding when available to avoid full-track arrays.
+    Falls back to full decode + in-memory segmentation otherwise.
+    """
+    segment_samples = int(segment_duration * target_sr)
+    hop_samples = int(segment_samples * (1 - overlap_ratio))
+    if segment_samples <= 0 or hop_samples <= 0:
+        raise ValueError("segment_duration and overlap_ratio must produce positive sample counts")
+
+    if AudioDecoder is None:
+        full_audio = load_audio(audio_path, target_sr=target_sr)
+        return segment_audio(
+            full_audio,
+            segment_duration=segment_duration,
+            overlap_ratio=overlap_ratio,
+            sample_rate=target_sr,
+        )
+
+    decoder = AudioDecoder(
+        str(audio_path),
+        sample_rate=target_sr,
+        num_channels=1,
+    )
+    metadata = decoder.metadata
+    duration = getattr(metadata, "duration_seconds", None)
+    if duration is None:
+        duration = getattr(metadata, "duration_seconds_from_header", None)
+    if duration is None or duration <= 0:
+        return []
+
+    total_samples = int(round(float(duration) * target_sr))
+    if total_samples <= 0:
+        return []
+
+    bounds = _segment_bounds(total_samples, segment_samples, hop_samples)
+    segments: list[np.ndarray] = []
+
+    for start_sample, end_sample in bounds:
+        start_sec = start_sample / target_sr
+        end_sec = end_sample / target_sr
+        decoded = decoder.get_samples_played_in_range(start_sec, end_sec).data
+        segment = np.asarray(decoded.squeeze(0).cpu().numpy(), dtype=np.float32)
+        expected_len = end_sample - start_sample
+        segment = _match_expected_length(segment, expected_len)
+        segments.append(segment)
+
+    return segments
+
+
 def validate_audio_file(
     audio_path: str | Path,
     check_corruption: bool = True,

@@ -21,7 +21,7 @@ from typing import Any
 
 from tqdm import tqdm
 
-from .audio import load_audio, segment_audio
+from .audio import load_audio_segments
 from .storage import features_exist_for_types, save_features
 
 
@@ -338,12 +338,11 @@ class ExtractionPipeline:
                 }
 
             # CPU-bound preprocessing (thread-safe)
-            audio = load_audio(audio_path, target_sr=self.extractor.target_sample_rate)
-            segments = segment_audio(
-                audio,
+            segments = load_audio_segments(
+                audio_path,
+                target_sr=self.extractor.target_sample_rate,
                 segment_duration=self.extractor.segment_duration,
                 overlap_ratio=self.extractor.overlap_ratio,
-                sample_rate=self.extractor.target_sample_rate
             )
 
             return {

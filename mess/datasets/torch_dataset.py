@@ -18,6 +18,7 @@ def default_meta_builder(record: ClipRecord) -> dict[str, Any]:
     return {
         "dataset_id": record.dataset_id,
         "recording_id": record.recording_id,
+        "work_id": record.work_id,
         "track_id": record.track_id,
         "segment_idx": record.segment_idx,
         "start_sec": record.start_sec,

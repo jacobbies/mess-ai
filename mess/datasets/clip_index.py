@@ -5,9 +5,11 @@ from __future__ import annotations
 import csv
 import random
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+
+import numpy as np
 
 REQUIRED_COLUMNS = (
     "clip_id",
@@ -20,6 +22,9 @@ REQUIRED_COLUMNS = (
     "split",
     "embedding_path",
 )
+
+OPTIONAL_COLUMNS = ("work_id",)
+CSV_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,7 @@ class ClipRecord:
     end_sec: float
     split: str
     embedding_path: str
+    work_id: str = ""
 
     @classmethod
     def from_row(cls, row: dict[str, str]) -> ClipRecord:
@@ -52,7 +58,67 @@ class ClipRecord:
             end_sec=float(row["end_sec"]),
             split=str(row["split"]),
             embedding_path=str(row["embedding_path"]),
+            work_id=str(row.get("work_id", "")),
         )
+
+
+def hop_seconds(segment_duration: float, overlap_ratio: float) -> float:
+    """Compute clip hop length in seconds from segment settings."""
+    hop = segment_duration * (1.0 - overlap_ratio)
+    if hop <= 0:
+        raise ValueError("segment_duration and overlap_ratio must produce hop > 0")
+    return hop
+
+
+def build_clip_records(
+    dataset_id: str,
+    segments_dir: Path,
+    segment_duration: float = 5.0,
+    overlap_ratio: float = 0.5,
+    default_split: str = "unspecified",
+    recording_map: Mapping[str, str] | None = None,
+    work_map: Mapping[str, str] | None = None,
+) -> list[ClipRecord]:
+    """Build clip records from per-track segment embedding files."""
+    if not segments_dir.exists():
+        raise FileNotFoundError(f"Segment directory not found: {segments_dir}")
+
+    recording_lookup = recording_map or {}
+    work_lookup = work_map or {}
+    hop = hop_seconds(segment_duration, overlap_ratio)
+
+    records: list[ClipRecord] = []
+    for embedding_file in sorted(segments_dir.glob("*.npy")):
+        track_id = embedding_file.stem
+        recording_id = recording_lookup.get(track_id, track_id)
+        work_id = work_lookup.get(track_id, "")
+        raw = np.load(embedding_file, mmap_mode="r")
+        if raw.ndim != 3 or raw.shape[1] != 13:
+            raise ValueError(
+                "Expected segment embeddings shape [segments, 13, embedding_dim], "
+                f"got {raw.shape}"
+            )
+        n_segments = int(raw.shape[0])
+
+        for segment_idx in range(n_segments):
+            start_sec = segment_idx * hop
+            end_sec = start_sec + segment_duration
+            clip_id = f"{dataset_id}:{track_id}:{segment_idx:05d}"
+            records.append(
+                ClipRecord(
+                    clip_id=clip_id,
+                    dataset_id=dataset_id,
+                    recording_id=recording_id,
+                    track_id=track_id,
+                    segment_idx=segment_idx,
+                    start_sec=start_sec,
+                    end_sec=end_sec,
+                    split=default_split,
+                    embedding_path=str(embedding_file),
+                    work_id=work_id,
+                )
+            )
+    return records
 
 
 class ClipIndex:
@@ -85,7 +151,7 @@ class ClipIndex:
     def from_parquet(cls, path: str | Path) -> ClipIndex:
         """Load clip index from parquet if pandas is available."""
         try:
-            import pandas as pd
+            import pandas as pd  # type: ignore[import-untyped]
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
                 "Reading parquet clip index requires pandas. "
@@ -127,6 +193,7 @@ class ClipIndex:
         splits: set[str] | None = None,
         dataset_ids: set[str] | None = None,
         recording_ids: set[str] | None = None,
+        work_ids: set[str] | None = None,
         track_ids: set[str] | None = None,
         clip_ids: set[str] | None = None,
     ) -> ClipIndex:
@@ -138,6 +205,8 @@ class ClipIndex:
             if dataset_ids is not None and record.dataset_id not in dataset_ids:
                 continue
             if recording_ids is not None and record.recording_id not in recording_ids:
+                continue
+            if work_ids is not None and record.work_id not in work_ids:
                 continue
             if track_ids is not None and record.track_id not in track_ids:
                 continue
@@ -197,6 +266,7 @@ class ClipIndex:
                     end_sec=record.end_sec,
                     split=split,
                     embedding_path=record.embedding_path,
+                    work_id=record.work_id,
                 )
             )
         return ClipIndex(updated)
@@ -206,7 +276,7 @@ class ClipIndex:
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with output_path.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(REQUIRED_COLUMNS))
+            writer = csv.DictWriter(handle, fieldnames=list(CSV_COLUMNS))
             writer.writeheader()
             for record in self._records:
                 writer.writerow(
@@ -220,5 +290,6 @@ class ClipIndex:
                         "end_sec": f"{record.end_sec:.6f}",
                         "split": record.split,
                         "embedding_path": record.embedding_path,
+                        "work_id": record.work_id,
                     }
                 )

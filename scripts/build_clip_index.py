@@ -7,83 +7,44 @@ import argparse
 import csv
 from pathlib import Path
 
-import numpy as np
-
-from mess.datasets.clip_index import ClipIndex, ClipRecord
+from mess.datasets.clip_index import ClipIndex, build_clip_records
 
 
-def _hop_seconds(segment_duration: float, overlap_ratio: float) -> float:
-    hop = segment_duration * (1.0 - overlap_ratio)
-    if hop <= 0:
-        raise ValueError("segment_duration and overlap_ratio must produce hop > 0")
-    return hop
-
-
-def _load_recording_map(
+def _load_id_maps(
     manifest_path: Path | None,
     track_col: str,
     recording_col: str,
-) -> dict[str, str]:
+    work_col: str,
+) -> tuple[dict[str, str], dict[str, str]]:
     if manifest_path is None:
-        return {}
+        return {}, {}
     with manifest_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
         rows = list(reader)
 
-    mapping: dict[str, str] = {}
+    recording_map: dict[str, str] = {}
+    work_map: dict[str, str] = {}
     for row in rows:
         track_id = row.get(track_col)
-        recording_id = row.get(recording_col)
-        if not track_id or not recording_id:
+        if track_id is None:
             continue
-        mapping[str(track_id)] = str(recording_id)
-    return mapping
+        track_id_str = str(track_id).strip()
+        if not track_id_str:
+            continue
 
+        recording_id = row.get(recording_col)
+        if recording_id is not None:
+            recording_id_str = str(recording_id).strip()
+            if recording_id_str:
+                recording_map[track_id_str] = recording_id_str
 
-def build_clip_records(
-    dataset_id: str,
-    segments_dir: Path,
-    segment_duration: float = 5.0,
-    overlap_ratio: float = 0.5,
-    default_split: str = "unspecified",
-    recording_map: dict[str, str] | None = None,
-) -> list[ClipRecord]:
-    """Build clip records from per-track segment embedding files."""
-    if not segments_dir.exists():
-        raise FileNotFoundError(f"Segment directory not found: {segments_dir}")
+        work_id = row.get(work_col)
+        if work_id is not None:
+            work_id_str = str(work_id).strip()
+            if work_id_str:
+                work_map[track_id_str] = work_id_str
 
-    recording_lookup = recording_map or {}
-    hop = _hop_seconds(segment_duration, overlap_ratio)
-
-    records: list[ClipRecord] = []
-    for embedding_file in sorted(segments_dir.glob("*.npy")):
-        track_id = embedding_file.stem
-        recording_id = recording_lookup.get(track_id, track_id)
-        raw = np.load(embedding_file, mmap_mode="r")
-        if raw.ndim < 3:
-            raise ValueError(
-                f"Expected segment embeddings shape [segments, 13, ...], got {raw.shape}"
-            )
-        n_segments = int(raw.shape[0])
-
-        for segment_idx in range(n_segments):
-            start_sec = segment_idx * hop
-            end_sec = start_sec + segment_duration
-            clip_id = f"{dataset_id}:{track_id}:{segment_idx:05d}"
-            records.append(
-                ClipRecord(
-                    clip_id=clip_id,
-                    dataset_id=dataset_id,
-                    recording_id=recording_id,
-                    track_id=track_id,
-                    segment_idx=segment_idx,
-                    start_sec=start_sec,
-                    end_sec=end_sec,
-                    split=default_split,
-                    embedding_path=str(embedding_file),
-                )
-            )
-    return records
+    return recording_map, work_map
 
 
 def main(
@@ -100,11 +61,13 @@ def main(
     manifest_path: Path | None,
     manifest_track_col: str,
     manifest_recording_col: str,
+    manifest_work_col: str,
 ) -> int:
-    recording_map = _load_recording_map(
+    recording_map, work_map = _load_id_maps(
         manifest_path=manifest_path,
         track_col=manifest_track_col,
         recording_col=manifest_recording_col,
+        work_col=manifest_work_col,
     )
 
     records = build_clip_records(
@@ -113,6 +76,7 @@ def main(
         segment_duration=segment_duration,
         overlap_ratio=overlap_ratio,
         recording_map=recording_map,
+        work_map=work_map,
     )
     index = ClipIndex(records)
 
@@ -181,6 +145,11 @@ if __name__ == "__main__":
         default="recording_id",
         help="Recording ID column name in recording manifest",
     )
+    parser.add_argument(
+        "--manifest-work-col",
+        default="work_id",
+        help="Optional work ID column name in recording manifest",
+    )
     args = parser.parse_args()
 
     raise SystemExit(
@@ -198,5 +167,6 @@ if __name__ == "__main__":
             manifest_path=args.recording_manifest,
             manifest_track_col=args.manifest_track_col,
             manifest_recording_col=args.manifest_recording_col,
+            manifest_work_col=args.manifest_work_col,
         )
     )

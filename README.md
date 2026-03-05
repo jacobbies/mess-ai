@@ -24,18 +24,23 @@ Requirements:
 
 - Python 3.11+
 - `uv` for dependency and environment management
-- Do NOT use slim base install
 
-Local development (full stack: extraction, probing, search, training, tests):
+Use case 1: local development (full stack: extraction, probing, search, training, tests):
 
 ```bash
 uv sync --group dev
 ```
 
-Slim base install (DO NOT USE):
+Use case 2: slim runtime install:
 
 ```bash
 pip install mess-ai
+```
+
+Runtime search install (EC2/service path):
+
+```bash
+pip install "mess-ai[search]"
 ```
 
 Install from GitHub (search runtime):

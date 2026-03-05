@@ -93,9 +93,10 @@ def build_clip_records(
         recording_id = recording_lookup.get(track_id, track_id)
         work_id = work_lookup.get(track_id, "")
         raw = np.load(embedding_file, mmap_mode="r")
-        if raw.ndim < 3:
+        if raw.ndim != 3 or raw.shape[1] != 13:
             raise ValueError(
-                f"Expected segment embeddings shape [segments, 13, ...], got {raw.shape}"
+                "Expected segment embeddings shape [segments, 13, embedding_dim], "
+                f"got {raw.shape}"
             )
         n_segments = int(raw.shape[0])
 

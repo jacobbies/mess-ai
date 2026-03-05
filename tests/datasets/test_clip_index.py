@@ -138,6 +138,14 @@ class TestBuildClipRecords:
         )
         assert records[0].work_id == "work_1"
 
+    def test_build_clip_records_rejects_invalid_segment_shape(self, tmp_path):
+        segments_dir = tmp_path / "segments"
+        segments_dir.mkdir()
+        np.save(segments_dir / "track_bad.npy", np.zeros((2, 12, 768), dtype=np.float32))
+
+        with pytest.raises(ValueError, match="Expected segment embeddings shape"):
+            build_clip_records("smd", segments_dir)
+
 
 class TestIndexCsvManual:
     def test_from_csv_with_manual_rows(self, tmp_path):

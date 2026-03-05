@@ -26,17 +26,23 @@ def _load_id_maps(
     work_map: dict[str, str] = {}
     for row in rows:
         track_id = row.get(track_col)
-        if not track_id:
+        if track_id is None:
             continue
-        track_id_str = str(track_id)
+        track_id_str = str(track_id).strip()
+        if not track_id_str:
+            continue
 
         recording_id = row.get(recording_col)
-        if recording_id:
-            recording_map[track_id_str] = str(recording_id)
+        if recording_id is not None:
+            recording_id_str = str(recording_id).strip()
+            if recording_id_str:
+                recording_map[track_id_str] = recording_id_str
 
         work_id = row.get(work_col)
-        if work_id:
-            work_map[track_id_str] = str(work_id)
+        if work_id is not None:
+            work_id_str = str(work_id).strip()
+            if work_id_str:
+                work_map[track_id_str] = work_id_str
 
     return recording_map, work_map
 

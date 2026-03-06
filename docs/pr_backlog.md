@@ -30,7 +30,7 @@ These are baseline assumptions for all PRs below.
 - [x] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium, PR #12)
 - [x] PR-03: Expand index types with FAISS `index_factory` (Large, PR #13)
 - [x] PR-04: Export projection retriever artifact from training outputs (Large, PR #14)
-- [ ] PR-05: Add retrieval evaluation harness + JSON reports (Medium)
+- [x] PR-05: Add retrieval evaluation harness + JSON reports (Medium, PR #15)
 - [ ] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large)
 - [ ] PR-07: Unify probing audio decode with extraction decode utilities (Medium)
 - [ ] PR-08: Resolve/retire scripts listed in `_NEEDS_UPDATE` (Small-Medium)
@@ -122,9 +122,17 @@ small synthetic dataset, short training, export artifact, load artifact, smoke-s
 
 ## PR-05: Retrieval Evaluation Harness + JSON Reports
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr05-retrieval-evaluation-harness`  
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/15  
 Primary objective: make cosine baseline vs learned retriever comparisons reproducible and reportable.
+
+Shipped scope:
+
+1. Added `mess/evaluation/metrics.py` with deterministic Recall@K, MRR, and nDCG aggregation helpers.
+2. Added `scripts/evaluate_retrieval.py` to evaluate baseline vectors and optional projection-checkpoint vectors in one JSON report.
+3. Added support for both `clip_to_clip` and `clip_to_track` protocol blocks.
+4. Added unit tests for metric calculations and a script smoke test over synthetic clip-index data.
 
 ### Current Evidence
 
@@ -288,3 +296,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `e7794a4`
 - Date: 2026-03-05
 - Notes: Added projection-head artifact export path in training script with optional S3 publish and end-to-end export tests.
+
+- `PR-ID`: PR-05
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/15
+- Branch: `pr05-retrieval-evaluation-harness`
+- Commit SHA: `87446d9`
+- Date: 2026-03-05
+- Notes: Added reusable retrieval metric module plus JSON evaluation script covering clip-to-clip and clip-to-track protocols.

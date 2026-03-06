@@ -31,7 +31,7 @@ These are baseline assumptions for all PRs below.
 - [x] PR-03: Expand index types with FAISS `index_factory` (Large, PR #13)
 - [x] PR-04: Export projection retriever artifact from training outputs (Large, PR #14)
 - [x] PR-05: Add retrieval evaluation harness + JSON reports (Medium, PR #15)
-- [ ] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large)
+- [x] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large, PR #16)
 - [ ] PR-07: Unify probing audio decode with extraction decode utilities (Medium)
 - [ ] PR-08: Resolve/retire scripts listed in `_NEEDS_UPDATE` (Small-Medium)
 
@@ -166,9 +166,17 @@ loads clip index + vectors, evaluates baseline and optionally projection-head ou
 
 ## PR-06: Hybrid Semantic + Keyword Metadata Search
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr06-hybrid-search`  
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/16  
 Primary objective: add metadata-aware retrieval controls without replacing embedding similarity.
+
+Shipped scope:
+
+1. Added `mess/search/hybrid.py` with semantic cosine scoring fused with keyword matching and optional hard metadata filters.
+2. Added `DatasetMetadataTable.text_for_track(...)` for lightweight metadata text extraction.
+3. Extended `scripts/demo_recommendations.py` with `--keyword`, repeatable `--filter key=value`, and semantic/keyword weighting controls.
+4. Added deterministic hybrid search tests plus metadata-table text helper coverage.
 
 ### Current Evidence
 
@@ -303,3 +311,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `87446d9`
 - Date: 2026-03-05
 - Notes: Added reusable retrieval metric module plus JSON evaluation script covering clip-to-clip and clip-to-track protocols.
+
+- `PR-ID`: PR-06
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/16
+- Branch: `pr06-hybrid-search`
+- Commit SHA: `bd544f7`
+- Date: 2026-03-05
+- Notes: Added additive hybrid semantic+metadata retrieval path and demo script controls for keyword boosting and hard filters.

@@ -65,6 +65,7 @@ class ArtifactManifest:
     ntotal: int
     created_at_utc: str
     model_name: str
+    default_nprobe: int | None = None
 
 
 @dataclass(frozen=True)
@@ -80,12 +81,14 @@ class FAISSArtifact:
         self,
         query_vectors: np.ndarray,
         k: int,
+        nprobe: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Run cosine-similarity search on the artifact's FAISS index."""
         if k <= 0:
             raise ValueError("k must be > 0")
 
         faiss = _require_faiss()
+        _set_index_nprobe(self.index, nprobe)
         query = np.asarray(query_vectors, dtype=np.float32)
         if query.ndim == 1:
             query = query.reshape(1, -1)
@@ -185,6 +188,10 @@ def _validate_manifest_payload(payload: dict[str, Any]) -> None:
     if not isinstance(artifact_version_id, str) or not artifact_version_id.startswith("vid-"):
         raise ArtifactValidationError("Manifest has invalid artifact_version_id format.")
 
+    default_nprobe = payload.get("default_nprobe")
+    if default_nprobe is not None and (not isinstance(default_nprobe, int) or default_nprobe <= 0):
+        raise ArtifactValidationError("Manifest default_nprobe must be a positive integer.")
+
 
 def _validate_checksums(root: Path, checksums: dict[str, dict[str, Any]]) -> None:
     for name, info in checksums.items():
@@ -211,6 +218,7 @@ def _build_faiss_index(
     vectors: np.ndarray,
     index_type: IndexType = "flatip",
     nlist: int = 256,
+    nprobe: int | None = None,
 ) -> Any:
     faiss = _require_faiss()
     arr = np.asarray(vectors, dtype=np.float32)
@@ -221,6 +229,8 @@ def _build_faiss_index(
     dim = arr.shape[1]
 
     if index_type == "flatip":
+        if nprobe is not None:
+            raise ValueError("nprobe is only valid for ivfflat indexes")
         index = faiss.IndexFlatIP(dim)
         index.add(arr)
         return index
@@ -232,9 +242,20 @@ def _build_faiss_index(
         index = faiss.IndexIVFFlat(quantizer, dim, int(nlist), faiss.METRIC_INNER_PRODUCT)
         index.train(arr)
         index.add(arr)
+        _set_index_nprobe(index, nprobe)
         return index
 
     raise ValueError(f"Unsupported index_type '{index_type}'")
+
+
+def _set_index_nprobe(index: Any, nprobe: int | None) -> None:
+    if nprobe is None:
+        return
+    if nprobe <= 0:
+        raise ValueError("nprobe must be > 0")
+    if not hasattr(index, "nprobe"):
+        raise ValueError("nprobe is only supported for IVF indexes")
+    index.nprobe = int(nprobe)
 
 
 def _serialize_clip_locations(locations: list[ClipLocation]) -> list[dict[str, Any]]:
@@ -290,10 +311,11 @@ def build_track_artifact(
     index_type: IndexType = "flatip",
     model_name: str = "m-a-p/MERT-v1-95M",
     nlist: int = 256,
+    nprobe: int | None = None,
 ) -> FAISSArtifact:
     """Build track-level FAISS artifact from aggregated features."""
     vectors, track_names = load_features(str(features_dir), layer=layer)
-    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist)
+    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist, nprobe=nprobe)
 
     manifest = ArtifactManifest(
         schema_version=SCHEMA_VERSION,
@@ -309,6 +331,7 @@ def build_track_artifact(
         ntotal=int(vectors.shape[0]),
         created_at_utc=_now_utc_iso(),
         model_name=model_name,
+        default_nprobe=nprobe if index_type == "ivfflat" else None,
     )
     return FAISSArtifact(index=index, manifest=manifest, track_names=track_names)
 
@@ -324,6 +347,7 @@ def build_clip_artifact(
     index_type: IndexType = "flatip",
     model_name: str = "m-a-p/MERT-v1-95M",
     nlist: int = 1024,
+    nprobe: int | None = None,
 ) -> FAISSArtifact:
     """Build clip-level FAISS artifact from segment features."""
     vectors, clip_locations = load_segment_features(
@@ -332,7 +356,7 @@ def build_clip_artifact(
         segment_duration=segment_duration,
         overlap_ratio=overlap_ratio,
     )
-    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist)
+    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist, nprobe=nprobe)
 
     manifest = ArtifactManifest(
         schema_version=SCHEMA_VERSION,
@@ -348,6 +372,7 @@ def build_clip_artifact(
         ntotal=int(vectors.shape[0]),
         created_at_utc=_now_utc_iso(),
         model_name=model_name,
+        default_nprobe=nprobe if index_type == "ivfflat" else None,
     )
     return FAISSArtifact(index=index, manifest=manifest, clip_locations=clip_locations)
 
@@ -424,6 +449,10 @@ def load_artifact(artifact_dir: str | Path) -> FAISSArtifact:
         raise ArtifactValidationError(
             f"Index ntotal mismatch: manifest {manifest.ntotal}, index {index.ntotal}"
         )
+    try:
+        _set_index_nprobe(index, manifest.default_nprobe)
+    except ValueError as exc:
+        raise ArtifactValidationError(f"Manifest/index nprobe mismatch: {exc}") from exc
 
     track_names: list[str] | None = None
     clip_locations: list[ClipLocation] | None = None

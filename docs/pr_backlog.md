@@ -32,7 +32,7 @@ These are baseline assumptions for all PRs below.
 - [x] PR-04: Export projection retriever artifact from training outputs (Large, PR #14)
 - [x] PR-05: Add retrieval evaluation harness + JSON reports (Medium, PR #15)
 - [x] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large, PR #16)
-- [ ] PR-07: Unify probing audio decode with extraction decode utilities (Medium)
+- [x] PR-07: Unify probing audio decode with extraction decode utilities (Medium, PR #17)
 - [ ] PR-08: Resolve/retire scripts listed in `_NEEDS_UPDATE` (Small-Medium)
 
 ## PR-01: Fix Extras + CI + Install/Error Consistency
@@ -209,9 +209,17 @@ combine vector score with lightweight token-match score and optional hard filter
 
 ## PR-07: Unify Probing Decode Path with Extraction Utilities
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr07-probing-audio-decode-unification`  
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/17  
 Primary objective: ensure probing target generation uses the same decode/segmentation contracts as extraction.
+
+Shipped scope:
+
+1. Replaced direct torchaudio decode in `mess/probing/targets.py` with canonical `mess.extraction.audio.load_audio(...)`.
+2. Replaced manual decode + segmentation in `mess/probing/segment_targets.py` with `mess.extraction.audio.load_audio_segments(...)`.
+3. Added delegation tests to verify probing paths use extraction audio utilities.
+4. Preserved segment-boundary behavior and fallback coverage through existing extraction-audio tests.
 
 ### Current Evidence
 
@@ -318,3 +326,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `bd544f7`
 - Date: 2026-03-05
 - Notes: Added additive hybrid semantic+metadata retrieval path and demo script controls for keyword boosting and hard filters.
+
+- `PR-ID`: PR-07
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/17
+- Branch: `pr07-probing-audio-decode-unification`
+- Commit SHA: `b30e149`
+- Date: 2026-03-05
+- Notes: Unified probing decode with extraction audio helpers and added delegation tests for both track-level and segment-level target generation.

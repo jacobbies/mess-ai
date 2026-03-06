@@ -43,7 +43,7 @@ def main() -> int:
     parser.add_argument("--layer", type=int, default=None, help="Optional layer 0-12")
     parser.add_argument(
         "--index-type",
-        choices=["flatip", "ivfflat"],
+        choices=["flatip", "ivfflat", "factory"],
         default="flatip",
         help="FAISS index type (default: flatip)",
     )
@@ -52,6 +52,11 @@ def main() -> int:
         type=int,
         default=None,
         help="IVF coarse centroid count (only used for ivfflat)",
+    )
+    parser.add_argument(
+        "--factory-string",
+        default=None,
+        help="FAISS index_factory string (required when --index-type=factory)",
     )
     parser.add_argument(
         "--artifact-root",
@@ -93,6 +98,12 @@ def main() -> int:
     if not features_dir.exists():
         print(f"Error: features directory not found: {features_dir}")
         return 1
+    if args.index_type == "factory" and not args.factory_string:
+        print("Error: --factory-string is required when --index-type=factory")
+        return 1
+    if args.index_type != "factory" and args.factory_string:
+        print("Error: --factory-string is only valid when --index-type=factory")
+        return 1
 
     if args.kind == "clip":
         artifact = build_clip_artifact(
@@ -105,6 +116,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 1024,
+            factory_string=args.factory_string,
         )
     else:
         artifact = build_track_artifact(
@@ -115,6 +127,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 256,
+            factory_string=args.factory_string,
         )
 
     saved_dir = save_artifact(artifact, artifact_root=args.artifact_root)

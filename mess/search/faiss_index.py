@@ -19,7 +19,7 @@ import numpy as np
 from .search import ClipLocation, load_features, load_segment_features
 
 IndexKind = Literal["track", "clip"]
-IndexType = Literal["flatip", "ivfflat"]
+IndexType = Literal["flatip", "ivfflat", "factory"]
 SCHEMA_VERSION = 2
 REQUIRED_MANIFEST_FIELDS = {
     "schema_version",
@@ -65,6 +65,9 @@ class ArtifactManifest:
     ntotal: int
     created_at_utc: str
     model_name: str
+    nlist: int | None = None
+    factory_string: str | None = None
+    train_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -185,6 +188,14 @@ def _validate_manifest_payload(payload: dict[str, Any]) -> None:
     if not isinstance(artifact_version_id, str) or not artifact_version_id.startswith("vid-"):
         raise ArtifactValidationError("Manifest has invalid artifact_version_id format.")
 
+    index_type = payload["index_type"]
+    factory_string = payload.get("factory_string")
+    if index_type == "factory":
+        if not isinstance(factory_string, str) or not factory_string.strip():
+            raise ArtifactValidationError(
+                "Factory index manifest requires non-empty factory_string."
+            )
+
 
 def _validate_checksums(root: Path, checksums: dict[str, dict[str, Any]]) -> None:
     for name, info in checksums.items():
@@ -211,6 +222,7 @@ def _build_faiss_index(
     vectors: np.ndarray,
     index_type: IndexType = "flatip",
     nlist: int = 256,
+    factory_string: str | None = None,
 ) -> Any:
     faiss = _require_faiss()
     arr = np.asarray(vectors, dtype=np.float32)
@@ -221,16 +233,29 @@ def _build_faiss_index(
     dim = arr.shape[1]
 
     if index_type == "flatip":
+        if factory_string is not None:
+            raise ValueError("factory_string is only valid when index_type='factory'")
         index = faiss.IndexFlatIP(dim)
         index.add(arr)
         return index
 
     if index_type == "ivfflat":
+        if factory_string is not None:
+            raise ValueError("factory_string is only valid when index_type='factory'")
         if nlist <= 0:
             raise ValueError("nlist must be > 0 for ivfflat")
         quantizer = faiss.IndexFlatIP(dim)
         index = faiss.IndexIVFFlat(quantizer, dim, int(nlist), faiss.METRIC_INNER_PRODUCT)
         index.train(arr)
+        index.add(arr)
+        return index
+
+    if index_type == "factory":
+        if factory_string is None or not factory_string.strip():
+            raise ValueError("factory_string is required when index_type='factory'")
+        index = faiss.index_factory(dim, factory_string, faiss.METRIC_INNER_PRODUCT)
+        if not index.is_trained:
+            index.train(arr)
         index.add(arr)
         return index
 
@@ -290,10 +315,16 @@ def build_track_artifact(
     index_type: IndexType = "flatip",
     model_name: str = "m-a-p/MERT-v1-95M",
     nlist: int = 256,
+    factory_string: str | None = None,
 ) -> FAISSArtifact:
     """Build track-level FAISS artifact from aggregated features."""
     vectors, track_names = load_features(str(features_dir), layer=layer)
-    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist)
+    index = _build_faiss_index(
+        vectors,
+        index_type=index_type,
+        nlist=nlist,
+        factory_string=factory_string,
+    )
 
     manifest = ArtifactManifest(
         schema_version=SCHEMA_VERSION,
@@ -309,6 +340,9 @@ def build_track_artifact(
         ntotal=int(vectors.shape[0]),
         created_at_utc=_now_utc_iso(),
         model_name=model_name,
+        nlist=nlist if index_type == "ivfflat" else None,
+        factory_string=factory_string if index_type == "factory" else None,
+        train_size=int(vectors.shape[0]) if index_type in {"ivfflat", "factory"} else None,
     )
     return FAISSArtifact(index=index, manifest=manifest, track_names=track_names)
 
@@ -324,6 +358,7 @@ def build_clip_artifact(
     index_type: IndexType = "flatip",
     model_name: str = "m-a-p/MERT-v1-95M",
     nlist: int = 1024,
+    factory_string: str | None = None,
 ) -> FAISSArtifact:
     """Build clip-level FAISS artifact from segment features."""
     vectors, clip_locations = load_segment_features(
@@ -332,7 +367,12 @@ def build_clip_artifact(
         segment_duration=segment_duration,
         overlap_ratio=overlap_ratio,
     )
-    index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist)
+    index = _build_faiss_index(
+        vectors,
+        index_type=index_type,
+        nlist=nlist,
+        factory_string=factory_string,
+    )
 
     manifest = ArtifactManifest(
         schema_version=SCHEMA_VERSION,
@@ -348,6 +388,9 @@ def build_clip_artifact(
         ntotal=int(vectors.shape[0]),
         created_at_utc=_now_utc_iso(),
         model_name=model_name,
+        nlist=nlist if index_type == "ivfflat" else None,
+        factory_string=factory_string if index_type == "factory" else None,
+        train_size=int(vectors.shape[0]) if index_type in {"ivfflat", "factory"} else None,
     )
     return FAISSArtifact(index=index, manifest=manifest, clip_locations=clip_locations)
 

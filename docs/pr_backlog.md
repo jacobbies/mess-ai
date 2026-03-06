@@ -33,7 +33,7 @@ These are baseline assumptions for all PRs below.
 - [x] PR-05: Add retrieval evaluation harness + JSON reports (Medium, PR #15)
 - [x] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large, PR #16)
 - [x] PR-07: Unify probing audio decode with extraction decode utilities (Medium, PR #17)
-- [ ] PR-08: Resolve/retire scripts listed in `_NEEDS_UPDATE` (Small-Medium)
+- [x] PR-08: Resolve/retire scripts listed in `_NEEDS_UPDATE` (Small-Medium, PR #18)
 
 ## PR-01: Fix Extras + CI + Install/Error Consistency
 
@@ -251,9 +251,17 @@ Shipped scope:
 
 ## PR-08: Resolve or Retire `_NEEDS_UPDATE` Scripts
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr08-needs-update-script-resolution`  
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/18  
 Primary objective: remove confusion around unsupported scripts and align docs with maintained entry points.
+
+Shipped scope:
+
+1. Retired and removed four outdated scripts that depended on removed search/index APIs.
+2. Updated `README.md` script-status section to clearly mark retired scripts as removed.
+3. Updated `scripts/_NEEDS_UPDATE.txt` to resolved status with replacement guidance.
+4. Added `tests/test_script_status_contract.py` to keep maintained/retired script status aligned with the repository state.
 
 ### Current Evidence
 
@@ -333,3 +341,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `b30e149`
 - Date: 2026-03-05
 - Notes: Unified probing decode with extraction audio helpers and added delegation tests for both track-level and segment-level target generation.
+
+- `PR-ID`: PR-08
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/18
+- Branch: `pr08-needs-update-script-resolution`
+- Commit SHA: `a1b2687`
+- Date: 2026-03-05
+- Notes: Retired obsolete scripts, updated docs/script-status ledger, and added a status consistency test.

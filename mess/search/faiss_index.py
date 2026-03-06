@@ -251,7 +251,7 @@ def _build_faiss_index(
         return index
 
     if index_type == "factory":
-        if factory_string is None or not factory_string.strip():
+        if not factory_string or not factory_string.strip():
             raise ValueError("factory_string is required when index_type='factory'")
         index = faiss.index_factory(dim, factory_string, faiss.METRIC_INNER_PRODUCT)
         if not index.is_trained:

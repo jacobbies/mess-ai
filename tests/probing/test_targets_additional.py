@@ -102,6 +102,59 @@ class TestFixedTargetComputations:
         assert c == 0.0
         assert d == 0.0
 
+    def test_generate_all_targets_uses_extraction_audio_loader(self, monkeypatch):
+        target_gen = MusicalAspectTargets(sample_rate=16000)
+        fake_audio = np.linspace(-1.0, 1.0, 16000, dtype=np.float32)
+        observed: dict[str, object] = {}
+
+        def fake_load_audio(path, target_sr):
+            observed["path"] = path
+            observed["target_sr"] = target_sr
+            return fake_audio
+
+        monkeypatch.setattr("mess.probing.targets.load_audio", fake_load_audio)
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_rhythm_targets",
+            lambda audio: {"tempo": np.array([float(np.mean(audio))], dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_harmony_targets",
+            lambda audio: {"key_profile": np.array([float(np.std(audio))], dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_timbre_targets",
+            lambda audio: {"spectral_centroid": np.array([float(np.max(audio))], dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_articulation_targets",
+            lambda audio: {"attack_slopes": np.array([float(np.min(audio))], dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_dynamics_targets",
+            lambda audio: {"dynamic_range": np.array([float(np.ptp(audio))], dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            target_gen,
+            "_generate_phrasing_targets",
+            lambda audio: {"num_phrases": np.array([float(len(audio))], dtype=np.float32)},
+        )
+
+        targets = target_gen.generate_all_targets("dummy.wav")
+        assert observed == {"path": "dummy.wav", "target_sr": 16000}
+        assert set(targets) == {
+            "rhythm",
+            "harmony",
+            "timbre",
+            "articulation",
+            "dynamics",
+            "phrasing",
+        }
+
 
 def _complete_scalar_targets() -> dict[str, dict[str, np.ndarray]]:
     targets: dict[str, dict[str, np.ndarray]] = {}

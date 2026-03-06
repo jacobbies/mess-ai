@@ -12,7 +12,9 @@ import argparse
 import logging
 from pathlib import Path
 
+from mess.datasets.metadata_table import DatasetMetadataTable
 from mess.probing import resolve_aspects
+from mess.search.hybrid import hybrid_search
 from mess.search.search import (
     find_similar,
     load_features,
@@ -68,6 +70,26 @@ def _parse_aspect_weights(raw: str) -> dict[str, float]:
     return weights
 
 
+def _parse_filters(raw_filters: list[str] | None) -> dict[str, str]:
+    if not raw_filters:
+        return {}
+    parsed: dict[str, str] = {}
+    for entry in raw_filters:
+        if "=" not in entry:
+            raise ValueError(
+                f"Invalid filter '{entry}'. Use format key=value."
+            )
+        key, value = entry.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or not value:
+            raise ValueError(
+                f"Invalid filter '{entry}'. Both key and value are required."
+            )
+        parsed[key] = value
+    return parsed
+
+
 def main(
     track_name: str,
     aspect: str | None = None,
@@ -75,6 +97,11 @@ def main(
     clip_start: float | None = None,
     clip_duration: float = 5.0,
     dedupe_window: float = 5.0,
+    keyword: str | None = None,
+    filters: list[str] | None = None,
+    semantic_weight: float = 1.0,
+    keyword_weight: float = 0.3,
+    metadata_path: str | None = None,
     k: int = 5,
     dataset: str = "smd",
 ):
@@ -91,6 +118,17 @@ def main(
         return 1
     if clip_start is not None and (aspect or aspects):
         print("Error: clip mode cannot be combined with --aspect/--aspects.")
+        return 1
+    if (keyword or filters) and (clip_start is not None or aspect or aspects):
+        print(
+            "Error: --keyword/--filter are currently supported only for baseline semantic mode."
+        )
+        return 1
+    if semantic_weight < 0:
+        print("Error: --semantic-weight must be >= 0.")
+        return 1
+    if keyword_weight < 0:
+        print("Error: --keyword-weight must be >= 0.")
         return 1
 
     if clip_start is not None:
@@ -183,12 +221,55 @@ def main(
             print(f"Error: Features not found at {aggregated_features_dir}")
             print("Run feature extraction first: python scripts/extract_features.py")
             return 1
-        # Search using all features
-        print("Using: All features (aggregated)")
-        print(f"{'='*70}\n")
+        try:
+            metadata_filters = _parse_filters(filters)
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 1
+        if keyword or metadata_filters:
+            metadata_file = (
+                Path(metadata_path)
+                if metadata_path
+                else Path(f"data/metadata/{dataset}_metadata.csv")
+            )
+            if not metadata_file.exists():
+                print(
+                    "Error: metadata file not found for hybrid search: "
+                    f"{metadata_file}"
+                )
+                return 1
 
-        features, track_names = load_features(str(aggregated_features_dir))
-        results = find_similar(track_name, features, track_names, k=k)
+            features, track_names = load_features(str(aggregated_features_dir))
+            metadata = DatasetMetadataTable.from_path(metadata_file)
+            results = hybrid_search(
+                query_track=track_name,
+                features=features,
+                track_names=track_names,
+                metadata=metadata,
+                keyword=keyword,
+                filters=metadata_filters,
+                semantic_weight=semantic_weight,
+                keyword_weight=keyword_weight,
+                k=k,
+            )
+            print("Using: Hybrid semantic + metadata search")
+            if keyword:
+                print(f"Keyword: {keyword}")
+            if metadata_filters:
+                filter_text = ", ".join(
+                    f"{key}={value}" for key, value in metadata_filters.items()
+                )
+                print(f"Filters: {filter_text}")
+            print(
+                f"Weights: semantic={semantic_weight:.2f}, "
+                f"keyword={keyword_weight:.2f}"
+            )
+        else:
+            # Search using all features
+            print("Using: All features (aggregated)")
+            features, track_names = load_features(str(aggregated_features_dir))
+            results = find_similar(track_name, features, track_names, k=k)
+        print(f"{'='*70}\n")
 
     # Display results
     for i, (rec_track, similarity) in enumerate(results, 1):
@@ -223,6 +304,35 @@ if __name__ == "__main__":
         default=5.0,
         help="Per-track timestamp dedupe window in seconds for clip results",
     )
+    parser.add_argument(
+        "--keyword",
+        help="Optional metadata keyword boost (hybrid mode, baseline semantic search only)",
+    )
+    parser.add_argument(
+        "--filter",
+        action="append",
+        default=[],
+        help="Metadata hard filter key=value (repeatable, hybrid mode only)",
+    )
+    parser.add_argument(
+        "--semantic-weight",
+        type=float,
+        default=1.0,
+        help="Semantic score weight in hybrid mode",
+    )
+    parser.add_argument(
+        "--keyword-weight",
+        type=float,
+        default=0.3,
+        help="Keyword score weight in hybrid mode",
+    )
+    parser.add_argument(
+        "--metadata-path",
+        help=(
+            "Metadata CSV/parquet path for hybrid mode "
+            "(default: data/metadata/<dataset>_metadata.csv)"
+        ),
+    )
     parser.add_argument("--k", type=int, default=5, help="Number of recommendations")
     parser.add_argument("--dataset", default="smd", help="Dataset name (default: smd)")
     args = parser.parse_args()
@@ -234,6 +344,11 @@ if __name__ == "__main__":
             clip_start=args.clip_start,
             clip_duration=args.clip_duration,
             dedupe_window=args.dedupe_window,
+            keyword=args.keyword,
+            filters=args.filter,
+            semantic_weight=args.semantic_weight,
+            keyword_weight=args.keyword_weight,
+            metadata_path=args.metadata_path,
             k=args.k,
             dataset=args.dataset,
         )

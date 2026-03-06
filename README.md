@@ -210,14 +210,14 @@ Research utility (not part of production path):
 
 - `scripts/evaluate_clip_retrieval.py`
 
-Experimental / needs refactor:
+Retired scripts (removed from repository):
 
-- `scripts/build_layer_indices.py`
-- `scripts/demo_layer_search.py`
-- `scripts/evaluate_layer_indices.py`
-- `scripts/evaluate_similarity.py`
+- `build_layer_indices.py`
+- `demo_layer_search.py`
+- `evaluate_layer_indices.py`
+- `evaluate_similarity.py`
 
-See `scripts/_NEEDS_UPDATE.txt` for outdated-script details.
+See `scripts/_NEEDS_UPDATE.txt` for retirement details and replacement guidance.
 
 ## Drift Corrections (Current Canonical Modules)
 

@@ -29,7 +29,7 @@ These are baseline assumptions for all PRs below.
 - [x] PR-01: Fix extras + CI + install/error-message consistency (Small-Medium, PR #11)
 - [x] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium, PR #12)
 - [x] PR-03: Expand index types with FAISS `index_factory` (Large, PR #13)
-- [ ] PR-04: Export projection retriever artifact from training outputs (Large)
+- [x] PR-04: Export projection retriever artifact from training outputs (Large, PR #14)
 - [ ] PR-05: Add retrieval evaluation harness + JSON reports (Medium)
 - [ ] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large)
 - [ ] PR-07: Unify probing audio decode with extraction decode utilities (Medium)
@@ -77,9 +77,17 @@ Shipped scope:
 
 ## PR-04: Export Projection Retriever Artifact from Training
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr04-training-artifact-export`  
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/14  
 Primary objective: connect retrieval training output to deployable FAISS artifact packaging.
+
+Shipped scope:
+
+1. Added `mess/training/export.py` to project clip vectors with trained projection-head weights and emit clip artifact payloads.
+2. Extended `scripts/train_retrieval_ssl.py` with optional `--export-artifact` flow, configurable artifact build options, and optional S3 upload.
+3. Added in-memory clip artifact builder (`build_clip_artifact_from_vectors`) to reuse artifact persistence contracts without intermediate files.
+4. Added integration coverage for training-to-artifact export plus training package export surface updates.
 
 ### Current Evidence
 
@@ -273,3 +281,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `bce7bc0`
 - Date: 2026-03-05
 - Notes: Added index_factory mode, factory metadata, and HNSW/IVFPQ/OPQ+IVF tests.
+
+- `PR-ID`: PR-04
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/14
+- Branch: `pr04-training-artifact-export`
+- Commit SHA: `e7794a4`
+- Date: 2026-03-05
+- Notes: Added projection-head artifact export path in training script with optional S3 publish and end-to-end export tests.

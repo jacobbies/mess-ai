@@ -28,7 +28,7 @@ These are baseline assumptions for all PRs below.
 
 - [x] PR-01: Fix extras + CI + install/error-message consistency (Small-Medium, PR #11)
 - [x] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium, PR #12)
-- [ ] PR-03: Expand index types with FAISS `index_factory` (Large)
+- [x] PR-03: Expand index types with FAISS `index_factory` (Large, PR #13)
 - [ ] PR-04: Export projection retriever artifact from training outputs (Large)
 - [ ] PR-05: Add retrieval evaluation harness + JSON reports (Medium)
 - [ ] PR-06: Add hybrid semantic + keyword metadata search (Medium-Large)
@@ -64,39 +64,16 @@ Shipped scope:
 
 ## PR-03: Expand Index Types with `index_factory`
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr03-faiss-index-factory`  
-Primary objective: support additional ANN configurations (`HNSW`, `IVFPQ`, `OPQ+IVF`) through FAISS-native factory strings.
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/13
 
-### Current Evidence
+Shipped scope:
 
-1. `IndexType` is limited to `"flatip" | "ivfflat"` in `mess/search/faiss_index.py`.
-2. No factory-string path exists in build/publish flow.
-
-### Implementation Plan
-
-1. Add index creation mode supporting FAISS `index_factory` strings.
-2. Persist factory metadata in artifact manifest (`factory_string`, training metadata if needed).
-3. Update `scripts/publish_faiss_index.py` with CLI support for factory mode.
-4. Keep existing index_type paths stable (`flatip`, `ivfflat`) for backward compatibility.
-5. Validate train-required factory indexes before add/search.
-
-### Tests
-
-1. New `tests/search/test_index_factory_build.py` with synthetic vectors:
-build, train (if required), add, save/load, and search.
-2. Include representative factory examples that are dimension-compatible in tests.
-
-### Acceptance Criteria
-
-1. Factory-based index build path works for at least one HNSW and one IVF/PQ-style config.
-2. Manifest fully describes how index was built.
-3. Existing artifact loading and search contracts stay intact.
-
-### Out of Scope
-
-1. Automatic hyperparameter tuning.
-2. Benchmark suite for all factory variants.
+1. Added `index_type="factory"` support in artifact builders.
+2. Added manifest metadata for `factory_string` plus training metadata fields.
+3. Updated publish CLI to support `--index-type=factory` with `--factory-string`.
+4. Added integration tests covering HNSW, IVFPQ, and OPQ+IVF factory builds/searches.
 
 ## PR-04: Export Projection Retriever Artifact from Training
 
@@ -289,3 +266,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `9c5e62b`
 - Date: 2026-03-05
 - Notes: Added IVF nprobe defaults/overrides in artifacts + publish CLI support.
+
+- `PR-ID`: PR-03
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/13
+- Branch: `pr03-faiss-index-factory`
+- Commit SHA: `bce7bc0`
+- Date: 2026-03-05
+- Notes: Added index_factory mode, factory metadata, and HNSW/IVFPQ/OPQ+IVF tests.

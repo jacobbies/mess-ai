@@ -26,7 +26,7 @@ These are baseline assumptions for all PRs below.
 
 ## Queue
 
-- [ ] PR-01: Fix extras + CI + install/error-message consistency (Small-Medium)
+- [x] PR-01: Fix extras + CI + install/error-message consistency (Small-Medium, PR #11)
 - [ ] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium)
 - [ ] PR-03: Expand index types with FAISS `index_factory` (Large)
 - [ ] PR-04: Export projection retriever artifact from training outputs (Large)
@@ -37,35 +37,16 @@ These are baseline assumptions for all PRs below.
 
 ## PR-01: Fix Extras + CI + Install/Error Consistency
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr01-packaging-extras-consistency`  
-Primary objective: remove install-path drift between CI, pyproject extras, and runtime guidance.
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/11
 
-### Current Evidence
+Shipped scope:
 
-1. CI installs `--extra probing`, but `pyproject.toml` currently defines only `search`.
-2. `mess/probing/discovery.py` error hint says `mess-ai[probing]`, which is currently invalid.
-3. README install guidance omits a probing extra path.
-
-### Implementation Plan
-
-1. Add `probing` optional dependency group to `pyproject.toml` (or remove all probing extra references; choose one path and make all files consistent).
-2. Align `.github/workflows/ci.yml` sync command with actual extras.
-3. Update probing error message in `mess/probing/discovery.py` to match chosen install path.
-4. Update README install section with canonical commands.
-5. Add contract tests:
-`tests/test_packaging_contracts.py` to verify CI `--extra X` values exist in pyproject optional dependencies and runtime hints are accurate.
-
-### Acceptance Criteria
-
-1. `uv sync --group dev --extra search --extra probing` either works or is replaced everywhere with valid equivalent.
-2. Runtime probing dependency error points to a real install path.
-3. CI extra references and docs remain in lockstep via tests.
-
-### Out of Scope
-
-1. Broad dependency pruning.
-2. Changing dev-group package choices unrelated to extras drift.
+1. Added `probing` optional extra in `pyproject.toml` so CI `--extra probing` is valid.
+2. Updated runtime install docs in README for probing.
+3. Added `tests/test_packaging_contracts.py` to keep CI extras and probing install hints aligned.
+4. Added and initialized this persistent backlog ledger (`docs/pr_backlog.md`).
 
 ## PR-02: Add IVF `nprobe` Tuning (Artifacts + Runtime)
 
@@ -317,10 +298,9 @@ either retire (delete + doc cleanup) or refactor each script to current API.
 
 Use this section when a PR is submitted/merged:
 
-- `PR-ID`:
-- GitHub PR:
-- Branch:
-- Commit SHA:
-- Date:
-- Notes:
-
+- `PR-ID`: PR-01
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/11
+- Branch: `pr01-packaging-extras-consistency`
+- Commit SHA: `d2ca697`
+- Date: 2026-03-05
+- Notes: CI extras/install-path contract aligned; backlog ledger initialized.

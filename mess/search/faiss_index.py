@@ -332,6 +332,41 @@ def build_clip_artifact(
         segment_duration=segment_duration,
         overlap_ratio=overlap_ratio,
     )
+    return build_clip_artifact_from_vectors(
+        dataset=dataset,
+        vectors=vectors,
+        clip_locations=clip_locations,
+        artifact_name=artifact_name,
+        layer=layer,
+        index_type=index_type,
+        model_name=model_name,
+        nlist=nlist,
+        feature_source_dir=str(features_dir),
+    )
+
+
+def build_clip_artifact_from_vectors(
+    *,
+    dataset: str,
+    vectors: np.ndarray,
+    clip_locations: list[ClipLocation],
+    artifact_name: str = "clip_index",
+    layer: int | None = None,
+    index_type: IndexType = "flatip",
+    model_name: str = "m-a-p/MERT-v1-95M",
+    nlist: int = 1024,
+    feature_source_dir: str = "<in-memory>",
+) -> FAISSArtifact:
+    """Build clip-level FAISS artifact from in-memory vectors + clip locations."""
+    arr = np.asarray(vectors, dtype=np.float32)
+    if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
+        raise ValueError(f"Expected non-empty 2D vectors, got shape {arr.shape}")
+    if len(clip_locations) != int(arr.shape[0]):
+        raise ValueError(
+            "clip_locations length must match vectors rows: "
+            f"{len(clip_locations)} vs {arr.shape[0]}"
+        )
+
     index = _build_faiss_index(vectors, index_type=index_type, nlist=nlist)
 
     manifest = ArtifactManifest(
@@ -342,10 +377,10 @@ def build_clip_artifact(
         index_type=index_type,
         metric="cosine_ip",
         dataset=dataset,
-        feature_source_dir=str(features_dir),
+        feature_source_dir=feature_source_dir,
         layer=layer,
-        dimension=int(vectors.shape[1]),
-        ntotal=int(vectors.shape[0]),
+        dimension=int(arr.shape[1]),
+        ntotal=int(arr.shape[0]),
         created_at_utc=_now_utc_iso(),
         model_name=model_name,
     )

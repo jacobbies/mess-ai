@@ -13,6 +13,7 @@ import pytest
 from mess.search.faiss_index import (
     ArtifactValidationError,
     build_clip_artifact,
+    build_clip_artifact_from_vectors,
     build_track_artifact,
     download_artifact_from_s3,
     find_latest_artifact_dir,
@@ -21,6 +22,7 @@ from mess.search.faiss_index import (
     save_artifact,
     upload_artifact_to_s3,
 )
+from mess.search.search import ClipLocation
 
 pytestmark = pytest.mark.integration
 
@@ -104,6 +106,20 @@ class TestFAISSArtifactPersistence:
 
         with pytest.raises(ArtifactValidationError, match="missing required fields"):
             load_artifact(bad)
+
+    def test_build_clip_artifact_from_vectors_validates_row_alignment(self):
+        vectors = np.random.default_rng(0).standard_normal((3, 16)).astype(np.float32)
+        clip_locations = [
+            ClipLocation(track_id="track_a", segment_idx=0, start_time=0.0, end_time=5.0),
+            ClipLocation(track_id="track_a", segment_idx=1, start_time=2.5, end_time=7.5),
+        ]
+
+        with pytest.raises(ValueError, match="clip_locations length must match vectors rows"):
+            build_clip_artifact_from_vectors(
+                dataset="smd",
+                vectors=vectors,
+                clip_locations=clip_locations,
+            )
 
 
 class TestLatestArtifactSelection:

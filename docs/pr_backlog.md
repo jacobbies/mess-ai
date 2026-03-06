@@ -27,7 +27,7 @@ These are baseline assumptions for all PRs below.
 ## Queue
 
 - [x] PR-01: Fix extras + CI + install/error-message consistency (Small-Medium, PR #11)
-- [ ] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium)
+- [x] PR-02: Add IVF `nprobe` tuning in artifacts + runtime search (Medium, PR #12)
 - [ ] PR-03: Expand index types with FAISS `index_factory` (Large)
 - [ ] PR-04: Export projection retriever artifact from training outputs (Large)
 - [ ] PR-05: Add retrieval evaluation harness + JSON reports (Medium)
@@ -50,39 +50,17 @@ Shipped scope:
 
 ## PR-02: Add IVF `nprobe` Tuning (Artifacts + Runtime)
 
-Status: Planned  
+Status: Completed (submitted)  
 Branch: `pr02-faiss-nprobe-config`  
-Primary objective: expose IVF recall/latency knob without changing default flat-index behavior.
+GitHub PR: https://github.com/jacobbies/mess-ai/pull/12
 
-### Current Evidence
+Shipped scope:
 
-1. `mess/search/faiss_index.py` supports `flatip` and `ivfflat`, with `nlist` only.
-2. Manifest schema has no field for default IVF search params.
-3. `scripts/publish_faiss_index.py` exposes `--nlist` but not `--nprobe`.
-
-### Implementation Plan
-
-1. Extend artifact manifest model to include optional `default_nprobe`.
-2. Apply `default_nprobe` when loading or searching IVF indexes.
-3. Add `nprobe` override path for runtime search calls on `FAISSArtifact.search(...)`.
-4. Add CLI option `--nprobe` in `scripts/publish_faiss_index.py` and plumb into artifact builders.
-5. Keep backward compatibility for existing artifacts that do not include `default_nprobe`.
-
-### Tests
-
-1. Extend `tests/search/test_faiss_index.py`:
-assert `default_nprobe` persists in manifest for IVF artifacts and affects loaded index behavior.
-2. Add search-time override test ensuring explicit `nprobe` takes effect for IVF.
-
-### Acceptance Criteria
-
-1. IVF artifacts can encode sane default `nprobe`.
-2. Runtime can override per-query/per-call without rebuilding artifacts.
-3. Existing flat and legacy artifacts continue to load.
-
-### Out of Scope
-
-1. New FAISS index families (`HNSW`, `PQ`, `OPQ`) in this PR.
+1. Added optional `default_nprobe` to FAISS artifact manifests.
+2. Applied manifest-level `default_nprobe` during artifact load for IVF indexes.
+3. Added runtime `nprobe` override support in `FAISSArtifact.search(...)`.
+4. Added `--nprobe` CLI support to `scripts/publish_faiss_index.py`.
+5. Extended FAISS artifact integration tests for nprobe persistence + override behavior.
 
 ## PR-03: Expand Index Types with `index_factory`
 
@@ -304,3 +282,10 @@ Use this section when a PR is submitted/merged:
 - Commit SHA: `d2ca697`
 - Date: 2026-03-05
 - Notes: CI extras/install-path contract aligned; backlog ledger initialized.
+
+- `PR-ID`: PR-02
+- GitHub PR: https://github.com/jacobbies/mess-ai/pull/12
+- Branch: `pr02-faiss-nprobe-config`
+- Commit SHA: `9c5e62b`
+- Date: 2026-03-05
+- Notes: Added IVF nprobe defaults/overrides in artifacts + publish CLI support.

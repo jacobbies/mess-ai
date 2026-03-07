@@ -1454,6 +1454,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+probing = [
+    { name = "librosa" },
+    { name = "mlflow" },
+    { name = "pretty-midi" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "soundfile" },
+]
 search = [
     { name = "boto3" },
     { name = "faiss-cpu" },
@@ -1490,11 +1498,17 @@ dev = [
 requires-dist = [
     { name = "boto3", marker = "extra == 'search'", specifier = ">=1.34" },
     { name = "faiss-cpu", marker = "extra == 'search'", specifier = ">=1.7" },
+    { name = "librosa", marker = "extra == 'probing'", specifier = ">=0.10" },
+    { name = "mlflow", marker = "extra == 'probing'", specifier = ">=2.10" },
     { name = "nnaudio", specifier = ">=0.3.4" },
     { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pretty-midi", marker = "extra == 'probing'", specifier = ">=0.2.10" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "scikit-learn", marker = "extra == 'probing'", specifier = ">=1.4" },
+    { name = "scipy", marker = "extra == 'probing'", specifier = ">=1.11" },
+    { name = "soundfile", marker = "extra == 'probing'" },
 ]
-provides-extras = ["search"]
+provides-extras = ["search", "probing"]
 
 [package.metadata.requires-dev]
 dev = [

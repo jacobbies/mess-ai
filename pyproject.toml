@@ -27,6 +27,14 @@ search = [
     "faiss-cpu>=1.7",
     "boto3>=1.34",
 ]
+probing = [
+    "scikit-learn>=1.4",
+    "scipy>=1.11",
+    "librosa>=0.10",
+    "soundfile",
+    "mlflow>=2.10",
+    "pretty-midi>=0.2.10",
+]
 
 [dependency-groups]
 dev = [

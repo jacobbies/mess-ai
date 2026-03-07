@@ -99,6 +99,59 @@ class TestGenerateSegmentTargets:
                     f"{category}/{field_name} contains non-finite values"
                 )
 
+    def test_generate_segment_targets_uses_extraction_loader(self, monkeypatch):
+        fake_segments = [
+            np.ones(24000, dtype=np.float32),
+            np.ones(24000, dtype=np.float32) * 2.0,
+            np.ones(24000, dtype=np.float32) * 3.0,
+        ]
+        observed: dict[str, object] = {}
+
+        def fake_load_audio_segments(path, target_sr, segment_duration, overlap_ratio):
+            observed["path"] = str(path)
+            observed["target_sr"] = target_sr
+            observed["segment_duration"] = segment_duration
+            observed["overlap_ratio"] = overlap_ratio
+            return fake_segments
+
+        monkeypatch.setattr(
+            "mess.probing.segment_targets.load_audio_segments",
+            fake_load_audio_segments,
+        )
+        monkeypatch.setattr(
+            "mess.probing.segment_targets._compute_timbre_segments",
+            lambda segments, sr: {"spectral_centroid": np.arange(len(segments), dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            "mess.probing.segment_targets._compute_dynamics_segments",
+            lambda segments, sr: {"dynamic_range": np.arange(len(segments), dtype=np.float32)},
+        )
+        monkeypatch.setattr(
+            "mess.probing.segment_targets._compute_harmony_segments",
+            lambda segments, sr: {
+                "harmonic_complexity": np.arange(len(segments), dtype=np.float32)
+            },
+        )
+        monkeypatch.setattr(
+            "mess.probing.segment_targets._compute_articulation_segments",
+            lambda segments, sr: {"attack_slopes": np.arange(len(segments), dtype=np.float32)},
+        )
+
+        targets = generate_segment_targets(
+            "dummy.wav",
+            segment_duration=5.0,
+            overlap_ratio=0.5,
+            sample_rate=24000,
+        )
+
+        assert observed == {
+            "path": "dummy.wav",
+            "target_sr": 24000,
+            "segment_duration": 5.0,
+            "overlap_ratio": 0.5,
+        }
+        assert len(targets["timbre"]["spectral_centroid"]) == len(fake_segments)
+
 
 # =========================================================================
 # TestSegmentExpressionTargets

@@ -31,6 +31,7 @@ from typing import Any
 import numpy as np
 
 from ..config import mess_config
+from ..extraction.audio import load_audio
 
 logger = logging.getLogger(__name__)
 
@@ -98,20 +99,7 @@ class MusicalAspectTargets:
     
     def generate_all_targets(self, audio_path: str) -> dict[str, dict[str, np.ndarray]]:
         """Generate all proxy targets for a given audio file."""
-        import torch
-        import torchaudio
-
-        # Load audio
-        audio, sr = torchaudio.load(audio_path)
-        if sr != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-            audio = resampler(audio)
-        
-        # Convert to mono if stereo
-        if audio.shape[0] > 1:
-            audio = torch.mean(audio, dim=0)
-        
-        audio = audio.numpy()
+        audio = load_audio(audio_path, target_sr=self.sample_rate)
         
         targets = {
             'rhythm': self._generate_rhythm_targets(audio),

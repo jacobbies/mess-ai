@@ -21,6 +21,8 @@ from pathlib import Path
 
 import numpy as np
 
+from ..extraction.audio import load_audio_segments
+
 logger = logging.getLogger(__name__)
 
 # Targets that are viable at 5s segment duration.
@@ -73,25 +75,13 @@ def generate_segment_targets(
         ``{category: {field: np.ndarray[num_segments]}}`` where each array
         has one value per segment.
     """
-    import torch
-    import torchaudio
-
-    from ..extraction.audio import segment_audio
-
-    audio_tensor, sr = torchaudio.load(str(audio_path))
-    if sr != sample_rate:
-        resampler = torchaudio.transforms.Resample(sr, sample_rate)
-        audio_tensor = resampler(audio_tensor)
-    if audio_tensor.shape[0] > 1:
-        audio_tensor = torch.mean(audio_tensor, dim=0)
-    audio = audio_tensor.numpy().squeeze()
-
-    segments = segment_audio(
-        audio,
+    segments = load_audio_segments(
+        audio_path,
+        target_sr=sample_rate,
         segment_duration=segment_duration,
         overlap_ratio=overlap_ratio,
-        sample_rate=sample_rate,
     )
+
     # Compute targets per segment
     timbre = _compute_timbre_segments(segments, sample_rate)
     dynamics = _compute_dynamics_segments(segments, sample_rate)

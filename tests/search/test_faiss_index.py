@@ -94,6 +94,70 @@ class TestFAISSArtifactPersistence:
         assert len(loaded.clip_locations) == 3
         assert loaded.clip_locations[1].start_time == pytest.approx(2.5)
 
+    def test_ivf_manifest_persists_default_nprobe_and_load_applies_it(self, tmp_path):
+        arr_a = np.random.default_rng(10).standard_normal((13, 768)).astype(np.float32)
+        arr_b = np.random.default_rng(11).standard_normal((13, 768)).astype(np.float32)
+        arr_c = np.random.default_rng(12).standard_normal((13, 768)).astype(np.float32)
+        feature_dir = tmp_path / "aggregated"
+        feature_dir.mkdir()
+        np.save(feature_dir / "track_a.npy", arr_a)
+        np.save(feature_dir / "track_b.npy", arr_b)
+        np.save(feature_dir / "track_c.npy", arr_c)
+
+        artifact = build_track_artifact(
+            dataset="smd",
+            features_dir=feature_dir,
+            artifact_name="track_index",
+            layer=0,
+            index_type="ivfflat",
+            nlist=2,
+            nprobe=2,
+        )
+        assert artifact.manifest.default_nprobe == 2
+        assert hasattr(artifact.index, "nprobe")
+        assert artifact.index.nprobe == 2
+
+        out_dir = save_artifact(
+            artifact,
+            artifact_root=tmp_path / "indices",
+            created_stamp="20260101T000000Z",
+        )
+        loaded = load_artifact(out_dir)
+        assert loaded.manifest.default_nprobe == 2
+        assert hasattr(loaded.index, "nprobe")
+        assert loaded.index.nprobe == 2
+
+    def test_ivf_search_allows_nprobe_override(self, tmp_path):
+        arr_a = np.random.default_rng(20).standard_normal((13, 768)).astype(np.float32)
+        arr_b = np.random.default_rng(21).standard_normal((13, 768)).astype(np.float32)
+        arr_c = np.random.default_rng(22).standard_normal((13, 768)).astype(np.float32)
+        feature_dir = tmp_path / "aggregated"
+        feature_dir.mkdir()
+        np.save(feature_dir / "track_a.npy", arr_a)
+        np.save(feature_dir / "track_b.npy", arr_b)
+        np.save(feature_dir / "track_c.npy", arr_c)
+
+        artifact = build_track_artifact(
+            dataset="smd",
+            features_dir=feature_dir,
+            artifact_name="track_index",
+            layer=0,
+            index_type="ivfflat",
+            nlist=2,
+            nprobe=1,
+        )
+        out_dir = save_artifact(
+            artifact,
+            artifact_root=tmp_path / "indices",
+            created_stamp="20260101T000000Z",
+        )
+        loaded = load_artifact(out_dir)
+        assert loaded.index.nprobe == 1
+
+        query = arr_a[0]
+        loaded.search(query, k=2, nprobe=2)
+        assert loaded.index.nprobe == 2
+
     def test_schema_validation_errors_are_explicit(self, tmp_path):
         bad = tmp_path / "bad"
         bad.mkdir()

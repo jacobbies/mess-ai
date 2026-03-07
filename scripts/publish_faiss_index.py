@@ -43,7 +43,7 @@ def main() -> int:
     parser.add_argument("--layer", type=int, default=None, help="Optional layer 0-12")
     parser.add_argument(
         "--index-type",
-        choices=["flatip", "ivfflat"],
+        choices=["flatip", "ivfflat", "factory"],
         default="flatip",
         help="FAISS index type (default: flatip)",
     )
@@ -58,6 +58,11 @@ def main() -> int:
         type=int,
         default=None,
         help="IVF search probes (only used for ivfflat)",
+    )
+    parser.add_argument(
+        "--factory-string",
+        default=None,
+        help="FAISS index_factory string (required when --index-type=factory)",
     )
     parser.add_argument(
         "--artifact-root",
@@ -103,6 +108,15 @@ def main() -> int:
         print("Error: --nprobe is only valid when --index-type=ivfflat")
         return 1
 
+    factory_string = args.factory_string.strip() if args.factory_string else None
+
+    if args.index_type == "factory" and not factory_string:
+        print("Error: --factory-string is required when --index-type=factory")
+        return 1
+    if args.index_type != "factory" and factory_string is not None:
+        print("Error: --factory-string is only valid when --index-type=factory")
+        return 1
+
     if args.kind == "clip":
         artifact = build_clip_artifact(
             dataset=args.dataset,
@@ -114,6 +128,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 1024,
+            factory_string=factory_string,
             nprobe=args.nprobe,
         )
     else:
@@ -125,6 +140,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 256,
+            factory_string=factory_string,
             nprobe=args.nprobe,
         )
 

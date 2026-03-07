@@ -131,6 +131,26 @@ class DatasetMetadataTable:
             return None
         return row["work_id"]
 
+    def text_for_track(
+        self,
+        track_id: str,
+        fields: Iterable[str] | None = None,
+    ) -> str | None:
+        """Return a normalized metadata text blob for lightweight keyword matching."""
+        row = self._by_track.get(track_id)
+        if row is None:
+            return None
+
+        selected_fields = list(fields) if fields is not None else sorted(row.keys())
+        values = [
+            row.get(field, "").strip()
+            for field in selected_fields
+            if row.get(field, "").strip()
+        ]
+        if not values:
+            return ""
+        return " ".join(values)
+
     def to_recording_map(self) -> dict[str, str]:
         """Return track_id -> recording_id mapping."""
         return {row["track_id"]: row["recording_id"] for row in self._rows}

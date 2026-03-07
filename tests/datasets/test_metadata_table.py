@@ -55,6 +55,15 @@ class TestDatasetMetadataTable:
         assert table.work_id_for_track("track_b") == "chopin_op10_no3"
         assert table.recording_id_for_track("missing") is None
 
+    def test_text_for_track_supports_keyword_views(self):
+        table = DatasetMetadataTable.from_rows(_rows())
+        full = table.text_for_track("track_a")
+        assert full is not None
+        assert "Beethoven" in full
+        focused = table.text_for_track("track_a", fields=["composer", "work_id"])
+        assert focused == "Beethoven beethoven_op27_no2_mvt1"
+        assert table.text_for_track("missing") is None
+
     def test_to_csv_and_from_csv_roundtrip(self, tmp_path):
         table = DatasetMetadataTable.from_rows(_rows())
         path = tmp_path / "metadata.csv"

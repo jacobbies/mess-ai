@@ -43,6 +43,12 @@ Runtime search install (EC2/service path):
 pip install "mess-ai[search]"
 ```
 
+Runtime probing install (layer discovery + proxy target tooling):
+
+```bash
+pip install "mess-ai[probing]"
+```
+
 Install from GitHub (search runtime):
 
 ```bash

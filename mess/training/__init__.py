@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .config import RetrievalSSLConfig
+    from .export import export_projection_clip_artifact, project_vectors_with_head
     from .trainer import ProjectionHead, TrainResult, train_projection_head
 
 __all__ = [
@@ -14,6 +15,8 @@ __all__ = [
     "ProjectionHead",
     "TrainResult",
     "train_projection_head",
+    "project_vectors_with_head",
+    "export_projection_clip_artifact",
 ]
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
@@ -21,6 +24,8 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "ProjectionHead": (".trainer", "ProjectionHead"),
     "TrainResult": (".trainer", "TrainResult"),
     "train_projection_head": (".trainer", "train_projection_head"),
+    "project_vectors_with_head": (".export", "project_vectors_with_head"),
+    "export_projection_clip_artifact": (".export", "export_projection_clip_artifact"),
 }
 
 

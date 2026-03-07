@@ -54,6 +54,12 @@ def main() -> int:
         help="IVF coarse centroid count (only used for ivfflat)",
     )
     parser.add_argument(
+        "--nprobe",
+        type=int,
+        default=None,
+        help="IVF search probes (only used for ivfflat)",
+    )
+    parser.add_argument(
         "--artifact-root",
         default=str(mess_config.data_root / "indices"),
         help="Root output directory for artifacts",
@@ -93,6 +99,9 @@ def main() -> int:
     if not features_dir.exists():
         print(f"Error: features directory not found: {features_dir}")
         return 1
+    if args.nprobe is not None and args.index_type != "ivfflat":
+        print("Error: --nprobe is only valid when --index-type=ivfflat")
+        return 1
 
     if args.kind == "clip":
         artifact = build_clip_artifact(
@@ -105,6 +114,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 1024,
+            nprobe=args.nprobe,
         )
     else:
         artifact = build_track_artifact(
@@ -115,6 +125,7 @@ def main() -> int:
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 256,
+            nprobe=args.nprobe,
         )
 
     saved_dir = save_artifact(artifact, artifact_root=args.artifact_root)

@@ -54,6 +54,12 @@ def main() -> int:
         help="IVF coarse centroid count (only used for ivfflat)",
     )
     parser.add_argument(
+        "--nprobe",
+        type=int,
+        default=None,
+        help="IVF search probes (only used for ivfflat)",
+    )
+    parser.add_argument(
         "--factory-string",
         default=None,
         help="FAISS index_factory string (required when --index-type=factory)",
@@ -98,6 +104,9 @@ def main() -> int:
     if not features_dir.exists():
         print(f"Error: features directory not found: {features_dir}")
         return 1
+    if args.nprobe is not None and args.index_type != "ivfflat":
+        print("Error: --nprobe is only valid when --index-type=ivfflat")
+        return 1
 
     factory_string = args.factory_string.strip() if args.factory_string else None
 
@@ -120,6 +129,7 @@ def main() -> int:
             model_name=args.model_name,
             nlist=args.nlist or 1024,
             factory_string=factory_string,
+            nprobe=args.nprobe,
         )
     else:
         artifact = build_track_artifact(
@@ -131,6 +141,7 @@ def main() -> int:
             model_name=args.model_name,
             nlist=args.nlist or 256,
             factory_string=factory_string,
+            nprobe=args.nprobe,
         )
 
     saved_dir = save_artifact(artifact, artifact_root=args.artifact_root)

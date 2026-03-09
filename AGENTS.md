@@ -494,6 +494,85 @@ Default execution protocol for code changes:
 6. Run broader suite as needed.
 7. Summarize what changed, what was validated, and residual risks.
 
+### PR Backlog Handoff Mechanism (`docs/pr_backlog.md`)
+
+Use `docs/pr_backlog.md` as the single handoff artifact when work should be executable by a fresh Codex instance with minimal extra context.
+
+Rules:
+1. For any non-trivial PR or debugging task, create/update `docs/pr_backlog.md` before implementation starts.
+2. Treat the file as operational context, not long-term narrative documentation.
+3. Keep it self-contained: another agent should be able to execute the task confidently by reading only this file plus referenced code.
+4. Keep it scoped to one active task/PR unless the user explicitly asks for a queue.
+5. After merge/closure, clear the file content so it is ready for the next task.
+6. Keep PR boundaries strict: one contract/problem per PR with explicit in-scope and out-of-scope boundaries; avoid mixing unrelated changes.
+7. In multi-PR workflows using `git worktree`, treat `docs/pr_backlog.md` as branch-local state: update it only in the worktree for that PR and avoid concurrent edits across unrelated PRs unless backlog changes are intentionally part of review.
+
+Multi-PR / Worktree execution protocol:
+1. Choose branch topology first:
+   - Independent PRs: branch from `origin/main` when changes are not dependent.
+   - Stacked PRs: branch from the parent PR branch only when there is a hard dependency.
+2. Use one worktree per active PR to isolate changes and agent context:
+   - `git fetch origin`
+   - `git worktree add ../mess-ai-pr-<slug> -b <branch-name> origin/main`
+3. Record execution context in `docs/pr_backlog.md`:
+   - `Branch`, `Base`, `Depends on` (if stacked), and `Worktree path`.
+4. Keep one active task per branch-local backlog file; if multiple tasks are intentionally queued, list them explicitly as a queue with owners/status.
+5. Sync cadence for long-running parallel work:
+   - rebase or merge from `origin/main` at least daily and immediately after any sibling PR merge.
+6. Merge order discipline:
+   - merge smallest/highest-leverage PR first; restack or rebase dependents immediately.
+7. Conflict hotspot policy:
+   - avoid editing shared coordination files (`docs/pr_backlog.md`, README script status blocks, broad index docs) in multiple concurrent PRs unless required.
+8. PR closure hygiene:
+   - after merge, clear `docs/pr_backlog.md` in that branch/worktree before starting the next task.
+
+Required handoff content:
+1. Objective: exact problem to solve and expected end state.
+2. Scope: in-scope and explicitly out-of-scope changes.
+3. Code map: exact files/modules/tests to inspect first.
+4. Contracts: data shape/path/API/runtime constraints that must not regress.
+5. External context: PR/issue links, workflow docs, or infra details needed to execute correctly.
+6. Implementation plan: concrete steps in execution order.
+7. Validation plan: exact `ruff`/`pytest`/`mypy` commands and acceptance criteria.
+8. Risks and open questions: blockers, ambiguity, and decision points.
+9. Branch topology metadata: base branch, dependency (if any), and intended merge order.
+
+Preferred template:
+```text
+# PR/TASK HANDOFF
+- Task/PR:
+- Branch:
+- Base:
+- Depends on:
+- Worktree:
+- Status:
+
+## Objective
+
+## Scope
+- In:
+- Out:
+
+## Files To Load First
+- path/to/file.py
+
+## Contracts To Preserve
+- ...
+
+## External References
+- ...
+
+## Implementation Plan
+1. ...
+
+## Validation
+- Commands:
+- Acceptance:
+
+## Risks / Open Questions
+- ...
+```
+
 For extraction-related tasks:
 1. Check config impacts (`mess/config.py`).
 2. Verify shape/path contracts in `storage.py` and tests.

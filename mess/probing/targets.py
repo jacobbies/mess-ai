@@ -26,7 +26,7 @@ Targets Generated:
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -34,6 +34,7 @@ from ..config import mess_config
 from ..extraction.audio import load_audio
 
 logger = logging.getLogger(__name__)
+mlflow: Any
 
 try:
     import mlflow  # type: ignore[import-not-found]
@@ -75,7 +76,6 @@ except ModuleNotFoundError:
         @staticmethod
         def set_tag(_key: str, _value: str) -> None:
             return None
-
     mlflow = _MlflowStub()
 
 
@@ -154,7 +154,7 @@ class MusicalAspectTargets:
     def _generate_rhythm_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate rhythm-related targets."""
         import librosa
-        import scipy.signal
+        import scipy.signal  # type: ignore[import-untyped]
 
         # Tempo estimation
         tempo, beats = librosa.beat.beat_track(
@@ -341,7 +341,7 @@ class MusicalAspectTargets:
     def _generate_dynamics_targets(self, audio: np.ndarray) -> dict[str, np.ndarray]:
         """Generate dynamics-related targets."""
         import librosa
-        import scipy.signal
+        import scipy.signal  # type: ignore[import-untyped]
 
         # RMS energy (dynamic level)
         rms = librosa.feature.rms(
@@ -526,7 +526,7 @@ def create_target_dataset(
     success_count = 0
     failed_count = 0
     errors = []
-    target_stats: dict[str, list] = {}
+    target_stats: dict[str, dict[str, Any]] = {}
 
     # Log to MLflow if requested and a run is active
     if use_mlflow and mlflow.active_run():
@@ -574,7 +574,7 @@ def create_target_dataset(
             # Save targets
             # Note: numpy will pickle the nested dicts automatically (allow_pickle=True implicit)
             target_file = output_dir / f"{audio_file.stem}_targets.npz"
-            np.savez_compressed(target_file, **targets)
+            np.savez_compressed(target_file, **cast(dict[str, Any], targets))
 
             logger.info(f"  ✓ Saved to {target_file.name}")
             success_count += 1

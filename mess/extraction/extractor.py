@@ -20,8 +20,8 @@ from typing import Any
 
 import numpy as np
 import torch
-from transformers.models.auto.modeling_auto import AutoModel
-from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor
+from transformers.models.auto.modeling_auto import AutoModel  # type: ignore[import-untyped]
+from transformers.models.wav2vec2 import Wav2Vec2FeatureExtractor  # type: ignore[import-untyped]
 
 from ..config import mess_config
 from .audio import load_audio_segments, validate_audio_file

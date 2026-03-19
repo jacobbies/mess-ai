@@ -90,12 +90,7 @@ target-version = "py311"
 include = [
     "mess/**/*.py",
     "tests/**/*.py",
-    "scripts/build_clip_index.py",
-    "scripts/publish_faiss_index.py",
-    "scripts/extract_features.py",
-    "scripts/run_probing.py",
-    "scripts/demo_recommendations.py",
-    "scripts/train_retrieval_ssl.py",
+    "scripts/**/*.py",
 ]
 exclude = [
     "data",

@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import soundfile as sf
-from scipy import signal
+import soundfile as sf  # type: ignore[import-untyped]
+from scipy import signal  # type: ignore[import-untyped]
 
 try:
     from torchcodec.decoders import AudioDecoder  # type: ignore[import-untyped]

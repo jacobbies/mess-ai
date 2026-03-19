@@ -1,0 +1,25 @@
+{
+  "maintained": [
+    "build_clip_index.py",
+    "demo_recommendations.py",
+    "extract_features.py",
+    "publish_faiss_index.py",
+    "run_probing.py",
+    "setup_demo_data.py",
+    "train_retrieval_ssl.py"
+  ],
+  "research": [
+    "build_maestro_manifest.py",
+    "contextualize_embeddings.py",
+    "evaluate_clip_retrieval.py",
+    "evaluate_retrieval.py",
+    "inspect_embeddings.py",
+    "train_contextualizer.py"
+  ],
+  "deprecated": [
+    "build_layer_indices.py",
+    "demo_layer_search.py",
+    "evaluate_layer_indices.py",
+    "evaluate_similarity.py"
+  ]
+}

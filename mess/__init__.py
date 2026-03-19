@@ -10,6 +10,10 @@ import importlib
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
 
+from ._runtime import configure_macos_openmp_runtime
+
+configure_macos_openmp_runtime()
+
 if TYPE_CHECKING:
     from .config import MESSConfig
     from .config import mess_config as mess_config

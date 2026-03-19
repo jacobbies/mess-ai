@@ -1,7 +1,16 @@
 """Root test fixtures for mess-ai test suite."""
 
+import os
+import sys
+
 import numpy as np
 import pytest
+
+if sys.platform == "darwin":
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
 
 from mess.config import MESSConfig
 

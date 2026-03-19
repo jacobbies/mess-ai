@@ -25,6 +25,16 @@ def test_public_api_contract_names() -> None:
         "train_projection_head",
         "project_vectors_with_head",
         "export_projection_clip_artifact",
+        "ContextualizerConfig",
+        "SegmentTransformer",
+        "late_interaction_score",
+        "ContextTrainResult",
+        "TrackSegments",
+        "train_contextualizer",
+        "load_contextualizer_from_state",
+        "contextualize_tracks",
+        "save_contextualized_embeddings",
+        "export_contextualizer_track_artifact",
     }
     assert expected == set(training.__all__)
     assert expected.issubset(set(dir(training)))

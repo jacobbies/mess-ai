@@ -23,9 +23,11 @@ import importlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
+
+from .._runtime import configure_faiss_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ DEFAULT_DEDUPE_WINDOW_SECONDS = 5.0
 def _require_faiss() -> Any:
     """Import faiss lazily so module import works without search dependencies."""
     try:
-        return importlib.import_module("faiss")
+        return configure_faiss_runtime(importlib.import_module("faiss"))
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "faiss is required for similarity search. Install it with `pip install faiss-cpu`."
@@ -89,12 +91,12 @@ def _vectorize_track_features(
                 f"Cannot apply layer={layer} to 1D features in {source_name}; "
                 "expected a [13, 768]-compatible array."
             )
-        return features.astype("float32")
+        return cast(np.ndarray, features.astype("float32"))
 
     if features.ndim == 2:
         if features.shape == (NUM_LAYERS, EMBEDDING_DIM):
             vector = features[layer] if layer is not None else features.reshape(-1)
-            return vector.astype("float32")
+            return cast(np.ndarray, vector.astype("float32"))
         raise ValueError(
             f"Unsupported 2D shape {features.shape} in {source_name}; "
             f"expected ({NUM_LAYERS}, {EMBEDDING_DIM})."
@@ -104,7 +106,7 @@ def _vectorize_track_features(
         if features.shape[1:] == (NUM_LAYERS, EMBEDDING_DIM):
             pooled = features.mean(axis=0)  # [13, 768]
             vector = pooled[layer] if layer is not None else pooled.reshape(-1)
-            return vector.astype("float32")
+            return cast(np.ndarray, vector.astype("float32"))
         raise ValueError(
             f"Unsupported 3D shape {features.shape} in {source_name}; "
             f"expected [segments, {NUM_LAYERS}, {EMBEDDING_DIM}]."
@@ -114,7 +116,7 @@ def _vectorize_track_features(
         if features.shape[1] == NUM_LAYERS and features.shape[3] == EMBEDDING_DIM:
             pooled = features.mean(axis=(0, 2))  # [13, 768]
             vector = pooled[layer] if layer is not None else pooled.reshape(-1)
-            return vector.astype("float32")
+            return cast(np.ndarray, vector.astype("float32"))
         raise ValueError(
             f"Unsupported 4D shape {features.shape} in {source_name}; "
             f"expected [segments, {NUM_LAYERS}, time, {EMBEDDING_DIM}]."
@@ -170,8 +172,8 @@ def _vectorize_segment_features(
         )
 
     if layer is not None:
-        return features[:, layer, :].astype("float32")
-    return features.reshape(features.shape[0], -1).astype("float32")
+        return cast(np.ndarray, features[:, layer, :].astype("float32"))
+    return cast(np.ndarray, features.reshape(features.shape[0], -1).astype("float32"))
 
 
 def _segment_hop_seconds(
@@ -279,7 +281,7 @@ def load_segment_features(
 
 def load_features(
     features_dir: str,
-    layer: int | None = None
+    layer: int | None = None,
 ) -> tuple[np.ndarray, list[str]]:
     """
     Load MERT features from directory.
@@ -295,15 +297,15 @@ def load_features(
     if layer is not None and not 0 <= layer < NUM_LAYERS:
         raise ValueError(f"Invalid layer {layer}; expected range [0, {NUM_LAYERS - 1}]")
 
-    features_dir = Path(features_dir)
+    features_dir_path = Path(features_dir)
 
-    if not features_dir.exists():
-        raise FileNotFoundError(f"Features directory not found: {features_dir}")
+    if not features_dir_path.exists():
+        raise FileNotFoundError(f"Features directory not found: {features_dir_path}")
 
-    feature_files = sorted(features_dir.glob("*.npy"))
+    feature_files = sorted(features_dir_path.glob("*.npy"))
 
     if not feature_files:
-        raise ValueError(f"No .npy files found in {features_dir}")
+        raise ValueError(f"No .npy files found in {features_dir_path}")
 
     features_list = []
     track_names = []
@@ -315,7 +317,7 @@ def load_features(
         track_names.append(feature_file.stem)
 
     if not features_list:
-        raise ValueError(f"No valid feature files found in {features_dir}")
+        raise ValueError(f"No valid feature files found in {features_dir_path}")
 
     features_array = np.vstack(features_list)
 
@@ -325,7 +327,7 @@ def load_features(
 
 
 def _load_layer_features(
-    features_dir: str
+    features_dir: str,
 ) -> tuple[np.ndarray, list[str]]:
     """
     Load per-track features and normalize to [n_tracks, 13, 768].
@@ -335,14 +337,14 @@ def _load_layer_features(
     - [segments, 13, 768] (pooled over segments)
     - [segments, 13, time, 768] (pooled over segments/time)
     """
-    features_dir = Path(features_dir)
+    features_dir_path = Path(features_dir)
 
-    if not features_dir.exists():
-        raise FileNotFoundError(f"Features directory not found: {features_dir}")
+    if not features_dir_path.exists():
+        raise FileNotFoundError(f"Features directory not found: {features_dir_path}")
 
-    feature_files = sorted(features_dir.glob("*.npy"))
+    feature_files = sorted(features_dir_path.glob("*.npy"))
     if not feature_files:
-        raise ValueError(f"No .npy files found in {features_dir}")
+        raise ValueError(f"No .npy files found in {features_dir_path}")
 
     layer_features: list[np.ndarray] = []
     track_names: list[str] = []
@@ -401,7 +403,7 @@ def _compose_weighted_vectors(
     normalized_layers = layer_features / layer_norms
 
     fused = (normalized_layers * normalized_weights[None, :, None]).sum(axis=1)
-    return fused.astype("float32")
+    return cast(np.ndarray, fused.astype("float32"))
 
 
 def build_index(features: np.ndarray) -> Any:

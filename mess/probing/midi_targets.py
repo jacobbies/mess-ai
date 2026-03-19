@@ -51,7 +51,7 @@ class MidiExpressionTargets:
             ValueError: If MIDI has fewer than *min_notes* notes.
             FileNotFoundError: If *midi_path* does not exist.
         """
-        import pretty_midi
+        import pretty_midi  # type: ignore[import-untyped]
 
         pm = pretty_midi.PrettyMIDI(str(midi_path))
         notes = self._collect_notes(pm)

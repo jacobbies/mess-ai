@@ -9,10 +9,11 @@ Shows:
 - Cosine similarity between two tracks
 """
 
+
 import numpy as np
-from pathlib import Path
-from mess.config import mess_config
+
 from mess.datasets.factory import DatasetFactory
+
 
 def main():
     # Load first two tracks

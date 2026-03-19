@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 
@@ -116,7 +117,7 @@ def generate_segment_expression_targets(
     Returns:
         ``{'expression': {field: np.ndarray[num_segments]}}``
     """
-    import pretty_midi
+    import pretty_midi  # type: ignore[import-untyped]
 
     pm = pretty_midi.PrettyMIDI(str(midi_path))
 
@@ -214,8 +215,8 @@ def get_segment_boundaries(
     # Final segment (if remainder)
     if audio_length_samples % hop_samples != 0:
         end = audio_length_samples / sample_rate
-        start = max(0.0, end - segment_duration)
-        final_boundary = (start, end)
+        final_start = float(max(0.0, end - segment_duration))
+        final_boundary = (final_start, end)
         if not boundaries or boundaries[-1] != final_boundary:
             boundaries.append(final_boundary)
 
@@ -263,7 +264,7 @@ def _compute_dynamics_segments(
     segments: list[np.ndarray], sample_rate: int,
 ) -> dict[str, np.ndarray]:
     import librosa
-    import scipy.signal
+    import scipy.signal  # type: ignore[import-untyped]
 
     n = len(segments)
     dyn_range = np.zeros(n)
@@ -434,7 +435,7 @@ def create_segment_target_dataset(
                 midi_path = midi_resolver(audio_file, dataset_id)
                 if midi_path is not None:
                     try:
-                        import torchaudio
+                        import torchaudio  # type: ignore[import-untyped]
 
                         info = torchaudio.info(str(audio_file))
                         audio_length = info.num_frames
@@ -455,7 +456,7 @@ def create_segment_target_dataset(
                         )
 
             out_file = output_dir / f"{audio_file.stem}_segment_targets.npz"
-            np.savez_compressed(out_file, **targets)
+            np.savez_compressed(out_file, **cast(dict[str, Any], targets))
             logger.info(f"  Saved to {out_file.name}")
             success += 1
 

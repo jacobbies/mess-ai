@@ -12,3 +12,6 @@ Replacement guidance:
 - Use `scripts/evaluate_clip_retrieval.py` for quick retrieval sanity checks.
 
 No pending outdated scripts are currently tracked in this file.
+
+Lifecycle classification source of truth:
+- `scripts/script_status.json` (`maintained`, `research`, `deprecated`)

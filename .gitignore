@@ -54,7 +54,7 @@ tmp/
 temp/
 
 # Data directories (large datasets - never commit!)
-data/
+data/*
 !data/.gitkeep
 !data/README.md
 

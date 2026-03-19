@@ -3,7 +3,6 @@
 
 import argparse
 from pathlib import Path
-from typing import Dict, List
 
 import faiss
 import numpy as np
@@ -11,7 +10,7 @@ import numpy as np
 from mess.search.search import ClipLocation, load_segment_features
 
 
-def _parse_k_values(raw: str) -> List[int]:
+def _parse_k_values(raw: str) -> list[int]:
     values = sorted({int(part.strip()) for part in raw.split(",") if part.strip()})
     if not values or any(k <= 0 for k in values):
         raise ValueError("--k-values must contain positive integers (e.g., 1,5,10)")
@@ -38,7 +37,7 @@ def _search_indices(
     index: faiss.IndexFlatIP,
     query_vector: np.ndarray,
     k: int,
-) -> List[int]:
+) -> list[int]:
     query = query_vector.astype("float32", copy=True).reshape(1, -1)
     faiss.normalize_L2(query)
     _, indices = index.search(query, k)
@@ -47,11 +46,11 @@ def _search_indices(
 
 def evaluate_synthetic_recall(
     features: np.ndarray,
-    k_values: List[int],
+    k_values: list[int],
     noise_std: float,
     max_queries: int,
     rng: np.random.Generator,
-) -> Dict[int, float]:
+) -> dict[int, float]:
     if noise_std < 0:
         raise ValueError("noise_std must be >= 0")
 
@@ -76,24 +75,24 @@ def evaluate_synthetic_recall(
 
 def evaluate_same_piece_nearby_recall(
     features: np.ndarray,
-    clip_locations: List[ClipLocation],
-    k_values: List[int],
+    clip_locations: list[ClipLocation],
+    k_values: list[int],
     nearby_window_seconds: float,
     max_queries: int,
     rng: np.random.Generator,
-) -> tuple[Dict[int, float], int]:
+) -> tuple[dict[int, float], int]:
     if nearby_window_seconds <= 0:
         raise ValueError("nearby_window_seconds must be > 0")
 
     index = _build_index(features)
     max_k = max(k_values) + 1  # include potential self-hit
 
-    per_track_indices: Dict[str, List[int]] = {}
+    per_track_indices: dict[str, list[int]] = {}
     for idx, loc in enumerate(clip_locations):
         per_track_indices.setdefault(loc.track_id, []).append(idx)
 
-    candidate_queries: List[int] = []
-    positive_sets: Dict[int, set[int]] = {}
+    candidate_queries: list[int] = []
+    positive_sets: dict[int, set[int]] = {}
 
     for idx, loc in enumerate(clip_locations):
         positives = {
@@ -133,7 +132,10 @@ def main() -> int:
     parser.add_argument("--dataset", default="smd", help="Dataset name (default: smd)")
     parser.add_argument(
         "--features-dir",
-        help="Override path to segment embeddings directory (defaults to data/embeddings/<dataset>-emb/segments)",
+        help=(
+            "Override path to segment embeddings directory "
+            "(defaults to data/embeddings/<dataset>-emb/segments)"
+        ),
     )
     parser.add_argument("--layer", type=int, help="Optional MERT layer (0-12)")
     parser.add_argument("--k-values", default="1,5,10", help="Comma-separated K list")

@@ -33,11 +33,14 @@ jobs:
       - name: Run tests
         run: uv run pytest -q
 
-      - name: Run lint (maintained paths)
+      - name: Run lint
+        run: uv run ruff check .
+
+      - name: Run type checks (targeted core modules)
         run: >
-          uv run ruff check
-          mess
-          tests
-          scripts/extract_features.py
-          scripts/run_probing.py
-          scripts/demo_recommendations.py
+          uv run mypy --follow-imports skip
+          mess/search/faiss_index.py
+          mess/search/__init__.py
+          mess/datasets/clip_index.py
+          mess/training/config.py
+          mess/training/index.py

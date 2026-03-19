@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import cast
 
 import numpy as np
 
@@ -15,7 +16,7 @@ def _normalize(vectors: np.ndarray) -> np.ndarray:
         raise ValueError(f"Expected non-empty [n, d] features, got shape {arr.shape}")
     norms = np.linalg.norm(arr, axis=1, keepdims=True)
     norms = np.clip(norms, 1e-12, None)
-    return arr / norms
+    return cast(np.ndarray, arr / norms)
 
 
 def _tokenize_keyword(keyword: str | None) -> list[str]:

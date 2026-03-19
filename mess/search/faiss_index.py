@@ -16,6 +16,7 @@ from typing import Any, Literal
 
 import numpy as np
 
+from .._runtime import configure_faiss_runtime
 from .search import ClipLocation, load_features, load_segment_features
 
 IndexKind = Literal["track", "clip"]
@@ -109,7 +110,7 @@ class FAISSArtifact:
 
 def _require_faiss() -> Any:
     try:
-        return importlib.import_module("faiss")
+        return configure_faiss_runtime(importlib.import_module("faiss"))
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "faiss is required for index build/load. Install it with `pip install faiss-cpu`."

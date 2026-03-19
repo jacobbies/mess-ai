@@ -56,16 +56,19 @@ class MESSConfig:
 
     def _apply_env_overrides(self) -> None:
         """Apply environment variable overrides for deployment flexibility."""
-        if os.getenv('MESS_DEVICE'):
+        device = os.getenv('MESS_DEVICE')
+        if device is not None:
             # Examples: MESS_DEVICE=cuda, MESS_DEVICE=cpu, MESS_DEVICE=mps
-            self.MERT_DEVICE = os.getenv('MESS_DEVICE')
+            self.MERT_DEVICE = device
 
-        if os.getenv('MESS_WORKERS'):
-            self.MERT_MAX_WORKERS = int(os.getenv('MESS_WORKERS'))
+        workers = os.getenv('MESS_WORKERS')
+        if workers is not None:
+            self.MERT_MAX_WORKERS = int(workers)
 
-        if os.getenv('MESS_BATCH_SIZE'):
+        batch_size_raw = os.getenv('MESS_BATCH_SIZE')
+        if batch_size_raw is not None:
             # Override all batch sizes uniformly
-            batch_size = int(os.getenv('MESS_BATCH_SIZE'))
+            batch_size = int(batch_size_raw)
             self.MERT_BATCH_SIZE_CUDA = batch_size
             self.MERT_BATCH_SIZE_MPS = batch_size
             self.MERT_BATCH_SIZE_CPU = batch_size

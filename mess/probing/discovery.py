@@ -29,6 +29,7 @@ import numpy as np
 from ..config import mess_config
 
 logger = logging.getLogger(__name__)
+mlflow: Any
 
 try:
     import mlflow  # type: ignore[import-not-found]
@@ -55,7 +56,6 @@ except ModuleNotFoundError:
         @staticmethod
         def log_artifact(_path: str) -> None:
             return None
-
     mlflow = _MlflowStub()
 
 NUM_LAYERS = 13
@@ -66,11 +66,15 @@ EMBEDDING_DIM = 768
 def _require_sklearn() -> tuple[Any, ...]:
     """Import sklearn probe primitives lazily for lightweight serving installs."""
     try:
-        from sklearn.linear_model import Ridge
-        from sklearn.metrics import mean_squared_error, r2_score
-        from sklearn.model_selection import GroupKFold, KFold, cross_val_predict
-        from sklearn.pipeline import make_pipeline
-        from sklearn.preprocessing import StandardScaler
+        from sklearn.linear_model import Ridge  # type: ignore[import-untyped]
+        from sklearn.metrics import mean_squared_error, r2_score  # type: ignore[import-untyped]
+        from sklearn.model_selection import (  # type: ignore[import-untyped]
+            GroupKFold,
+            KFold,
+            cross_val_predict,
+        )
+        from sklearn.pipeline import make_pipeline  # type: ignore[import-untyped]
+        from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "scikit-learn is required for layer probing. "
@@ -117,7 +121,7 @@ def inspect_model(model_name: str | None = None) -> dict[str, Any]:
     Returns dict with total_params, trainable_params, and per-module breakdown.
     Requires transformers and torch dependencies.
     """
-    from transformers import AutoModel
+    from transformers import AutoModel  # type: ignore[import-untyped]
 
     name = model_name or mess_config.model_name
     model = AutoModel.from_pretrained(name, trust_remote_code=True)
@@ -160,8 +164,11 @@ def trace_activations(
     Requires transformers, torch, and torchaudio dependencies.
     """
     import torch
-    import torchaudio
-    from transformers import AutoModel, Wav2Vec2FeatureExtractor
+    import torchaudio  # type: ignore[import-untyped]
+    from transformers import (  # type: ignore[import-untyped]
+        AutoModel,
+        Wav2Vec2FeatureExtractor,
+    )
 
     name = model_name or mess_config.model_name
     processor = Wav2Vec2FeatureExtractor.from_pretrained(name, trust_remote_code=True)
@@ -660,8 +667,8 @@ class LayerDiscoverySystem:
                 seg_counts.append(first_count)
 
         if not loaded:
-            targets = {name: np.array([]) for name in SEGMENT_TARGETS}
-            return targets, loaded, np.array([], dtype=int)
+            empty_targets = {name: np.array([]) for name in SEGMENT_TARGETS}
+            return empty_targets, loaded, np.array([], dtype=int)
 
         targets: dict[str, np.ndarray] = {}
         for name, arrays in collectors.items():

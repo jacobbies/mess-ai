@@ -12,33 +12,41 @@ pytestmark = pytest.mark.unit
 
 
 class ConcreteTestDataset(BaseDataset):
-    """Concrete subclass for testing abstract BaseDataset."""
+    """Concrete subclass for testing declarative BaseDataset definitions."""
+
+    dataset_id = "test"
+    audio_subdir = "audio/test"
+    embeddings_subdir = "embeddings/test-emb"
+    name = "Test Dataset"
+    description = "A test dataset"
+
+
+class LegacyPropertyDataset(BaseDataset):
+    """Legacy property-based subclasses remain supported."""
 
     @property
     def dataset_id(self):
-        return "test"
+        return "legacy"
 
     @property
     def audio_dir(self):
-        return self.data_root / "audio" / "test"
+        return self.data_root / "legacy-audio"
 
     @property
     def embeddings_dir(self):
-        return self.data_root / "embeddings" / "test-emb"
-
-    @property
-    def name(self):
-        return "Test Dataset"
-
-    @property
-    def description(self):
-        return "A test dataset"
+        return self.data_root / "legacy-embeddings"
 
 
 class TestAbstract:
     def test_cannot_instantiate_base_directly(self):
         with pytest.raises(TypeError):
             BaseDataset(data_root=Path("/tmp"))
+
+    def test_supports_legacy_property_overrides(self, tmp_path):
+        ds = LegacyPropertyDataset(data_root=tmp_path)
+        assert ds.dataset_id == "legacy"
+        assert ds.audio_dir == tmp_path / "legacy-audio"
+        assert ds.embeddings_dir == tmp_path / "legacy-embeddings"
 
 
 class TestGetAudioFiles:

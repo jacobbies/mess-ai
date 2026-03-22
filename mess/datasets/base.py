@@ -2,22 +2,32 @@
 Base dataset interface for ML workflows.
 Simplified for local development - focuses on audio files and feature paths.
 """
-from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import ClassVar
 
 from .clip_index import ClipIndex, build_clip_records
 from .metadata_table import DatasetMetadataTable
 
 
-class BaseDataset(ABC):
+class BaseDataset:
     """
-    Abstract base class for music datasets (ML-focused).
+    Lightweight base class for music datasets (ML-focused).
 
-    Hybrid approach: Datasets are self-contained but use config.data_root as default.
-    This allows both:
-    - Easy default usage: dataset = SMDDataset() uses config.data_root
-    - Flexible override: dataset = SMDDataset(data_root="/custom/path")
+    Subclasses can define datasets declaratively with class attributes:
+    - dataset_id
+    - audio_subdir
+    - embeddings_subdir
+    - name
+    - description
+
+    Legacy subclasses that override properties directly are still supported.
     """
+
+    dataset_id: ClassVar[str | None] = None
+    audio_subdir: ClassVar[str | Path | None] = None
+    embeddings_subdir: ClassVar[str | Path | None] = None
+    name: ClassVar[str] = ""
+    description: ClassVar[str] = ""
 
     def __init__(self, data_root: Path | None = None):
         """
@@ -31,24 +41,51 @@ class BaseDataset(ABC):
             data_root = mess_config.data_root
 
         self.data_root = Path(data_root)
+        self._validate_definition()
+
+    def _validate_definition(self) -> None:
+        if type(self) is BaseDataset:
+            raise TypeError("BaseDataset must be subclassed with dataset configuration.")
+
+        if not self.dataset_id:
+            raise TypeError(f"{type(self).__name__} must define dataset_id.")
+
+        if type(self).audio_dir is BaseDataset.audio_dir and self.audio_subdir is None:
+            raise TypeError(
+                f"{type(self).__name__} must define audio_subdir or override audio_dir."
+            )
+
+        if (
+            type(self).embeddings_dir is BaseDataset.embeddings_dir
+            and self.embeddings_subdir is None
+        ):
+            raise TypeError(
+                f"{type(self).__name__} must define embeddings_subdir or override embeddings_dir."
+            )
+
+    def _resolve_defined_subdir(
+        self,
+        value: str | Path | None,
+        field_name: str,
+    ) -> Path:
+        if value is None:
+            raise TypeError(
+                f"{type(self).__name__} must define {field_name} or override the matching property."
+            )
+        resolved = Path(value)
+        if resolved.is_absolute():
+            return resolved
+        return self.data_root / resolved
 
     @property
-    @abstractmethod
-    def dataset_id(self) -> str:
-        """Stable dataset identifier used in configs and artifact naming."""
-        ...
-
-    @property
-    @abstractmethod
     def audio_dir(self) -> Path:
         """Directory containing audio files for this dataset."""
-        ...
+        return self._resolve_defined_subdir(self.audio_subdir, "audio_subdir")
 
     @property
-    @abstractmethod
     def embeddings_dir(self) -> Path:
         """Directory for storing MERT embeddings for this dataset."""
-        ...
+        return self._resolve_defined_subdir(self.embeddings_subdir, "embeddings_subdir")
 
     @property
     def aggregated_dir(self) -> Path:
@@ -203,15 +240,3 @@ class BaseDataset(ABC):
     def __len__(self) -> int:
         """Number of audio files in dataset."""
         return len(self.get_audio_files())
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Dataset name."""
-        ...
-
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """Dataset description."""
-        ...

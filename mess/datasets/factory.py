@@ -15,27 +15,11 @@ class SMDDataset(BaseDataset):
     - Embeddings: data_root/embeddings/smd-emb/
     """
 
-    @property
-    def dataset_id(self) -> str:
-        return "smd"
-
-    @property
-    def audio_dir(self) -> Path:
-        """Directory containing SMD audio files."""
-        return self.data_root / "audio" / "smd" / "wav-44"
-
-    @property
-    def embeddings_dir(self) -> Path:
-        """Directory for SMD MERT embeddings."""
-        return self.data_root / "embeddings" / "smd-emb"
-
-    @property
-    def name(self) -> str:
-        return "Saarland Music Dataset (SMD)"
-
-    @property
-    def description(self) -> str:
-        return "Classical piano dataset with 50 recordings (44kHz WAV)"
+    dataset_id = "smd"
+    audio_subdir = Path("audio") / "smd" / "wav-44"
+    embeddings_subdir = Path("embeddings") / "smd-emb"
+    name = "Saarland Music Dataset (SMD)"
+    description = "Classical piano dataset with 50 recordings (44kHz WAV)"
 
 
 class MAESTRODataset(BaseDataset):
@@ -47,43 +31,40 @@ class MAESTRODataset(BaseDataset):
     - Embeddings: data_root/embeddings/maestro-emb/
     """
 
-    @property
-    def dataset_id(self) -> str:
-        return "maestro"
+    dataset_id = "maestro"
+    audio_subdir = Path("audio") / "maestro"
+    embeddings_subdir = Path("embeddings") / "maestro-emb"
+    name = "MAESTRO Dataset"
+    description = (
+        "Classical piano performances dataset "
+        "(MIDI Aligned Edited Synchronized TRack of Orchestral)"
+    )
 
-    @property
-    def audio_dir(self) -> Path:
-        """Directory containing MAESTRO audio files."""
-        return self.data_root / "audio" / "maestro"
 
-    @property
-    def embeddings_dir(self) -> Path:
-        """Directory for MAESTRO MERT embeddings."""
-        return self.data_root / "embeddings" / "maestro-emb"
-
-    @property
-    def name(self) -> str:
-        return "MAESTRO Dataset"
-
-    @property
-    def description(self) -> str:
-        return (
-            "Classical piano performances dataset "
-            "(MIDI Aligned Edited Synchronized TRack of Orchestral)"
-        )
+DEFAULT_DATASETS: dict[str, type[BaseDataset]] = {
+    "smd": SMDDataset,
+    "maestro": MAESTRODataset,
+}
 
 
 class DatasetFactory:
     """
     Factory for creating dataset instances.
 
-    Uses hybrid approach: datasets default to config.data_root but can be overridden.
+    Uses a small registry of dataset classes keyed by dataset_id.
     """
 
-    _datasets: dict[str, type[BaseDataset]] = {
-        'smd': SMDDataset,
-        'maestro': MAESTRODataset,
-    }
+    _datasets: dict[str, type[BaseDataset]] = DEFAULT_DATASETS.copy()
+
+    @classmethod
+    def _resolve_dataset_class(cls, dataset_type: str) -> type[BaseDataset]:
+        try:
+            return cls._datasets[dataset_type]
+        except KeyError as exc:
+            available = ", ".join(cls._datasets)
+            raise ValueError(
+                f"Unsupported dataset type '{dataset_type}'. Available: {available}"
+            ) from exc
 
     @classmethod
     def get_dataset(cls, dataset_type: str, data_root: Path | None = None) -> BaseDataset:
@@ -107,11 +88,7 @@ class DatasetFactory:
             # Override with custom path
             dataset = DatasetFactory.get_dataset('maestro', Path('/custom/data'))
         """
-        if dataset_type not in cls._datasets:
-            available = ', '.join(cls._datasets.keys())
-            raise ValueError(f"Unsupported dataset type '{dataset_type}'. Available: {available}")
-
-        dataset_class = cls._datasets[dataset_type]
+        dataset_class = cls._resolve_dataset_class(dataset_type)
         return dataset_class(data_root)
 
     @classmethod
@@ -134,9 +111,13 @@ class DatasetFactory:
     @classmethod
     def get_available_datasets(cls) -> list[str]:
         """Get list of available dataset types."""
-        return list(cls._datasets.keys())
+        return list(cls._datasets)
 
     @classmethod
     def register_dataset(cls, name: str, dataset_class: type[BaseDataset]) -> None:
         """Register a new dataset type."""
+        if not name:
+            raise ValueError("Dataset name must be non-empty.")
+        if not issubclass(dataset_class, BaseDataset):
+            raise TypeError("dataset_class must inherit from BaseDataset.")
         cls._datasets[name] = dataset_class

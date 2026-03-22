@@ -32,25 +32,11 @@ class TestGetAvailableDatasets:
 class TestRegisterDataset:
     def test_register_custom(self, tmp_path):
         class CustomDataset(BaseDataset):
-            @property
-            def dataset_id(self):
-                return "custom"
-
-            @property
-            def audio_dir(self):
-                return self.data_root / "audio" / "custom"
-
-            @property
-            def embeddings_dir(self):
-                return self.data_root / "embeddings" / "custom-emb"
-
-            @property
-            def name(self):
-                return "Custom"
-
-            @property
-            def description(self):
-                return "Test dataset"
+            dataset_id = "custom"
+            audio_subdir = "audio/custom"
+            embeddings_subdir = "embeddings/custom-emb"
+            name = "Custom"
+            description = "Test dataset"
 
         DatasetFactory.register_dataset("custom", CustomDataset)
         ds = DatasetFactory.get_dataset("custom", data_root=tmp_path)

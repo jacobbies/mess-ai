@@ -238,19 +238,41 @@ def _validate_checksums(root: Path, checksums: dict[str, dict[str, Any]]) -> Non
             )
 
 
+def _normalize_vectors(vectors: np.ndarray) -> np.ndarray:
+    faiss = _require_faiss()
+    arr = np.asarray(vectors, dtype=np.float32).copy()
+    if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
+        raise ValueError(f"Expected non-empty 2D vectors, got shape {arr.shape}")
+    faiss.normalize_L2(arr)
+    return arr
+
+
 def _build_faiss_index(
     vectors: np.ndarray,
     index_type: IndexType = "flatip",
     nlist: int = 256,
     factory_string: str | None = None,
     nprobe: int | None = None,
-) -> tuple[Any, np.ndarray]:
-    faiss = _require_faiss()
-    arr = np.asarray(vectors, dtype=np.float32).copy()
-    if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
-        raise ValueError(f"Expected non-empty 2D vectors, got shape {arr.shape}")
+) -> Any:
+    return _build_faiss_index_impl(
+        _normalize_vectors(vectors),
+        index_type=index_type,
+        nlist=nlist,
+        factory_string=factory_string,
+        nprobe=nprobe,
+    )
 
-    faiss.normalize_L2(arr)
+
+def _build_faiss_index_impl(
+    normalized_vectors: np.ndarray,
+    *,
+    index_type: IndexType,
+    nlist: int,
+    factory_string: str | None,
+    nprobe: int | None,
+) -> Any:
+    faiss = _require_faiss()
+    arr = np.asarray(normalized_vectors, dtype=np.float32)
     dim = arr.shape[1]
 
     if index_type == "flatip":
@@ -260,7 +282,7 @@ def _build_faiss_index(
             raise ValueError("nprobe is only valid for ivfflat indexes")
         index = faiss.IndexFlatIP(dim)
         index.add(arr)
-        return index, arr
+        return index
 
     if index_type == "ivfflat":
         if factory_string is not None:
@@ -272,7 +294,7 @@ def _build_faiss_index(
         index.train(arr)
         index.add(arr)
         _set_index_nprobe(index, nprobe)
-        return index, arr
+        return index
 
     if index_type == "factory":
         if nprobe is not None:
@@ -283,7 +305,7 @@ def _build_faiss_index(
         if not index.is_trained:
             index.train(arr)
         index.add(arr)
-        return index, arr
+        return index
 
     raise ValueError(f"Unsupported index_type '{index_type}'")
 
@@ -406,7 +428,7 @@ def build_track_artifact(
 ) -> FAISSArtifact:
     """Build track-level FAISS artifact from aggregated features."""
     vectors, track_names = load_features(str(features_dir), layer=layer)
-    index, _ = _build_faiss_index(
+    index = _build_faiss_index(
         vectors,
         index_type=index_type,
         nlist=nlist,
@@ -575,8 +597,9 @@ def build_clip_artifact_from_vectors(
             f"{len(normalized_clip_records)} vs {arr.shape[0]}"
         )
 
-    index, normalized_vectors = _build_faiss_index(
-        vectors,
+    normalized_vectors = _normalize_vectors(vectors)
+    index = _build_faiss_index_impl(
+        normalized_vectors,
         index_type=index_type,
         nlist=nlist,
         factory_string=factory_string,

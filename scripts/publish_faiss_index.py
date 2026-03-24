@@ -21,6 +21,10 @@ def _default_features_dir(dataset: str, kind: str) -> Path:
     return base / ("segments" if kind == "clip" else "aggregated")
 
 
+def _default_clip_index(dataset: str) -> Path:
+    return mess_config.data_root / "metadata" / f"{dataset}_clip_index.csv"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build and optionally publish FAISS artifacts")
     parser.add_argument("--dataset", default="smd", help="Dataset name (default: smd)")
@@ -39,6 +43,11 @@ def main() -> int:
         "--features-dir",
         default=None,
         help="Features source dir; defaults to data/embeddings/<dataset>-emb/{aggregated|segments}",
+    )
+    parser.add_argument(
+        "--clip-index",
+        default=None,
+        help="Clip index CSV/parquet path. Required for clip artifacts.",
     )
     parser.add_argument("--layer", type=int, default=None, help="Optional layer 0-12")
     parser.add_argument(
@@ -97,13 +106,13 @@ def main() -> int:
     args = parser.parse_args()
 
     artifact_name = args.artifact_name or ("clip_index" if args.kind == "clip" else "track_index")
-    features_dir = Path(args.features_dir) if args.features_dir else _default_features_dir(
-        args.dataset, args.kind
+    features_dir = (
+        Path(args.features_dir)
+        if args.features_dir
+        else _default_features_dir(args.dataset, args.kind)
     )
+    clip_index = Path(args.clip_index) if args.clip_index else _default_clip_index(args.dataset)
 
-    if not features_dir.exists():
-        print(f"Error: features directory not found: {features_dir}")
-        return 1
     if args.nprobe is not None and args.index_type != "ivfflat":
         print("Error: --nprobe is only valid when --index-type=ivfflat")
         return 1
@@ -118,13 +127,14 @@ def main() -> int:
         return 1
 
     if args.kind == "clip":
+        if not clip_index.exists():
+            print(f"Error: clip index not found: {clip_index}")
+            return 1
         artifact = build_clip_artifact(
             dataset=args.dataset,
-            features_dir=features_dir,
+            clip_index=clip_index,
             artifact_name=artifact_name,
             layer=args.layer,
-            segment_duration=args.segment_duration,
-            overlap_ratio=args.overlap_ratio,
             index_type=args.index_type,
             model_name=args.model_name,
             nlist=args.nlist or 1024,
@@ -132,6 +142,9 @@ def main() -> int:
             nprobe=args.nprobe,
         )
     else:
+        if not features_dir.exists():
+            print(f"Error: features directory not found: {features_dir}")
+            return 1
         artifact = build_track_artifact(
             dataset=args.dataset,
             features_dir=features_dir,

@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from mess.datasets.clip_index import ClipIndex, ClipRecord
+from mess.search.faiss_index import build_clip_artifact
 from mess.search.search import (
     ClipSearchResult,
     _require_faiss,
@@ -134,6 +136,34 @@ class TestClipLevelSearch:
             arr[i, 0, : len(values)] = np.asarray(values, dtype=np.float32)
         return arr
 
+    @staticmethod
+    def _write_clip_index(tmp_path, segments_by_track: dict[str, np.ndarray]) -> ClipIndex:
+        records: list[ClipRecord] = []
+        for track_id, segments in segments_by_track.items():
+            path = tmp_path / f"{track_id}.npy"
+            np.save(path, segments)
+            for segment_idx in range(segments.shape[0]):
+                start_sec = segment_idx * 2.5
+                records.append(
+                    ClipRecord(
+                        clip_id=f"smd:{track_id}:{segment_idx:05d}",
+                        dataset_id="smd",
+                        recording_id=f"rec_{track_id}",
+                        work_id=f"work_{track_id}",
+                        track_id=track_id,
+                        segment_idx=segment_idx,
+                        start_sec=start_sec,
+                        end_sec=start_sec + 5.0,
+                        split="train" if track_id == "query_track" else "test",
+                        embedding_path=str(path),
+                    )
+                )
+
+        index = ClipIndex(records)
+        index_path = tmp_path / "clip_index.csv"
+        index.to_csv(index_path)
+        return ClipIndex.from_csv(index_path)
+
     def test_load_segment_features_returns_timestamps(self, tmp_path):
         np.save(
             tmp_path / "track_x.npy",
@@ -151,25 +181,24 @@ class TestClipLevelSearch:
         assert clip_locations[1].start_time == pytest.approx(2.5)
         assert clip_locations[2].start_time == pytest.approx(5.0)
 
-    def test_search_by_clip_returns_timestamped_results(self, tmp_path):
-        np.save(
-            tmp_path / "query_track.npy",
-            self._make_segments(
-                [[1.0, 0.0], [0.0, 1.0], [0.98, 0.05], [0.2, 0.9]]
-            ),
+    def test_search_by_clip_returns_full_metadata_results(self, tmp_path):
+        clip_index = self._write_clip_index(
+            tmp_path,
+            {
+                "query_track": self._make_segments(
+                    [[1.0, 0.0], [0.0, 1.0], [0.98, 0.05], [0.2, 0.9]]
+                ),
+                "candidate_track": self._make_segments(
+                    [[0.95, 0.1], [0.97, 0.04], [0.0, 1.0], [-1.0, 0.0]]
+                ),
+            },
         )
-        np.save(
-            tmp_path / "candidate_track.npy",
-            self._make_segments(
-                [[0.95, 0.1], [0.97, 0.04], [0.0, 1.0], [-1.0, 0.0]]
-            ),
-        )
+        artifact = build_clip_artifact(dataset="smd", clip_index=clip_index, layer=0)
 
         results = search_by_clip(
-            query_track="query_track",
-            clip_start=5.0,
-            features_dir=str(tmp_path),
-            layer=0,
+            artifact=artifact,
+            track_id="query_track",
+            start_sec=5.0,
             k=3,
             dedupe_window_seconds=0.0,
         )
@@ -178,26 +207,53 @@ class TestClipLevelSearch:
         assert all(isinstance(item, ClipSearchResult) for item in results)
         top = results[0]
         assert top.track_id == "candidate_track"
+        assert top.clip_id == "smd:candidate_track:00001"
+        assert top.dataset_id == "smd"
+        assert top.recording_id == "rec_candidate_track"
+        assert top.work_id == "work_candidate_track"
+        assert top.split == "test"
         assert top.start_time == pytest.approx(2.5)
         assert top.end_time == pytest.approx(7.5)
 
-    def test_search_by_clip_dedupes_nearby_regions_per_track(self, tmp_path):
-        np.save(
-            tmp_path / "query_track.npy",
-            self._make_segments([[1.0, 0.0], [0.95, 0.05], [0.9, 0.1], [0.0, 1.0]]),
+    def test_search_by_clip_accepts_clip_id(self, tmp_path):
+        clip_index = self._write_clip_index(
+            tmp_path,
+            {
+                "query_track": self._make_segments([[1.0, 0.0], [0.0, 1.0], [0.98, 0.05]]),
+                "candidate_track": self._make_segments([[0.95, 0.1], [0.97, 0.04], [0.0, 1.0]]),
+            },
         )
-        np.save(
-            tmp_path / "candidate_track.npy",
-            self._make_segments(
-                [[0.99, 0.01], [0.98, 0.02], [0.97, 0.03], [-1.0, 0.0]]
-            ),
-        )
+        artifact = build_clip_artifact(dataset="smd", clip_index=clip_index, layer=0)
 
         results = search_by_clip(
-            query_track="query_track",
-            clip_start=0.0,
-            features_dir=str(tmp_path),
-            layer=0,
+            artifact=artifact,
+            clip_id="smd:query_track:00002",
+            k=2,
+            dedupe_window_seconds=0.0,
+        )
+
+        assert len(results) == 2
+        assert results[0].clip_id == "smd:candidate_track:00001"
+        assert all(result.clip_id != "smd:query_track:00002" for result in results)
+
+    def test_search_by_clip_dedupes_nearby_regions_per_track(self, tmp_path):
+        clip_index = self._write_clip_index(
+            tmp_path,
+            {
+                "query_track": self._make_segments(
+                    [[1.0, 0.0], [0.95, 0.05], [0.9, 0.1], [0.0, 1.0]]
+                ),
+                "candidate_track": self._make_segments(
+                    [[0.99, 0.01], [0.98, 0.02], [0.97, 0.03], [-1.0, 0.0]]
+                ),
+            },
+        )
+        artifact = build_clip_artifact(dataset="smd", clip_index=clip_index, layer=0)
+
+        results = search_by_clip(
+            artifact=artifact,
+            track_id="query_track",
+            start_sec=0.0,
             k=4,
             dedupe_window_seconds=5.0,
         )
@@ -210,14 +266,17 @@ class TestClipLevelSearch:
             assert candidate_starts[i] - candidate_starts[i - 1] >= 5.0
 
     def test_search_by_clip_unknown_track_raises(self, tmp_path):
-        np.save(tmp_path / "track_a.npy", self._make_segments([[1.0, 0.0], [0.0, 1.0]]))
+        clip_index = self._write_clip_index(
+            tmp_path,
+            {"track_a": self._make_segments([[1.0, 0.0], [0.0, 1.0]])},
+        )
+        artifact = build_clip_artifact(dataset="smd", clip_index=clip_index, layer=0)
 
         with pytest.raises(ValueError, match="not found"):
             search_by_clip(
-                query_track="missing",
-                clip_start=0.0,
-                features_dir=str(tmp_path),
-                layer=0,
+                artifact=artifact,
+                track_id="missing",
+                start_sec=0.0,
             )
 
 

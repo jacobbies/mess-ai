@@ -14,7 +14,6 @@ from ..search.faiss_index import (
     build_clip_artifact_from_vectors,
     save_artifact,
 )
-from ..search.search import ClipLocation
 from .trainer import ProjectionHead
 
 
@@ -63,20 +62,6 @@ def project_vectors_with_head(
 
     return np.vstack(outputs).astype(np.float32)
 
-
-def records_to_clip_locations(records: Sequence[ClipRecord]) -> list[ClipLocation]:
-    """Convert clip-index records to FAISS clip-location metadata rows."""
-    return [
-        ClipLocation(
-            track_id=record.track_id,
-            segment_idx=record.segment_idx,
-            start_time=record.start_sec,
-            end_time=record.end_sec,
-        )
-        for record in records
-    ]
-
-
 def _resolve_dataset(records: Sequence[ClipRecord], dataset: str | None) -> str:
     if dataset is not None:
         return dataset
@@ -122,13 +107,12 @@ def export_projection_clip_artifact(
         batch_size=batch_size,
     )
 
-    clip_locations = records_to_clip_locations(records)
     resolved_dataset = _resolve_dataset(records, dataset)
 
     artifact = build_clip_artifact_from_vectors(
         dataset=resolved_dataset,
         vectors=projected_vectors,
-        clip_locations=clip_locations,
+        clip_records=records,
         artifact_name=artifact_name,
         layer=layer,
         index_type=index_type,

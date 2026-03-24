@@ -114,8 +114,18 @@ def test_train_then_export_projection_clip_artifact(
     assert loaded.manifest.dimension == result.output_dim
     assert loaded.manifest.ntotal == len(records)
     assert loaded.manifest.feature_source_dir == str(tmp_path / "clip_index.csv")
+    assert loaded.clip_records is not None
+    assert len(loaded.clip_records) == len(records)
+    assert loaded.vectors is not None
+    assert loaded.vectors.shape == (len(records), result.output_dim)
     assert loaded.clip_locations is not None
     assert len(loaded.clip_locations) == len(records)
+
+    first_record = loaded.clip_records[0]
+    assert first_record.clip_id == records[0].clip_id
+    assert first_record.recording_id == records[0].recording_id
+    assert first_record.work_id == records[0].work_id
+    assert first_record.split == records[0].split
 
     first_loc = loaded.clip_locations[0]
     assert first_loc.track_id == records[0].track_id

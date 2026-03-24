@@ -21,13 +21,13 @@ Usage:
 
 import importlib
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 
 from .._runtime import configure_faiss_runtime
+from .contracts import ClipLocation, ClipMetadata, ClipSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,28 +46,6 @@ def _require_faiss() -> Any:
         raise ModuleNotFoundError(
             "faiss is required for similarity search. Install it with `pip install faiss-cpu`."
         ) from exc
-
-
-@dataclass(frozen=True)
-class ClipLocation:
-    """Index location and time span for one segment embedding."""
-
-    track_id: str
-    segment_idx: int
-    start_time: float
-    end_time: float
-
-
-@dataclass(frozen=True)
-class ClipSearchResult:
-    """Search result for clip-level retrieval."""
-
-    track_id: str
-    segment_idx: int
-    start_time: float
-    end_time: float
-    similarity: float
-
 
 def _vectorize_track_features(
     raw_features: np.ndarray,
@@ -208,6 +186,73 @@ def _resolve_query_segment_index(
         range(len(track_clip_locations)),
         key=lambda i: abs(track_clip_locations[i].start_time - clip_start),
     )
+
+
+def _load_clip_artifact(artifact: str | Path | Any) -> Any:
+    if isinstance(artifact, (str, Path)):
+        from .faiss_index import load_artifact
+
+        loaded = load_artifact(artifact)
+    else:
+        loaded = artifact
+
+    if loaded.manifest.kind != "clip":
+        raise ValueError(
+            f"search_by_clip requires a clip artifact, got kind={loaded.manifest.kind!r}"
+        )
+    return loaded
+
+
+def _resolve_artifact_query_index(
+    *,
+    clip_records: list[ClipMetadata],
+    clip_id: str | None,
+    track_id: str | None,
+    start_sec: float | None,
+) -> int:
+    if clip_id is not None:
+        if track_id is not None or start_sec is not None:
+            raise ValueError("Provide either clip_id or track_id/start_sec, not both")
+        for idx, record in enumerate(clip_records):
+            if record.clip_id == clip_id:
+                return idx
+        raise ValueError(f"Query clip_id '{clip_id}' not found in artifact")
+
+    if track_id is None or start_sec is None:
+        raise ValueError("Provide either clip_id or both track_id and start_sec")
+    if start_sec < 0:
+        raise ValueError("start_sec must be >= 0")
+
+    track_indices = [
+        idx for idx, record in enumerate(clip_records) if record.track_id == track_id
+    ]
+    if not track_indices:
+        raise ValueError(f"Query track '{track_id}' not found in artifact")
+
+    track_locations = [clip_records[idx].to_location() for idx in track_indices]
+    relative_query_idx = _resolve_query_segment_index(track_locations, start_sec)
+    return track_indices[relative_query_idx]
+
+
+def _query_vector_from_artifact(artifact: Any, query_idx: int) -> np.ndarray:
+    if artifact.vectors is not None:
+        return np.array(artifact.vectors[query_idx:query_idx + 1], dtype=np.float32, copy=True)
+
+    if not hasattr(artifact.index, "reconstruct"):
+        raise ValueError(
+            "Clip artifact is missing persisted vectors required for clip queries. "
+            "Rebuild the artifact with stored vectors."
+        )
+
+    try:
+        reconstructed = artifact.index.reconstruct(int(query_idx))
+    except Exception as exc:  # pragma: no cover - FAISS errors vary by backend
+        raise ValueError(
+            "Clip artifact could not reconstruct the query vector. "
+            "Rebuild the artifact with stored vectors."
+        ) from exc
+
+    return np.asarray(reconstructed, dtype=np.float32).reshape(1, -1)
 
 
 def load_segment_features(
@@ -485,81 +530,68 @@ def find_similar(
 
 
 def search_by_clip(
-    query_track: str,
-    clip_start: float,
-    features_dir: str,
+    artifact: str | Path | Any,
+    *,
+    clip_id: str | None = None,
+    track_id: str | None = None,
+    start_sec: float | None = None,
     k: int = 10,
-    clip_duration: float = DEFAULT_SEGMENT_DURATION,
-    layer: int | None = None,
-    segment_duration: float = DEFAULT_SEGMENT_DURATION,
-    overlap_ratio: float = DEFAULT_OVERLAP_RATIO,
     dedupe_window_seconds: float = DEFAULT_DEDUPE_WINDOW_SECONDS,
     exclude_same_segment: bool = True,
+    nprobe: int | None = None,
 ) -> list[ClipSearchResult]:
     """
-    Find similar clips for a query clip defined by track and start time.
+    Find similar clips from a prebuilt clip artifact.
 
     Args:
-        query_track: Track ID containing the query clip
-        clip_start: Clip start time in seconds
-        features_dir: Directory containing segment embeddings
+        artifact: Loaded clip artifact or artifact directory path
+        clip_id: Exact clip identifier to use as the query
+        track_id: Track identifier used together with start_sec
+        start_sec: Clip start time used to resolve the nearest query clip in track_id
         k: Number of clip results to return
-        clip_duration: Query clip duration in seconds (for validation/reporting)
-        layer: Optional layer selection for clip embeddings
-        segment_duration: Segment duration used during extraction
-        overlap_ratio: Segment overlap ratio used during extraction
         dedupe_window_seconds: Suppress nearby results within this window per track
         exclude_same_segment: Exclude the exact query segment from results
+        nprobe: Optional IVF nprobe override
 
     Returns:
-        List of clip-level results with timestamps and similarity scores
+        List of clip-level results with preserved clip metadata and similarity scores
     """
-    faiss = _require_faiss()
-
-    if clip_duration <= 0:
-        raise ValueError("clip_duration must be > 0")
     if k <= 0:
         raise ValueError("k must be > 0")
     if dedupe_window_seconds < 0:
         raise ValueError("dedupe_window_seconds must be >= 0")
 
-    features, clip_locations = load_segment_features(
-        features_dir=features_dir,
-        layer=layer,
-        segment_duration=segment_duration,
-        overlap_ratio=overlap_ratio,
+    loaded_artifact = _load_clip_artifact(artifact)
+    clip_records = loaded_artifact.clip_records
+    if not clip_records:
+        raise ValueError(
+            "Clip artifact is missing clip metadata. Rebuild it from ClipIndex-backed records."
+        )
+
+    query_idx = _resolve_artifact_query_index(
+        clip_records=clip_records,
+        clip_id=clip_id,
+        track_id=track_id,
+        start_sec=start_sec,
     )
-
-    track_indices = [
-        idx for idx, loc in enumerate(clip_locations) if loc.track_id == query_track
-    ]
-    if not track_indices:
-        raise ValueError(f"Query track '{query_track}' not found in dataset")
-
-    track_locations = [clip_locations[idx] for idx in track_indices]
-    relative_query_idx = _resolve_query_segment_index(track_locations, clip_start)
-    query_idx = track_indices[relative_query_idx]
-    query_location = clip_locations[query_idx]
+    query_record = clip_records[query_idx]
 
     logger.info(
-        "Resolved query clip '%s' start %.2fs to segment %d [%.2f, %.2f]",
-        query_track,
-        clip_start,
-        query_location.segment_idx,
-        query_location.start_time,
-        query_location.end_time,
+        "Resolved query clip to '%s' [%s %.2fs - %.2fs]",
+        query_record.clip_id or f"{query_record.track_id}:{query_record.segment_idx}",
+        query_record.track_id,
+        query_record.start_time,
+        query_record.end_time,
     )
 
-    query_features = features[query_idx:query_idx + 1].astype("float32")
-    index = build_index(features)
-    faiss.normalize_L2(query_features)
+    query_vector = _query_vector_from_artifact(loaded_artifact, query_idx)
 
     # Over-fetch so we can still return k after filtering + deduping.
     search_k = min(
-        len(clip_locations),
+        len(clip_records),
         max(k * 25, k + 25),
     )
-    distances, indices = index.search(query_features, search_k)
+    distances, indices = loaded_artifact.search(query_vector, search_k, nprobe=nprobe)
 
     accepted_starts_by_track: dict[str, list[float]] = {}
     results: list[ClipSearchResult] = []
@@ -568,29 +600,21 @@ def search_by_clip(
         if idx < 0:
             continue
 
-        location = clip_locations[int(idx)]
+        record = clip_records[int(idx)]
 
         if exclude_same_segment and int(idx) == query_idx:
             continue
 
         # Avoid near-duplicate regions from the same track.
-        existing_starts = accepted_starts_by_track.setdefault(location.track_id, [])
+        existing_starts = accepted_starts_by_track.setdefault(record.track_id, [])
         if dedupe_window_seconds > 0 and any(
-            abs(location.start_time - existing_start) < dedupe_window_seconds
+            abs(record.start_time - existing_start) < dedupe_window_seconds
             for existing_start in existing_starts
         ):
             continue
 
-        existing_starts.append(location.start_time)
-        results.append(
-            ClipSearchResult(
-                track_id=location.track_id,
-                segment_idx=location.segment_idx,
-                start_time=location.start_time,
-                end_time=location.end_time,
-                similarity=float(score),
-            )
-        )
+        existing_starts.append(record.start_time)
+        results.append(ClipSearchResult.from_clip_metadata(record, similarity=float(score)))
 
         if len(results) >= k:
             break

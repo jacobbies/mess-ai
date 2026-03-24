@@ -1,57 +1,58 @@
 # PR/TASK HANDOFF
-- Task/PR: Simplify dataset definitions and dataset factory
-- Branch: `pr09-simplify-dataset-layer`
-- Status: `completed`
+- Task/PR: Unify clip retrieval around ClipIndex-backed FAISS artifacts
+- Branch: `pr15-clip-search-artifact`
+- Status: `in_progress`
 
 ## Objective
-- Reduce `mess.datasets.base` and `mess.datasets.factory` complexity without changing dataset path behavior, clip-index helpers, or public dataset names.
+- Make clip retrieval use one contract end-to-end: clip artifacts built from ClipIndex metadata and clip search executed against prebuilt FAISS artifacts.
+- Preserve clip identity and provenance in artifacts so clip search can return full metadata, not just reduced location fields.
 
 ## Scope
 - In:
-  - `BaseDataset` contract shape
-  - `SMDDataset` and `MAESTRODataset` definitions
-  - `DatasetFactory` registry/lookup behavior
-  - Dataset tests directly covering those contracts
+  - Clip artifact metadata schema and persistence
+  - Projection export path for clip artifacts
+  - Clip artifact build path used by publishing/search workflows
+  - One canonical artifact-backed clip search API
+  - Tests and repo callers directly affected by the contract change
 - Out:
-  - Search/training/probing refactors
-  - Clip index or metadata schema changes
-  - Changes to dataset consumer behavior outside what is required for the simpler dataset contract
+  - Track retrieval API changes
+  - Unrelated probing/search refactors
+  - Broader CLI redesign outside what is needed to support the new clip artifact/search contract
 
 ## Files To Inspect
-- `mess/datasets/base.py`
-- `mess/datasets/factory.py`
-- `mess/datasets/__init__.py`
-- `tests/datasets/test_base.py`
-- `tests/datasets/test_factory.py`
-- `tests/datasets/test_smd.py`
-- `tests/datasets/test_maestro.py`
-- `tests/datasets/conftest.py`
-- `mess/probing/discovery.py`
-- `scripts/extract_features.py`
-- `scripts/inspect_embeddings.py`
+- `mess/datasets/clip_index.py`
+- `mess/search/faiss_index.py`
+- `mess/search/search.py`
+- `mess/search/__init__.py`
+- `mess/__init__.py`
+- `mess/training/export.py`
+- `mess/training/context_export.py`
+- `scripts/publish_faiss_index.py`
+- `scripts/demo_recommendations.py`
+- `tests/search/test_faiss_index.py`
+- `tests/search/test_search.py`
+- `tests/training/test_end_to_end_projection_artifact.py`
+- `tests/search/test_search_init_exports.py`
+- `tests/test_public_api.py`
 
 ## Contracts To Preserve
-- `DatasetFactory.get_dataset("smd"|"maestro")` continues to return the same public dataset types.
-- Dataset instances keep the same resolved paths for `audio_dir`, `embeddings_dir`, `aggregated_dir`, `segments_dir`, `metadata_table_path`, and `clip_index_path`.
-- `BaseDataset.build_clip_index()` and metadata-loading behavior stay unchanged.
-- Custom dataset registration via `DatasetFactory.register_dataset()` continues to work.
-- Public exports from `mess.datasets` and `mess` remain stable.
+- Clip artifact row order must stay aligned with FAISS vector row order.
+- Clip search must stay cosine-based (`IndexFlatIP`/normalized vectors) and preserve self-exclusion and near-time dedupe behavior unless explicitly changed.
+- ClipIndex remains the source of truth for clip identity/provenance fields, especially `clip_id`, `recording_id`, `work_id`, and recording-level `split`.
+- Artifact integrity behavior stays intact: immutable `artifact_version_id`, checksum validation, `latest.json` upload ordering, and local/S3 load paths.
 
 ## Plan
-1. Replace abstract-property-heavy dataset definitions with a smaller concrete base contract.
-2. Convert built-in datasets to declarative class-level definitions.
-3. Simplify factory lookup/registration without changing public method names.
-4. Update tests to cover the simpler dataset definition style and preserved compatibility.
-5. Run focused validation for dataset contracts and key callers.
+1. Replace reduced clip-location artifact metadata with a richer clip metadata row aligned to ClipIndex identity/provenance.
+2. Update clip artifact save/load/build helpers and projection export to persist that metadata.
+3. Add a canonical artifact-backed clip search API that resolves queries by `clip_id` or `(track_id, start_sec)`.
+4. Update repo callers/exports to use the new clip artifact/search contract.
+5. Run focused validation for artifact round-trips, clip search behavior, and public API exports.
 
 ## Validation
-- `uv run pytest -q tests/datasets/test_base.py tests/datasets/test_factory.py tests/datasets/test_smd.py tests/datasets/test_maestro.py`
-- `uv run pytest -q tests/probing/test_discovery.py tests/test_public_api.py`
-
-## Validation Results
-- `uv run ruff check mess/datasets/base.py mess/datasets/factory.py tests/datasets/test_base.py tests/datasets/test_factory.py tests/datasets/test_smd.py tests/datasets/test_maestro.py tests/datasets/test_init.py tests/probing/test_discovery.py tests/test_public_api.py`: pass
-- `uv run pytest -q tests/datasets/test_base.py tests/datasets/test_factory.py tests/datasets/test_smd.py tests/datasets/test_maestro.py tests/datasets/test_init.py tests/probing/test_discovery.py tests/test_public_api.py`: pass
+- `uv run pytest -q tests/search/test_faiss_index.py tests/search/test_search.py tests/training/test_end_to_end_projection_artifact.py tests/search/test_search_init_exports.py tests/test_public_api.py`
+- `uv run ruff check mess/search mess/training scripts/publish_faiss_index.py scripts/demo_recommendations.py`
 
 ## Risks / Open Questions
-- Direct third-party subclassing of `BaseDataset` may rely on overriding properties instead of class attributes; compatibility should be preserved where practical.
-- The factory registry is still mutable by design for tests and extensions, so simplification should not remove that capability.
+- Persisted clip artifact schema is changing; loader compatibility for older clip artifacts needs an explicit decision and tests.
+- `mess/training/context_export.py` currently uses clip artifact helpers for track-level outputs and may need a compatibility adjustment if clip metadata becomes stricter.
+- The repo currently exposes `search_by_clip`; decide whether to replace it outright or keep it as a thin compatibility wrapper during the transition.

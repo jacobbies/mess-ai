@@ -1,58 +1,52 @@
 # PR/TASK HANDOFF
-- Task/PR: Unify clip retrieval around ClipIndex-backed FAISS artifacts
-- Branch: `pr15-clip-search-artifact`
+- Task/PR: Cleanup clip-search README example and cut a stable downstream pin
+- Branch: `pr16-clip-search-cleanup`
 - Status: `in_progress`
+- Depends on: `2f3c577` (`Merge pull request #19 from jacobbies/pr15-clip-search-artifact`)
 
 ## Objective
-- Make clip retrieval use one contract end-to-end: clip artifacts built from ClipIndex metadata and clip search executed against prebuilt FAISS artifacts.
-- Preserve clip identity and provenance in artifacts so clip search can return full metadata, not just reduced location fields.
+- Replace the stale pre-artifact `search_by_clip(...)` README example with the current artifact-backed call pattern.
+- Close the open compatibility decision for downstream consumers such as `classical-recsys`.
+- Cut a stable commit/tag once the docs and focused tests pass.
 
 ## Scope
 - In:
-  - Clip artifact metadata schema and persistence
-  - Projection export path for clip artifacts
-  - Clip artifact build path used by publishing/search workflows
-  - One canonical artifact-backed clip search API
-  - Tests and repo callers directly affected by the contract change
+  - `README.md` clip-search example
+  - Compatibility-wrapper decision documentation
+  - Focused regression coverage for the README example
+  - Stable commit/tag creation for downstream pinning
 - Out:
-  - Track retrieval API changes
-  - Unrelated probing/search refactors
-  - Broader CLI redesign outside what is needed to support the new clip artifact/search contract
+  - Search behavior changes
+  - Public API renames or removals
+  - Artifact schema or storage changes
 
 ## Files To Inspect
-- `mess/datasets/clip_index.py`
-- `mess/search/faiss_index.py`
+- `README.md`
+- `docs/pr_backlog.md`
 - `mess/search/search.py`
 - `mess/search/__init__.py`
 - `mess/__init__.py`
-- `mess/training/export.py`
-- `mess/training/context_export.py`
-- `scripts/publish_faiss_index.py`
 - `scripts/demo_recommendations.py`
-- `tests/search/test_faiss_index.py`
 - `tests/search/test_search.py`
-- `tests/training/test_end_to_end_projection_artifact.py`
 - `tests/search/test_search_init_exports.py`
 - `tests/test_public_api.py`
 
 ## Contracts To Preserve
-- Clip artifact row order must stay aligned with FAISS vector row order.
-- Clip search must stay cosine-based (`IndexFlatIP`/normalized vectors) and preserve self-exclusion and near-time dedupe behavior unless explicitly changed.
-- ClipIndex remains the source of truth for clip identity/provenance fields, especially `clip_id`, `recording_id`, `work_id`, and recording-level `split`.
-- Artifact integrity behavior stays intact: immutable `artifact_version_id`, checksum validation, `latest.json` upload ordering, and local/S3 load paths.
+- `search_by_clip` stays the stable public clip-search entry point.
+- Clip search continues to operate on prebuilt clip artifacts rather than raw segment directories.
+- Cleanup must not change any caller-visible behavior beyond fixing the stale README example.
 
 ## Plan
-1. Replace reduced clip-location artifact metadata with a richer clip metadata row aligned to ClipIndex identity/provenance.
-2. Update clip artifact save/load/build helpers and projection export to persist that metadata.
-3. Add a canonical artifact-backed clip search API that resolves queries by `clip_id` or `(track_id, start_sec)`.
-4. Update repo callers/exports to use the new clip artifact/search contract.
-5. Run focused validation for artifact round-trips, clip search behavior, and public API exports.
+1. Update the task record before editing.
+2. Replace the stale README snippet with the current artifact-backed example.
+3. Add a focused regression test for the README example.
+4. Run focused validation for the touched surface.
+5. Create a stable commit and tag for downstream pinning.
 
 ## Validation
-- `uv run pytest -q tests/search/test_faiss_index.py tests/search/test_search.py tests/training/test_end_to_end_projection_artifact.py tests/search/test_search_init_exports.py tests/test_public_api.py`
-- `uv run ruff check mess/search mess/training scripts/publish_faiss_index.py scripts/demo_recommendations.py`
+- `uv run pytest -q tests/test_readme_examples.py tests/search/test_search.py tests/search/test_search_init_exports.py tests/test_public_api.py`
+- `uv run ruff check tests/test_readme_examples.py`
 
 ## Risks / Open Questions
-- Persisted clip artifact schema is changing; loader compatibility for older clip artifacts needs an explicit decision and tests.
-- `mess/training/context_export.py` currently uses clip artifact helpers for track-level outputs and may need a compatibility adjustment if clip metadata becomes stricter.
-- The repo currently exposes `search_by_clip`; decide whether to replace it outright or keep it as a thin compatibility wrapper during the transition.
+- Decision: keep `search_by_clip` as the stable compatibility wrapper/public entry point for now. It is exported from both `mess` and `mess.search`, used by repo callers, and removing or renaming it would create downstream churn without solving a cleanup problem.
+- Local tag creation is in scope here. Publishing that tag upstream still requires a later `git push origin <tag>`.

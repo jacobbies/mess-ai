@@ -541,7 +541,7 @@ def search_by_clip(
     nprobe: int | None = None,
 ) -> list[ClipSearchResult]:
     """
-    Find similar clips from a prebuilt clip artifact.
+    Stable public entry point for clip search over a prebuilt clip artifact.
 
     Args:
         artifact: Loaded clip artifact or artifact directory path

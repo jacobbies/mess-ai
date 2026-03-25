@@ -109,6 +109,7 @@ uv run mlflow ui
 
 ```python
 from mess import find_similar, load_features, search_by_aspect, search_by_clip
+from mess.search import find_latest_artifact_dir
 
 features_dir = "data/embeddings/smd-emb/aggregated"
 features, track_names = load_features(features_dir)
@@ -116,10 +117,11 @@ features, track_names = load_features(features_dir)
 baseline = find_similar("Beethoven_Op027No1-01", features, track_names, k=5)
 brightness = search_by_aspect("Beethoven_Op027No1-01", "brightness", features_dir, k=5)
 
+clip_artifact_dir = find_latest_artifact_dir("data/indices", artifact_name="clip_index")
 clip_results = search_by_clip(
-    query_track="Beethoven_Op027No1-01",
-    clip_start=30.0,
-    features_dir="data/embeddings/smd-emb/segments",
+    artifact=clip_artifact_dir,
+    track_id="Beethoven_Op027No1-01",
+    start_sec=30.0,
     k=5,
 )
 ```

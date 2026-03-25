@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from mess.datasets.clip_index import ClipIndex, ClipRecord
 from mess.search.faiss_index import (
     ArtifactValidationError,
     build_clip_artifact,
@@ -68,17 +69,30 @@ class TestFAISSArtifactPersistence:
         segs[1, 0, 1] = 1.0
         segs[2, 0, :2] = np.array([0.6, 0.8], dtype=np.float32)
 
-        feature_dir = tmp_path / "segments"
-        feature_dir.mkdir()
-        np.save(feature_dir / "track_x.npy", segs)
+        feature_path = tmp_path / "track_x.npy"
+        np.save(feature_path, segs)
+        clip_index = ClipIndex(
+            [
+                ClipRecord(
+                    clip_id=f"smd:track_x:{segment_idx:05d}",
+                    dataset_id="smd",
+                    recording_id="rec_x",
+                    work_id="work_x",
+                    track_id="track_x",
+                    segment_idx=segment_idx,
+                    start_sec=segment_idx * 2.5,
+                    end_sec=(segment_idx * 2.5) + 5.0,
+                    split="train",
+                    embedding_path=str(feature_path),
+                )
+                for segment_idx in range(3)
+            ]
+        )
 
         artifact = build_clip_artifact(
-            dataset="smd",
-            features_dir=feature_dir,
+            clip_index=clip_index,
             artifact_name="clip_index",
             layer=0,
-            segment_duration=5.0,
-            overlap_ratio=0.5,
         )
         out_dir = save_artifact(
             artifact,
@@ -86,10 +100,19 @@ class TestFAISSArtifactPersistence:
             created_stamp="20260101T000000Z",
         )
 
-        assert (out_dir / "clip_locations.json.gz").exists()
+        assert (out_dir / "clip_records.json.gz").exists()
+        assert (out_dir / "vectors.npy").exists()
         loaded = load_artifact(out_dir)
         assert loaded.manifest.kind == "clip"
         assert loaded.track_names is None
+        assert loaded.clip_records is not None
+        assert len(loaded.clip_records) == 3
+        assert loaded.clip_records[1].clip_id == "smd:track_x:00001"
+        assert loaded.clip_records[1].recording_id == "rec_x"
+        assert loaded.clip_records[1].work_id == "work_x"
+        assert loaded.clip_records[1].split == "train"
+        assert loaded.vectors is not None
+        assert loaded.vectors.shape == (3, 768)
         assert loaded.clip_locations is not None
         assert len(loaded.clip_locations) == 3
         assert loaded.clip_locations[1].start_time == pytest.approx(2.5)
@@ -178,7 +201,7 @@ class TestFAISSArtifactPersistence:
             ClipLocation(track_id="track_a", segment_idx=1, start_time=2.5, end_time=7.5),
         ]
 
-        with pytest.raises(ValueError, match="clip_locations length must match vectors rows"):
+        with pytest.raises(ValueError, match="clip metadata length must match vectors rows"):
             build_clip_artifact_from_vectors(
                 dataset="smd",
                 vectors=vectors,

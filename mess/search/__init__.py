@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .hybrid import hybrid_search
     from .search import (
         ClipLocation,
+        ClipMetadata,
         ClipSearchResult,
         build_index,
         find_similar,
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "ClipMetadata",
     "ClipLocation",
     "ClipSearchResult",
     "build_index",
@@ -59,6 +61,7 @@ __all__ = [
 ]
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
+    "ClipMetadata": (".search", "ClipMetadata"),
     "ClipLocation": (".search", "ClipLocation"),
     "ClipSearchResult": (".search", "ClipSearchResult"),
     "build_index": (".search", "build_index"),

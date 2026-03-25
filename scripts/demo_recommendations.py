@@ -14,6 +14,7 @@ from pathlib import Path
 
 from mess.datasets.metadata_table import DatasetMetadataTable
 from mess.probing import resolve_aspects
+from mess.search.faiss_index import find_latest_artifact_dir
 from mess.search.hybrid import hybrid_search
 from mess.search.search import (
     find_similar,
@@ -108,7 +109,7 @@ def main(
     """Run similarity search demo."""
     # Construct features directory paths
     aggregated_features_dir = Path(f"data/embeddings/{dataset}-emb/aggregated")
-    segment_features_dir = Path(f"data/embeddings/{dataset}-emb/segments")
+    artifact_root = Path("data/indices")
 
     print(f"\n{'='*70}")
     print(f"RECOMMENDATIONS FOR: {track_name}")
@@ -132,13 +133,6 @@ def main(
         return 1
 
     if clip_start is not None:
-        if not segment_features_dir.exists():
-            print(f"Error: Segment features not found at {segment_features_dir}")
-            print(
-                "Run feature extraction with segments: "
-                "python scripts/extract_features.py --feature-level segments"
-            )
-            return 1
         if clip_duration <= 0:
             print("Error: --clip-duration must be > 0.")
             return 1
@@ -146,16 +140,28 @@ def main(
             print("Error: --dedupe-window must be >= 0.")
             return 1
 
+        try:
+            clip_artifact_dir = find_latest_artifact_dir(
+                artifact_root,
+                artifact_name="clip_index",
+            )
+        except FileNotFoundError:
+            print(f"Error: Clip artifact not found under {artifact_root / 'clip_index'}")
+            print(
+                "Build one first with "
+                "python scripts/publish_faiss_index.py --kind clip --clip-index <path>"
+            )
+            return 1
+
         print(f"Clip Query: start={clip_start:.2f}s, duration={clip_duration:.2f}s")
-        print("Using: Clip-level segment search")
+        print("Using: Artifact-backed clip search")
         print(f"{'='*70}\n")
 
         try:
             results = search_by_clip(
-                query_track=track_name,
-                clip_start=clip_start,
-                clip_duration=clip_duration,
-                features_dir=str(segment_features_dir),
+                artifact=clip_artifact_dir,
+                track_id=track_name,
+                start_sec=clip_start,
                 k=k,
                 dedupe_window_seconds=dedupe_window,
             )

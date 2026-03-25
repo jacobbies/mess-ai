@@ -13,9 +13,10 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .._runtime import configure_faiss_runtime
 from ..datasets.clip_index import ClipIndex, ClipRecord
@@ -240,11 +241,11 @@ def _validate_checksums(root: Path, checksums: dict[str, dict[str, Any]]) -> Non
 
 def _normalize_vectors(vectors: np.ndarray) -> np.ndarray:
     faiss = _require_faiss()
-    arr = np.asarray(vectors, dtype=np.float32).copy()
+    arr: NDArray[np.float32] = np.asarray(vectors, dtype=np.float32).copy()
     if arr.ndim != 2 or arr.shape[0] == 0 or arr.shape[1] == 0:
         raise ValueError(f"Expected non-empty 2D vectors, got shape {arr.shape}")
     faiss.normalize_L2(arr)
-    return arr
+    return cast(np.ndarray, arr)
 
 
 def _build_faiss_index(
@@ -355,14 +356,17 @@ def _resolve_clip_index(index: ClipIndex | str | Path) -> ClipIndex:
 
 
 def _resolve_dataset_from_records(records: Sequence[ClipMetadata]) -> str:
-    dataset_ids = sorted({record.dataset_id for record in records if record.dataset_id})
+    unique_dataset_ids: set[str] = {
+        record.dataset_id for record in records if record.dataset_id
+    }
+    dataset_ids: list[str] = sorted(unique_dataset_ids)
     if not dataset_ids:
         raise ValueError("Cannot infer dataset from clip records without dataset_id")
     if len(dataset_ids) > 1:
         raise ValueError(
             "Multiple dataset IDs found in clip records. Provide dataset explicitly."
         )
-    return dataset_ids[0]
+    return cast(str, dataset_ids[0])
 
 
 def _validate_vectors_payload(manifest: ArtifactManifest, vectors: np.ndarray) -> None:

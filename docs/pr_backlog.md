@@ -1,7 +1,7 @@
 # PR/TASK HANDOFF
 - Task/PR: Cleanup clip-search README example and cut a stable downstream pin
 - Branch: `pr16-clip-search-cleanup`
-- Status: `in_progress`
+- Status: `completed`
 - Depends on: `2f3c577` (`Merge pull request #19 from jacobbies/pr15-clip-search-artifact`)
 
 ## Objective

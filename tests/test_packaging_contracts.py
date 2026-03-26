@@ -35,6 +35,15 @@ def test_ci_extras_exist_in_pyproject_optional_dependencies():
     assert not missing, f"CI references undefined extras: {missing}"
 
 
+def test_supported_optional_dependency_profiles_are_search_and_ml():
+    root = _repo_root()
+    pyproject_data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+    optional_deps = pyproject_data["project"]["optional-dependencies"]
+
+    assert set(optional_deps) == {"search", "ml"}
+
+
 def test_discovery_sklearn_error_hint_matches_supported_install_path(monkeypatch):
     real_import = builtins.__import__
 
@@ -46,7 +55,7 @@ def test_discovery_sklearn_error_hint_matches_supported_install_path(monkeypatch
     discovery._require_sklearn.cache_clear()
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    with pytest.raises(ModuleNotFoundError, match=r"mess-ai\[probing\]"):
+    with pytest.raises(ModuleNotFoundError, match=r"mess-ai\[ml\]"):
         discovery._require_sklearn()
 
     discovery._require_sklearn.cache_clear()

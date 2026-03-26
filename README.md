@@ -15,14 +15,15 @@ Requirements:
 
 Full local workflow (recommended for this repo):
 ```bash
-uv sync --group dev
+uv sync --group dev --extra search --extra ml
 ```
 
 Runtime-only installs:
 ```bash
 pip install mess-ai
 pip install "mess-ai[search]"
-pip install "mess-ai[probing]"
+pip install "mess-ai[ml]"
+pip install "mess-ai[search,ml]"
 ```
 
 ### 2. Add Demo Audio (One Command)

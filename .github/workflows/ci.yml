@@ -28,7 +28,7 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Sync dependencies
-        run: uv sync --group dev --extra search --extra probing
+        run: uv sync --group dev --extra search --extra ml
 
       - name: Run tests
         run: uv run pytest -q

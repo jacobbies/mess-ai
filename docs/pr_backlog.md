@@ -1,52 +1,54 @@
 # PR/TASK HANDOFF
-- Task/PR: Cleanup clip-search README example and cut a stable downstream pin
-- Branch: `pr16-clip-search-cleanup`
+- Task/PR: Collapse packaging extras to `search` and `ml`, refresh lockfile, and cut a local tag
+- Branch: `main`
 - Status: `completed`
-- Depends on: `2f3c577` (`Merge pull request #19 from jacobbies/pr15-clip-search-artifact`)
+- Depends on: current worktree state
 
 ## Objective
-- Replace the stale pre-artifact `search_by_clip(...)` README example with the current artifact-backed call pattern.
-- Close the open compatibility decision for downstream consumers such as `classical-recsys`.
-- Cut a stable commit/tag once the docs and focused tests pass.
+- Keep the base install lightweight with only always-safe core dependencies.
+- Preserve a narrow `search` extra for FAISS and S3 support.
+- Move the remaining runtime ML stack under a single `ml` extra and remove stale install paths.
 
 ## Scope
 - In:
-  - `README.md` clip-search example
-  - Compatibility-wrapper decision documentation
-  - Focused regression coverage for the README example
-  - Stable commit/tag creation for downstream pinning
+  - `pyproject.toml` optional dependencies and `dev` dependency group
+  - `uv.lock`
+  - Install guidance in docs/CI that names supported extras
+  - Packaging contract tests and runtime install hints
+  - Local tag creation once validation passes
 - Out:
-  - Search behavior changes
-  - Public API renames or removals
-  - Artifact schema or storage changes
+  - Runtime behavior changes in extraction, probing, search, or training
+  - Dependency version upgrades unrelated to the extra reshuffle
+  - Publishing tags upstream
 
 ## Files To Inspect
+- `pyproject.toml`
+- `uv.lock`
 - `README.md`
+- `.github/workflows/ci.yml`
+- `mess/probing/discovery.py`
+- `tests/test_packaging_contracts.py`
+- `tests/tests.md`
 - `docs/pr_backlog.md`
-- `mess/search/search.py`
-- `mess/search/__init__.py`
-- `mess/__init__.py`
-- `scripts/demo_recommendations.py`
-- `tests/search/test_search.py`
-- `tests/search/test_search_init_exports.py`
-- `tests/test_public_api.py`
 
 ## Contracts To Preserve
-- `search_by_clip` stays the stable public clip-search entry point.
-- Clip search continues to operate on prebuilt clip artifacts rather than raw segment directories.
-- Cleanup must not change any caller-visible behavior beyond fixing the stale README example.
+- Base install remains lightweight and usable for safe metadata/config usage.
+- `search` contains only repo-required search dependencies (`faiss-cpu`, `boto3`).
+- All probing, extraction, and training runtime dependencies install through `mess-ai[ml]`.
+- CI and contributor install commands must reference only supported extras.
 
 ## Plan
-1. Update the task record before editing.
-2. Replace the stale README snippet with the current artifact-backed example.
-3. Add a focused regression test for the README example.
-4. Run focused validation for the touched surface.
-5. Create a stable commit and tag for downstream pinning.
+1. Update this task record before editing.
+2. Rewrite package extras and dev tooling to the `base` / `search` / `ml` model.
+3. Update CI, docs, and runtime error hints to the supported install paths.
+4. Refresh `uv.lock` and run focused packaging validation.
+5. Create a local git tag for the resolved packaging state.
 
 ## Validation
-- `uv run pytest -q tests/test_readme_examples.py tests/search/test_search.py tests/search/test_search_init_exports.py tests/test_public_api.py`
-- `uv run ruff check tests/test_readme_examples.py`
+- `uv lock`
+- `uv run pytest -q tests/test_packaging_contracts.py`
+- `uv run ruff check tests/test_packaging_contracts.py`
 
 ## Risks / Open Questions
-- Decision: keep `search_by_clip` as the stable compatibility wrapper/public entry point for now. It is exported from both `mess` and `mess.search`, used by repo callers, and removing or renaming it would create downstream churn without solving a cleanup problem.
-- Local tag creation is in scope here. Publishing that tag upstream still requires a later `git push origin <tag>`.
+- Local tag creation is in scope here. Publishing the tag upstream still requires `git push origin <tag>`.
+- `uv.lock` already had local edits at task start; this change preserves the `nnaudio` removal while reshaping extras to `search` and `ml`.

@@ -90,4 +90,4 @@ In `pyproject.toml` `[dependency-groups] dev`:
 - `ruff`
 - `mypy`
 
-Install: `uv sync --group dev`
+Install: `uv sync --group dev --extra search --extra ml`

@@ -61,7 +61,7 @@ mess-ai/
 **Installation:**
 ```bash
 # Install all dependencies (including test deps)
-uv sync --group dev --extra search --extra ml
+uv sync --group dev --extra search
 
 # Or using pip
 pip install -e .
@@ -98,7 +98,7 @@ These specializations replace naive feature averaging and enable evidence-based 
 ### Installation
 
 ```bash
-uv sync --group dev --extra search --extra ml
+uv sync --group dev --extra search
 ```
 
 ### Running Tests
@@ -278,6 +278,10 @@ python scripts/demo_recommendations.py --track {track_id} --aspect {aspect}
 - Frozen MERT embeddings + cosine similarity via FAISS IndexFlatIP
 - Aspect-weighted search using layer discovery (proxy target R2 -> best layer -> cosine in that layer)
 - Clip-level retrieval via FAISS artifact format
+
+## Related Repo: classical-recsys
+
+The visible demo application lives at `~/projects/classical-recsys` (FastAPI + Next.js 16). It consumes `mess-ai[search]` as a pip dependency and exposes passage similarity search via `search_by_clip()` over S3-hosted FAISS artifacts. Ongoing design doc for the aspect-slider demo: `docs/passage-search-demo.md` in that repo. Keep the public API in `mess/__init__.py` and `mess/search/__init__.py` stable for that consumer.
 
 ## Notes for Claude
 

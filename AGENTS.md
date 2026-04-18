@@ -6,7 +6,7 @@ This file defines repo-local execution policy. Use it for workflow rules and har
 
 - Source of truth: `mess/` and `tests/`.
 - When docs disagree with code/tests, code/tests win.
-- This file defines execution policy; ignore `CLAUDE.md`.
+- This file defines execution policy. `CLAUDE.md` describes architecture and history; both may be read together.
 - Load `docs/` only when the task needs extra context.
 
 ## 2) Working Defaults
@@ -16,7 +16,6 @@ This file defines repo-local execution policy. Use it for workflow rules and har
 - Preserve existing behavior unless the task explicitly requires change.
 - If an interface changes, update callers, tests, and docs together.
 - If work depends on another unmerged change, state that explicitly and treat it as stacked work.
-- For non-trivial PR/debug work, update `docs/pr_backlog.md` before editing with objective, scope, files, contracts, plan, validation, and open risks.
 
 ## 3) Core Objectives
 
@@ -40,14 +39,12 @@ This file defines repo-local execution policy. Use it for workflow rules and har
 
 - Clip index rows must preserve required columns and stable alignment.
 - Split assignment for train/val/test must be by `recording_id`, never by clip.
-- Retrieval training must preserve self-exclusion, near-time exclusion, and recording-level positive/negative policies.
 
 ### 4.3 Proxy Targets / Discovery
 
 - Proxy target NPZ files must keep nested category payloads.
 - Discovery must read targets through nested category/field access.
 - Missing required scalar targets must trigger omission or warnings.
-- Optional categories (for example MIDI expression) may use NaN and must be filtered before probing.
 
 ### 4.4 Artifact Integrity (Local + S3)
 
@@ -60,7 +57,6 @@ This file defines repo-local execution policy. Use it for workflow rules and har
 - Extraction: check config impact in `mess/config.py`; preserve shape/path behavior in `mess/extraction/storage.py`; preserve throughput and memory behavior in `mess/extraction/pipeline.py`.
 - Probing/aspects: update `mess/probing/targets.py` when adding targets; keep `SCALAR_TARGETS` and optional-category handling consistent in `mess/probing/discovery.py`; ensure `ASPECT_REGISTRY` references only existing scalar targets; rerun probing when aspect mapping changes.
 - Search: preserve normalized cosine behavior (`IndexFlatIP` + L2 normalization); keep query existence checks and result ordering stable; validate layer-specific and aspect-weighted paths.
-- Training/projection: keep recording-level split boundaries leakage-safe; preserve mining guardrails and index refresh determinism; keep projection-head-first as default; only consider MERT unfreezing after head-only plateaus and metric justification.
 
 ## 6) Execution Workflow
 
@@ -90,18 +86,15 @@ Scope checks to touched modules when appropriate.
   - `mess/extraction` -> `tests/extraction`
   - `mess/probing` -> `tests/probing`
   - `mess/search` -> `tests/search`
-  - `mess/training` -> `tests/training`
+  - `mess/datasets` -> `tests/datasets`
 
 ## 8) Script Status Policy
 
-Stable scripts:
-- `scripts/build_clip_index.py`
+Maintained scripts (source of truth: `scripts/script_status.json`):
+- `scripts/setup_demo_data.py`
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
 - `scripts/demo_recommendations.py`
-- `scripts/train_retrieval_ssl.py`
-
-Treat scripts listed in `scripts/_NEEDS_UPDATE.txt` as outdated or experimental unless the task explicitly updates them.
 
 ## 9) Git, Data, And Context Hygiene
 

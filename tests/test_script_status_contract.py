@@ -14,14 +14,14 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SCRIPT_STATUS_FILE = SCRIPTS_DIR / "script_status.json"
-EXPECTED_STATUS_KEYS = {"maintained", "research", "deprecated"}
+EXPECTED_STATUS_KEYS = {"maintained"}
 
 
 def _load_script_status() -> dict[str, set[str]]:
     payload: Any = json.loads(SCRIPT_STATUS_FILE.read_text(encoding="utf-8"))
     assert isinstance(payload, dict), "scripts/script_status.json must contain a JSON object"
-    assert set(payload) == EXPECTED_STATUS_KEYS, (
-        f"scripts/script_status.json keys must be {sorted(EXPECTED_STATUS_KEYS)}"
+    assert EXPECTED_STATUS_KEYS.issubset(set(payload)), (
+        f"scripts/script_status.json must include keys {sorted(EXPECTED_STATUS_KEYS)}"
     )
 
     status: dict[str, set[str]] = {}
@@ -62,40 +62,16 @@ def _tracked_script_names() -> set[str]:
 def test_script_status_manifest_covers_all_tracked_scripts() -> None:
     status = _load_script_status()
     maintained = status["maintained"]
-    research = status["research"]
-    deprecated = status["deprecated"]
-
-    assert maintained.isdisjoint(research)
-    assert maintained.isdisjoint(deprecated)
-    assert research.isdisjoint(deprecated)
 
     tracked_scripts = _tracked_script_names()
-    classified_active = maintained | research
-    missing_classification = tracked_scripts - classified_active
+    missing_classification = tracked_scripts - maintained
     assert not missing_classification, (
-        "All tracked scripts/*.py files must be classified as maintained or research. "
+        "All tracked scripts/*.py files must be classified as maintained. "
         f"Unclassified tracked scripts={sorted(missing_classification)}"
     )
 
 
 def test_active_scripts_exist() -> None:
     status = _load_script_status()
-    for script_name in sorted(status["maintained"] | status["research"]):
+    for script_name in sorted(status["maintained"]):
         assert (SCRIPTS_DIR / script_name).exists(), f"Missing active script: {script_name}"
-
-
-def test_deprecated_scripts_are_removed_and_documented() -> None:
-    status = _load_script_status()
-    readme_text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    status_manifest_text = SCRIPT_STATUS_FILE.read_text(encoding="utf-8")
-    status_text = (SCRIPTS_DIR / "_NEEDS_UPDATE.txt").read_text(encoding="utf-8")
-
-    assert "No pending outdated scripts" in status_text
-    assert "scripts/script_status.json" in readme_text
-    for script_name in sorted(status["deprecated"]):
-        assert not (SCRIPTS_DIR / script_name).exists(), (
-            f"Deprecated script still exists: {script_name}"
-        )
-        assert script_name in readme_text
-        assert script_name in status_manifest_text
-        assert script_name in status_text

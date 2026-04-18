@@ -17,8 +17,6 @@ from mess.config import MESSConfig
 
 SYSTEM_MARKER_FILES = {
     "test_setup_demo_data_script.py",
-    "test_evaluate_script_smoke.py",
-    "test_end_to_end_projection_artifact.py",
 }
 
 

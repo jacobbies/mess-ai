@@ -28,14 +28,10 @@ def test_root_public_api_contract_names() -> None:
         "search_by_clip",
         "search_by_aspect",
         "search_by_aspects",
-        "RetrievalSSLConfig",
-        "TrainResult",
-        "train_projection_head",
         "datasets",
         "extraction",
         "probing",
         "search",
-        "training",
     }
 
     assert expected.issubset(set(mess.__all__))

@@ -1,3 +1,5 @@
+> **ARCHIVED:** this doc describes the learned-projection research direction that was dropped on 2026-04-17. Kept for reference only; not the current roadmap.
+
 # Research Context
 
 This file is non-binding research context for experiment planning and prioritization.

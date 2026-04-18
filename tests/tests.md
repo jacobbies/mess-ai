@@ -5,7 +5,7 @@ MESS-AI uses two confidence layers:
 1. **Pure library tests** (`library`, typically `unit` + focused `integration`) for deterministic logic, contracts, and error handling.
 2. **Workflow/system tests** (`system`, usually `workflow`) for end-to-end retrieval behavior and artifact integrity.
 
-To prevent silent drift, deterministic **regression tests** (`regression`) lock key retrieval outputs and tiny-benchmark metrics.
+To prevent silent drift, deterministic **regression tests** (`regression`) lock key retrieval outputs.
 
 ## Quick Reference
 
@@ -18,7 +18,6 @@ uv run pytest -m integration                       # multi-module / filesystem s
 uv run pytest -m regression                        # drift / golden checks
 uv run pytest -m workflow                          # end-to-end workflow/system tests
 uv run pytest --run-gpu                            # include GPU-marked tests
-uv run pytest tests/workflows -v                   # workflow folder only
 uv run ruff check tests                            # lint tests
 uv run mypy mess                                   # type checks for library code
 ```
@@ -27,7 +26,7 @@ uv run mypy mess                                   # type checks for library cod
 
 ### Pure Library Layer
 
-Use this layer to answer: “Does this code do what it claims?”
+Use this layer to answer: "Does this code do what it claims?"
 
 - Deterministic logic and invariants:
   - path/config parsing, chunk bounds, vector normalization, scoring/ranking helpers
@@ -38,20 +37,16 @@ Use this layer to answer: “Does this code do what it claims?”
 - Integration slices:
   - dataset -> extractor -> storage
   - features -> index -> search
-  - probing targets -> discovery/evaluation pipeline inputs
+  - probing targets -> discovery pipeline inputs
 
 ### Workflow/System Layer
 
-Use this layer to answer: “Does retrieval behave correctly end to end?”
+Use this layer to answer: "Does retrieval behave correctly end to end?"
 
-- Mini pipeline smoke:
-  - fixture embeddings -> clip index build -> FAISS artifact -> retrieval query
 - Artifact integrity:
   - manifest/checksum/index/vectors/metadata persistence and load validation
 - Rerun stability:
   - deterministic outputs for same inputs/seed
-- Retrieval usefulness guardrails:
-  - tiny curated benchmark with metric thresholds (MRR/Recall@K)
 
 ## Key Files
 
@@ -63,15 +58,7 @@ tests/
 │   ├── test_search.py                      # core search contracts
 │   ├── test_faiss_index.py                 # artifact and S3 integrity
 │   └── test_retrieval_regression.py        # golden ranking + drift checks
-├── evaluation/
-│   ├── test_metrics.py                     # metric primitives
-│   ├── test_evaluate_script_smoke.py       # report schema smoke
-│   └── test_retrieval_mini_benchmark.py    # usefulness guardrail metrics
-├── test_setup_demo_data_script.py          # data setup CLI workflow smoke
-├── training/
-│   └── test_end_to_end_projection_artifact.py  # train->artifact workflow path
-└── workflows/
-    └── test_retrieval_pipeline_workflow.py  # retrieval workflow + corruption/resume checks
+└── test_setup_demo_data_script.py          # data setup CLI workflow smoke
 ```
 
 ## Root Fixtures (`tests/conftest.py`)

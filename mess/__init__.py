@@ -28,7 +28,6 @@ if TYPE_CHECKING:
         search_by_aspects,
         search_by_clip,
     )
-    from .training import RetrievalSSLConfig, TrainResult, train_projection_head
 
 __all__ = [
     "__version__",
@@ -48,14 +47,10 @@ __all__ = [
     "search_by_clip",
     "search_by_aspect",
     "search_by_aspects",
-    "RetrievalSSLConfig",
-    "TrainResult",
-    "train_projection_head",
     "datasets",
     "extraction",
     "probing",
     "search",
-    "training",
 ]
 
 _LAZY_ATTRS: dict[str, tuple[str, str]] = {
@@ -75,12 +70,9 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "search_by_clip": (".search", "search_by_clip"),
     "search_by_aspect": (".search", "search_by_aspect"),
     "search_by_aspects": (".search", "search_by_aspects"),
-    "RetrievalSSLConfig": (".training", "RetrievalSSLConfig"),
-    "TrainResult": (".training", "TrainResult"),
-    "train_projection_head": (".training", "train_projection_head"),
 }
 
-_LAZY_MODULES = {"datasets", "extraction", "probing", "search", "training"}
+_LAZY_MODULES = {"datasets", "extraction", "probing", "search"}
 
 
 def _resolve_version() -> str:

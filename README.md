@@ -1,9 +1,9 @@
 # MESS-AI
 
-MESS-AI is a Python library for expressive, content-based music retrieval using MERT embeddings.
+MESS-AI is a Python library for content-based classical music passage retrieval using MERT embeddings.
 
 Pipeline:
-`WAV audio -> embeddings -> proxy targets -> layer discovery -> aspect-aware retrieval -> FAISS artifacts`
+`WAV audio -> embeddings -> proxy targets -> layer discovery -> aspect-aware retrieval`
 
 ## Start Here (Step-by-Step)
 
@@ -127,56 +127,6 @@ clip_results = search_by_clip(
 )
 ```
 
-## Training Baseline (Optional)
-
-Build clip index (recording-level splits):
-```bash
-uv run python scripts/build_clip_index.py \
-  --dataset-id smd \
-  --segments-dir data/embeddings/smd-emb/segments \
-  --output data/metadata/smd_clip_index.csv \
-  --assign-splits
-```
-
-Train projection head:
-```bash
-uv run python scripts/train_retrieval_ssl.py \
-  --clip-index data/metadata/smd_clip_index.csv \
-  --output-dir data/indices/retrieval_ssl/smd_run01 \
-  --steps 500 \
-  --batch-size 64 \
-  --layer 0
-```
-
-Experimental contextualizer workflow:
-```bash
-uv run python scripts/train_contextualizer.py \
-  --clip-index data/metadata/smd_clip_index.csv \
-  --output-dir data/indices/contextualizer/smd_run01 \
-  --layer 0
-
-uv run python scripts/contextualize_embeddings.py \
-  --checkpoint data/indices/contextualizer/smd_run01/contextualizer_checkpoint.pt \
-  --clip-index data/metadata/smd_clip_index.csv \
-  --output-dir data/embeddings/smd-contextualized \
-  --export-artifact
-```
-
-## Build/Publish FAISS Artifacts (Optional)
-
-```bash
-uv run python scripts/publish_faiss_index.py \
-  --dataset smd \
-  --kind clip \
-  --s3-bucket <BUCKET> \
-  --s3-prefix mess/faiss
-```
-
-Artifact model:
-- immutable `artifact_version_id`
-- checksum validation on download/load
-- `latest.json` pointer updated only after validation
-
 ## Data Contracts (Do Not Break)
 
 - `raw`: `[num_segments, 13, time_steps, 768]`
@@ -186,7 +136,7 @@ Artifact model:
 
 ## Repository Map
 
-- `mess/`: library modules (`datasets`, `extraction`, `probing`, `search`, `training`)
+- `mess/`: library modules (`datasets`, `extraction`, `probing`, `search`)
 - `scripts/`: CLI workflows
 - `tests/`: contract and behavior tests
 - `docs/`: architecture and research context
@@ -200,28 +150,9 @@ Source of truth for lifecycle status:
 
 Maintained scripts:
 - `scripts/setup_demo_data.py`
-- `scripts/build_clip_index.py`
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
 - `scripts/demo_recommendations.py`
-- `scripts/publish_faiss_index.py`
-- `scripts/train_retrieval_ssl.py`
-
-Research utility scripts:
-- `scripts/build_maestro_manifest.py`
-- `scripts/contextualize_embeddings.py`
-- `scripts/evaluate_clip_retrieval.py`
-- `scripts/evaluate_retrieval.py`
-- `scripts/inspect_embeddings.py`
-- `scripts/train_contextualizer.py`
-
-Deprecated scripts (removed):
-- `build_layer_indices.py`
-- `demo_layer_search.py`
-- `evaluate_layer_indices.py`
-- `evaluate_similarity.py`
-
-See `scripts/_NEEDS_UPDATE.txt` for deprecation details.
 
 ## Development Checks
 
@@ -231,7 +162,5 @@ uv run pytest -v
 uv run mypy --follow-imports skip \
   mess/search/faiss_index.py \
   mess/search/__init__.py \
-  mess/datasets/clip_index.py \
-  mess/training/config.py \
-  mess/training/index.py
+  mess/datasets/clip_index.py
 ```

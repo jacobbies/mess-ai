@@ -25,7 +25,16 @@ def _ci_extras(ci_yaml: str) -> set[str]:
 def test_ci_extras_exist_in_pyproject_optional_dependencies():
     root = _repo_root()
     pyproject_data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    ci_yaml = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    workflows_dir = root / ".github" / "workflows"
+    ci_candidates = [
+        workflows_dir / "ci.yml",
+        workflows_dir / "ci.yml.disabled",
+    ]
+    ci_yaml = next(
+        (p.read_text(encoding="utf-8") for p in ci_candidates if p.exists()),
+        None,
+    )
+    assert ci_yaml is not None, "CI workflow file not found (ci.yml or ci.yml.disabled)"
 
     optional_deps = pyproject_data["project"]["optional-dependencies"]
     extras_used_by_ci = _ci_extras(ci_yaml)

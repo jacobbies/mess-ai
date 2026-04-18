@@ -20,7 +20,6 @@ if TYPE_CHECKING:
         save_artifact,
         upload_artifact_to_s3,
     )
-    from .hybrid import hybrid_search
     from .search import (
         ClipLocation,
         ClipMetadata,
@@ -45,7 +44,6 @@ __all__ = [
     "search_by_aspect",
     "search_by_aspects",
     "search_by_clip",
-    "hybrid_search",
     "ArtifactManifest",
     "ArtifactValidationError",
     "FAISSArtifact",
@@ -71,7 +69,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "search_by_aspect": (".search", "search_by_aspect"),
     "search_by_aspects": (".search", "search_by_aspects"),
     "search_by_clip": (".search", "search_by_clip"),
-    "hybrid_search": (".hybrid", "hybrid_search"),
     "ArtifactManifest": (".faiss_index", "ArtifactManifest"),
     "ArtifactValidationError": (".faiss_index", "ArtifactValidationError"),
     "FAISSArtifact": (".faiss_index", "FAISSArtifact"),

@@ -33,6 +33,18 @@ jobs:
       - name: Run tests
         run: uv run pytest -q
 
+      - name: Assert system/workflow/regression layers are present
+        run: |
+          system_count=$(uv run pytest --collect-only -q -m system | awk -F':' '/^tests\// {gsub(/ /,"",$2); sum += $2} END {print sum+0}')
+          workflow_count=$(uv run pytest --collect-only -q -m workflow | awk -F':' '/^tests\// {gsub(/ /,"",$2); sum += $2} END {print sum+0}')
+          regression_count=$(uv run pytest --collect-only -q -m regression | awk -F':' '/^tests\// {gsub(/ /,"",$2); sum += $2} END {print sum+0}')
+          echo "system tests: $system_count"
+          echo "workflow tests: $workflow_count"
+          echo "regression tests: $regression_count"
+          test "$system_count" -gt 0
+          test "$workflow_count" -gt 0
+          test "$regression_count" -gt 0
+
       - name: Run lint
         run: uv run ruff check .
 

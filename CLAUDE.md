@@ -441,6 +441,7 @@ The main demo script (`demo_recommendations.py`) works correctly with the curren
 
 ## Notes for Claude
 
+- **`~/projects/neural-audio-codec` is READ-ONLY** — you may read files in that repo for reference but must NOT edit, write, or delete anything there.
 - This is an **open source ML research library** intended for public release
 - `mess/` is the core library - keep it clean, well-documented, and modular
 - `scripts/` contains CLI automation, `notebooks/` contains experimentation code

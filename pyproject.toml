@@ -56,6 +56,10 @@ pythonpath = ["."]
 markers = [
     "unit: Fast isolated tests with no I/O or external dependencies",
     "integration: Tests that touch the filesystem or combine modules",
+    "library: Pure library behavior tests for code-level correctness and contracts",
+    "system: Workflow/system behavior tests for end-to-end retrieval pipelines",
+    "regression: Golden and drift-detection tests with deterministic fixtures",
+    "workflow: End-to-end system behavior tests for full retrieval workflows",
     "slow: Tests that take >5s (model loading, large data)",
     "gpu: Tests requiring GPU (CUDA or MPS)",
 ]

@@ -1,0 +1,63 @@
+{
+  "dataset_id": "smd",
+  "segment_duration": 5.0,
+  "overlap_ratio": 0.5,
+  "tracks": [
+    {
+      "track_id": "bach_a",
+      "recording_id": "rec_bach_1",
+      "work_id": "work_bach",
+      "segments": [
+        [1.0, 0.05, 0.0, 0.0, 0.0, 0.0],
+        [0.97, 0.12, 0.0, 0.0, 0.0, 0.0],
+        [0.93, 0.2, 0.0, 0.0, 0.0, 0.0]
+      ]
+    },
+    {
+      "track_id": "bach_b",
+      "recording_id": "rec_bach_2",
+      "work_id": "work_bach",
+      "segments": [
+        [0.96, 0.1, 0.01, 0.0, 0.0, 0.0],
+        [0.91, 0.18, 0.02, 0.0, 0.0, 0.0],
+        [0.88, 0.24, 0.02, 0.0, 0.0, 0.0]
+      ]
+    },
+    {
+      "track_id": "chopin_a",
+      "recording_id": "rec_chopin_1",
+      "work_id": "work_chopin",
+      "segments": [
+        [0.05, 1.0, 0.0, 0.0, 0.0, 0.0],
+        [0.12, 0.96, 0.0, 0.0, 0.0, 0.0],
+        [0.2, 0.92, 0.0, 0.0, 0.0, 0.0]
+      ]
+    },
+    {
+      "track_id": "chopin_b",
+      "recording_id": "rec_chopin_2",
+      "work_id": "work_chopin",
+      "segments": [
+        [0.08, 0.98, 0.02, 0.0, 0.0, 0.0],
+        [0.16, 0.92, 0.02, 0.0, 0.0, 0.0],
+        [0.24, 0.88, 0.03, 0.0, 0.0, 0.0]
+      ]
+    },
+    {
+      "track_id": "noise_a",
+      "recording_id": "rec_noise_1",
+      "work_id": "work_noise",
+      "segments": [
+        [0.0, -0.12, 1.0, 0.0, 0.0, 0.0],
+        [0.0, -0.2, 0.92, 0.1, 0.0, 0.0],
+        [0.0, -0.28, 0.84, 0.18, 0.0, 0.0]
+      ]
+    }
+  ],
+  "positive_tracks": {
+    "bach_a": ["bach_b"],
+    "bach_b": ["bach_a"],
+    "chopin_a": ["chopin_b"],
+    "chopin_b": ["chopin_a"]
+  }
+}

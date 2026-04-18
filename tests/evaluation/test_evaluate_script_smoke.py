@@ -14,7 +14,7 @@ import torch
 from mess.datasets.clip_index import ClipIndex, ClipRecord
 from mess.training.trainer import ProjectionHead
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.workflow]
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "evaluate_retrieval.py"
 

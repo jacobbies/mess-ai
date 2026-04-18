@@ -16,7 +16,7 @@ from mess.training import (
     train_projection_head,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.workflow]
 
 
 class _FakeIndexFlatIP:

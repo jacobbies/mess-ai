@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,6 +15,12 @@ if sys.platform == "darwin":
 
 from mess.config import MESSConfig
 
+SYSTEM_MARKER_FILES = {
+    "test_setup_demo_data_script.py",
+    "test_evaluate_script_smoke.py",
+    "test_end_to_end_projection_artifact.py",
+}
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -23,11 +30,22 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--run-gpu"):
-        return
-    skip_gpu = pytest.mark.skip(reason="Need --run-gpu option to run")
+        skip_gpu = None
+    else:
+        skip_gpu = pytest.mark.skip(reason="Need --run-gpu option to run")
+
     for item in items:
-        if "gpu" in item.keywords:
+        if skip_gpu is not None and "gpu" in item.keywords:
             item.add_marker(skip_gpu)
+
+        path = Path(str(item.fspath))
+        if "library" not in item.keywords and "system" not in item.keywords:
+            is_system = (
+                "workflow" in item.keywords
+                or "workflows" in path.parts
+                or path.name in SYSTEM_MARKER_FILES
+            )
+            item.add_marker(pytest.mark.system if is_system else pytest.mark.library)
 
 
 @pytest.fixture

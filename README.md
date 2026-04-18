@@ -15,15 +15,13 @@ Requirements:
 
 Full local workflow (recommended for this repo):
 ```bash
-uv sync --group dev --extra search --extra ml
+uv sync --group dev --extra search
 ```
 
 Runtime-only installs:
 ```bash
 pip install mess-ai
 pip install "mess-ai[search]"
-pip install "mess-ai[ml]"
-pip install "mess-ai[search,ml]"
 ```
 
 ### 2. Add Demo Audio (One Command)
@@ -153,6 +151,10 @@ Maintained scripts:
 - `scripts/extract_features.py`
 - `scripts/run_probing.py`
 - `scripts/demo_recommendations.py`
+
+## Sibling Repo: classical-recsys
+
+The visible demo application lives in a sibling repo at `~/projects/classical-recsys` (FastAPI backend + Next.js frontend). It consumes `mess-ai[search]` as a pip dependency and exposes passage similarity search over S3-hosted FAISS artifacts. Ongoing design doc: `docs/passage-search-demo.md` in that repo.
 
 ## Development Checks
 

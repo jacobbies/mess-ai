@@ -15,13 +15,14 @@ Requirements:
 
 Full local workflow (recommended for this repo):
 ```bash
-uv sync --group dev --extra search
+uv sync --group dev --extra search --extra ml
 ```
 
 Runtime-only installs:
 ```bash
 pip install mess-ai
-pip install "mess-ai[search]"
+pip install "mess-ai[search]"          # search only (FAISS + boto3) — what consumers need
+pip install "mess-ai[search,ml]"       # + MERT extraction + probing (torch, librosa, ...)
 ```
 
 ### 2. Add Demo Audio (One Command)

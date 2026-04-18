@@ -61,7 +61,7 @@ mess-ai/
 **Installation:**
 ```bash
 # Install all dependencies (including test deps)
-uv sync --group dev --extra search
+uv sync --group dev --extra search --extra ml
 
 # Or using pip
 pip install -e .
@@ -98,7 +98,7 @@ These specializations replace naive feature averaging and enable evidence-based 
 ### Installation
 
 ```bash
-uv sync --group dev --extra search
+uv sync --group dev --extra search --extra ml
 ```
 
 ### Running Tests

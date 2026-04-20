@@ -30,8 +30,8 @@ from typing import Any, cast
 
 import numpy as np
 
-from ..config import mess_config
-from ..extraction.audio import load_audio
+from ...config import mess_config
+from ...extraction.audio import load_audio
 
 logger = logging.getLogger(__name__)
 mlflow: Any
@@ -126,7 +126,7 @@ class MusicalAspectTargets:
         Returns:
             True if all required targets are present, False otherwise.
         """
-        from .discovery import LayerDiscoverySystem
+        from ..discovery import LayerDiscoverySystem
 
         missing = []
         for target_name, (category, key, _) in LayerDiscoverySystem.SCALAR_TARGETS.items():

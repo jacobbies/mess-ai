@@ -53,18 +53,36 @@ def main(
             mlflow.log_param("status", "failed")
             return 1
 
-        # Display per-layer results
+        # Display per-layer results (skip non-integer keys like "weighted_sum")
         print("\n" + "=" * 70)
         print("LAYER DISCOVERY RESULTS")
         print("=" * 70)
 
-        for layer_idx, layer_results in sorted(results.items()):
+        per_layer = sorted(
+            ((k, v) for k, v in results.items() if isinstance(k, int)),
+            key=lambda item: item[0],
+        )
+        for layer_idx, layer_results in per_layer:
             print(f"\nLayer {layer_idx}:")
             for proxy_name, metrics in sorted(layer_results.items()):
                 print(f"  {proxy_name}:")
-                print(f"    R² Score:    {metrics['r2_score']:.4f}")
-                print(f"    Correlation: {metrics['correlation']:.4f}")
-                print(f"    RMSE:        {metrics['rmse']:.4f}")
+                r2 = metrics.get('r2_score', metrics.get('r2_mean'))
+                print(f"    R² Score:    {r2:.4f}")
+                if 'correlation' in metrics:
+                    print(f"    Correlation: {metrics['correlation']:.4f}")
+                rmse = metrics.get('rmse', metrics.get('rmse_mean'))
+                if rmse is not None:
+                    print(f"    RMSE:        {rmse:.4f}")
+
+        if 'weighted_sum' in results:
+            print("\n" + "=" * 70)
+            print("WEIGHTED-SUM RESULTS")
+            print("=" * 70)
+            for proxy_name, metrics in sorted(results['weighted_sum'].items()):
+                print(
+                    f"  {proxy_name:25s}  R²={metrics['r2_score']:.4f}  "
+                    f"gain={metrics['r2_gain_over_best_single']:+.4f}"
+                )
 
         # Display best layers summary
         print("\n" + "=" * 70)

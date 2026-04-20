@@ -32,7 +32,7 @@ def test_create_target_dataset_discovers_nested_wavs(monkeypatch, tmp_path):
 
     output_dir = tmp_path / "proxy_targets"
 
-    monkeypatch.setattr("mess.probing.targets.MusicalAspectTargets", _FakeTargets)
+    monkeypatch.setattr("mess.probing.targets._legacy.MusicalAspectTargets", _FakeTargets)
 
     result = create_target_dataset(
         audio_dir=audio_dir,

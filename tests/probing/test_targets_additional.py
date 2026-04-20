@@ -112,7 +112,7 @@ class TestFixedTargetComputations:
             observed["target_sr"] = target_sr
             return fake_audio
 
-        monkeypatch.setattr("mess.probing.targets.load_audio", fake_load_audio)
+        monkeypatch.setattr("mess.probing.targets._legacy.load_audio", fake_load_audio)
         monkeypatch.setattr(
             target_gen,
             "_generate_rhythm_targets",
@@ -209,7 +209,7 @@ class TestCreateTargetDataset:
             def validate_target_structure(_targets):
                 return True
 
-        monkeypatch.setattr("mess.probing.targets.MusicalAspectTargets", PartialTargets)
+        monkeypatch.setattr("mess.probing.targets._legacy.MusicalAspectTargets", PartialTargets)
 
         output_dir = tmp_path / "proxy_targets"
         result = create_target_dataset(
@@ -240,11 +240,17 @@ class TestCreateTargetDataset:
 
         calls: dict[str, list] = {"params": [], "metrics": [], "artifacts": []}
 
-        monkeypatch.setattr("mess.probing.targets.MusicalAspectTargets", FakeTargets)
-        monkeypatch.setattr("mess.probing.targets.mlflow.active_run", lambda: object())
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_params", calls["params"].append)
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_metrics", calls["metrics"].append)
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_artifact", calls["artifacts"].append)
+        monkeypatch.setattr("mess.probing.targets._legacy.MusicalAspectTargets", FakeTargets)
+        monkeypatch.setattr("mess.probing.targets._legacy.mlflow.active_run", lambda: object())
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.mlflow.log_params", calls["params"].append
+        )
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.mlflow.log_metrics", calls["metrics"].append
+        )
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.mlflow.log_artifact", calls["artifacts"].append
+        )
 
         result = create_target_dataset(
             audio_dir=audio_dir,
@@ -275,11 +281,17 @@ class TestCreateTargetDataset:
 
         artifacts: list[str] = []
 
-        monkeypatch.setattr("mess.probing.targets.MusicalAspectTargets", AlwaysFailTargets)
-        monkeypatch.setattr("mess.probing.targets.mlflow.active_run", lambda: object())
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_params", lambda _params: None)
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_metrics", lambda _metrics: None)
-        monkeypatch.setattr("mess.probing.targets.mlflow.log_artifact", artifacts.append)
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.MusicalAspectTargets", AlwaysFailTargets
+        )
+        monkeypatch.setattr("mess.probing.targets._legacy.mlflow.active_run", lambda: object())
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.mlflow.log_params", lambda _params: None
+        )
+        monkeypatch.setattr(
+            "mess.probing.targets._legacy.mlflow.log_metrics", lambda _metrics: None
+        )
+        monkeypatch.setattr("mess.probing.targets._legacy.mlflow.log_artifact", artifacts.append)
 
         output_dir = tmp_path / "proxy_targets"
         result = create_target_dataset(

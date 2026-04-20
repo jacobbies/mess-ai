@@ -22,7 +22,7 @@ import json
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -30,6 +30,8 @@ from ..config import mess_config
 
 logger = logging.getLogger(__name__)
 mlflow: Any
+
+ProbeMode = Literal["best_layer", "weighted_sum", "both"]
 
 try:
     import mlflow  # type: ignore[import-not-found]
@@ -60,6 +62,13 @@ except ModuleNotFoundError:
 
 NUM_LAYERS = 13
 EMBEDDING_DIM = 768
+
+
+def _softmax(x: np.ndarray) -> np.ndarray:
+    """Numerically stable softmax over a 1-D vector."""
+    shifted = x - np.max(x)
+    exp = np.exp(shifted)
+    return np.asarray(exp / np.sum(exp))
 
 
 @lru_cache(maxsize=1)
@@ -257,7 +266,13 @@ class LayerDiscoverySystem:
     # optional values are stored as NaN and filtered before probing.
     OPTIONAL_CATEGORIES: set[str] = {'expression'}
 
-    def __init__(self, dataset_name: str = "smd", alpha: float = 1.0, n_folds: int = 5):
+    def __init__(
+        self,
+        dataset_name: str = "smd",
+        alpha: float = 1.0,
+        n_folds: int = 5,
+        probe_mode: ProbeMode = "both",
+    ):
         from mess.datasets.factory import DatasetFactory
 
         self.dataset = DatasetFactory.get_dataset(dataset_name)
@@ -269,6 +284,7 @@ class LayerDiscoverySystem:
         self.segment_targets_dir: Path | None = None
         self.alpha = alpha
         self.n_folds = n_folds
+        self.probe_mode: ProbeMode = probe_mode
 
     def load_features(self, audio_files: list[str]) -> tuple[dict[int, np.ndarray], list[str]]:
         """Load MERT layer embeddings, averaged across segments and time steps."""
@@ -342,58 +358,99 @@ class LayerDiscoverySystem:
         logger.info(f"Loaded {len(targets)} targets for {len(loaded)} files")
         return targets, loaded
 
+    def _row_valid_mask(self, y: np.ndarray) -> np.ndarray:
+        """Return a row-level valid mask for scalar or curve targets."""
+        if y.ndim == 1:
+            mask = ~np.isnan(y)
+        else:
+            # Curve: drop rows that are entirely NaN (MIDI unavailable / missing).
+            mask = ~np.all(np.isnan(y), axis=1)
+        return np.asarray(mask, dtype=bool)
+
+    def _make_cv(
+        self,
+        n: int,
+        groups: np.ndarray | None,
+    ) -> tuple[Any, bool]:
+        """Build the CV splitter shared by scalar and curve paths."""
+        (GroupKFold, _Ridge, _mse, _r2, KFold, *_rest) = _require_sklearn()
+        if groups is not None:
+            n_groups = int(np.unique(groups).size)
+            if n_groups >= 2:
+                return GroupKFold(n_splits=min(self.n_folds, n_groups)), True
+            logger.warning(
+                "Segment probe has only one track group after filtering; "
+                "falling back to ungrouped KFold."
+            )
+        return KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42), False
+
     def _probe_single(
         self,
         X: np.ndarray,
         y: np.ndarray,
         groups: np.ndarray | None = None,
     ) -> dict[str, float]:
-        """Cross-validated Ridge regression for one (layer, target) pair."""
+        """Cross-validated Ridge regression for one (layer, target) pair.
+
+        Dispatches on ``y`` shape:
+
+        * ``(N,)``: scalar Ridge. Returns ``{r2_score, correlation, rmse}``
+          (unchanged from pre-F1 behavior).
+        * ``(N, T)``: multi-output Ridge over a curve target. Returns
+          ``{r2_mean, r2_pc1, rmse_mean}``.
+
+        NaN rows (whole-row for curves, element-wise for scalars) are
+        dropped before probing. When rows are dropped the dict also includes
+        ``n_valid`` and ``coverage`` so MIDI-backed targets expose mask
+        statistics to the caller.
+        """
+        n_total = len(y)
+        valid = self._row_valid_mask(y)
+        dropped_any = not bool(np.all(valid))
+        if dropped_any:
+            X, y = X[valid], y[valid]
+            if groups is not None:
+                groups = groups[valid]
+
+        n = len(X)
+        if y.ndim == 1:
+            metrics = self._probe_scalar(X, y, groups, n)
+        else:
+            metrics = self._probe_curve(X, y, groups, n)
+
+        if dropped_any:
+            metrics["n_valid"] = float(n)
+            metrics["coverage"] = float(n / n_total) if n_total else 0.0
+        return metrics
+
+    def _probe_scalar(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        groups: np.ndarray | None,
+        n: int,
+    ) -> dict[str, float]:
+        """Scalar Ridge probe — preserves exact pre-F1 output shape."""
+        if n < self.n_folds:
+            return {"r2_score": -999.0, "correlation": 0.0, "rmse": 999.0}
+
         (
-            GroupKFold,
+            _GroupKFold,
             Ridge,
             mean_squared_error,
             r2_score,
-            KFold,
+            _KFold,
             cross_val_predict,
             make_pipeline,
             StandardScaler,
         ) = _require_sklearn()
 
-        # Filter out NaN targets (from optional categories like expression)
-        valid = ~np.isnan(y)
-        if not np.all(valid):
-            X, y = X[valid], y[valid]
-            if groups is not None:
-                groups = groups[valid]
-        n = len(X)
-        if n < self.n_folds:
-            return {'r2_score': -999.0, 'correlation': 0.0, 'rmse': 999.0}
-
-        if groups is not None:
-            unique_groups = np.unique(groups)
-            n_groups = len(unique_groups)
-            if n_groups >= 2:
-                n_splits = min(self.n_folds, n_groups)
-                cv = GroupKFold(n_splits=n_splits)
-                uses_grouped_cv = True
-            else:
-                logger.warning(
-                    "Segment probe has only one track group after filtering; "
-                    "falling back to ungrouped KFold."
-                )
-                cv = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
-                uses_grouped_cv = False
-        else:
-            cv = KFold(n_splits=min(self.n_folds, n), shuffle=True, random_state=42)
-            uses_grouped_cv = False
-
+        cv, uses_grouped = self._make_cv(n, groups)
         probe = make_pipeline(
             StandardScaler(),
             Ridge(alpha=self.alpha, random_state=42),
         )
-
-        if groups is not None and uses_grouped_cv:
+        if uses_grouped and groups is not None:
             y_pred = cross_val_predict(probe, X, y, cv=cv, groups=groups)
         else:
             y_pred = cross_val_predict(probe, X, y, cv=cv)
@@ -405,18 +462,216 @@ class LayerDiscoverySystem:
             else 0.0
         )
         rmse = float(np.sqrt(mean_squared_error(y, y_pred)))
+        return {"r2_score": r2, "correlation": corr, "rmse": rmse}
 
-        return {'r2_score': r2, 'correlation': corr, 'rmse': rmse}
+    def _probe_curve(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        groups: np.ndarray | None,
+        n: int,
+    ) -> dict[str, float]:
+        """Multi-output Ridge probe for curve-valued targets.
 
-    def discover(self, n_samples: int = 50) -> dict[int, dict[str, dict[str, float]]]:
+        Reports ``r2_mean`` (mean per-frame R²), ``r2_pc1`` (R² against
+        the first principal component of ``y``, with PCA fit inside each
+        training fold to avoid leakage), and ``rmse_mean``.
+        """
+        bad = {"r2_mean": -999.0, "r2_pc1": -999.0, "rmse_mean": 999.0}
+        if n < self.n_folds:
+            return bad
+
+        (
+            _GroupKFold,
+            Ridge,
+            mean_squared_error,
+            r2_score,
+            _KFold,
+            _cross_val_predict,
+            make_pipeline,
+            StandardScaler,
+        ) = _require_sklearn()
+
+        cv, uses_grouped = self._make_cv(n, groups)
+        split_iter = cv.split(X, y, groups) if uses_grouped else cv.split(X, y)
+        splits = list(split_iter)
+        if not splits:
+            return bad
+
+        y_pred_curve = np.full_like(y, fill_value=np.nan)
+        pc1_true = np.full(n, fill_value=np.nan)
+        pc1_pred = np.full(n, fill_value=np.nan)
+
+        for train_idx, test_idx in splits:
+            y_train = y[train_idx]
+            curve_probe = make_pipeline(
+                StandardScaler(),
+                Ridge(alpha=self.alpha, random_state=42),
+            )
+            curve_probe.fit(X[train_idx], y_train)
+            y_pred_curve[test_idx] = curve_probe.predict(X[test_idx])
+
+            # PC1 axis is fit on train-fold y only to avoid leaking test
+            # variance into the projection.
+            train_mean = y_train.mean(axis=0, keepdims=True)
+            _u, _s, vt = np.linalg.svd(y_train - train_mean, full_matrices=False)
+            axis = vt[0]
+            pc1_probe = make_pipeline(
+                StandardScaler(),
+                Ridge(alpha=self.alpha, random_state=42),
+            )
+            pc1_probe.fit(X[train_idx], (y_train - train_mean) @ axis)
+            pc1_true[test_idx] = (y[test_idx] - train_mean) @ axis
+            pc1_pred[test_idx] = pc1_probe.predict(X[test_idx])
+
+        per_frame_r2 = r2_score(y, y_pred_curve, multioutput="raw_values")
+        r2_mean = float(np.mean(per_frame_r2))
+        rmse_mean = float(np.sqrt(mean_squared_error(y, y_pred_curve)))
+        r2_pc1 = float(r2_score(pc1_true, pc1_pred)) if np.std(pc1_true) > 1e-10 else 0.0
+        return {"r2_mean": r2_mean, "r2_pc1": r2_pc1, "rmse_mean": rmse_mean}
+
+    def _single_layer_r2(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        groups: np.ndarray | None,
+        n: int,
+    ) -> float:
+        """R² for a single layer — dispatches on ``y`` shape."""
+        if y.ndim == 1:
+            return float(self._probe_scalar(X, y, groups, n).get("r2_score", -np.inf))
+        return float(self._probe_curve(X, y, groups, n).get("r2_mean", -np.inf))
+
+    def _probe_weighted_sum(
+        self,
+        X_all_layers: np.ndarray,
+        y: np.ndarray,
+        groups: np.ndarray | None = None,
+    ) -> dict[str, Any]:
+        """SUPERB-style weighted-sum probe across layers.
+
+        ``X_all_layers`` has shape ``(N, 13, 768)``. We parameterise layer
+        weights as ``softmax(w / tau)`` and fuse as
+        ``sum_j softmax(w)[j] * X_all_layers[:, j, :]``. A small grid over
+        sparsity temperatures (``tau``) and a starting weight vector selects
+        the configuration that maximises K-Fold R²; the reported metrics use
+        the selected fused features with the same CV pipeline as the per-
+        layer probes.
+
+        Supports scalar (``y.ndim==1``), curve (``y.ndim==2``), and MIDI-
+        masked (NaN rows) targets via the same dispatch as ``_probe_single``.
+
+        Returns a dict with:
+            * ``r2_score`` — K-Fold CV R² of the fused probe (mean across
+              frames for curves).
+            * ``layer_weights`` — list of 13 floats summing to 1.
+            * ``correlation`` — Pearson correlation of the fused probe
+              (``0.0`` for curve targets where a single scalar correlation
+              is not defined).
+            * ``rmse`` — mirrors ``_probe_scalar``/``_probe_curve`` for the
+              fused features.
+            * ``r2_gain_over_best_single`` — fused R² minus the best
+              single-layer R².
+        """
+        n_total = len(y)
+        valid = self._row_valid_mask(y)
+        dropped_any = not bool(np.all(valid))
+        if dropped_any:
+            X_all_layers = X_all_layers[valid]
+            y = y[valid]
+            if groups is not None:
+                groups = groups[valid]
+
+        n = len(X_all_layers)
+        bad: dict[str, Any] = {
+            "r2_score": -999.0,
+            "layer_weights": [1.0 / NUM_LAYERS] * NUM_LAYERS,
+            "correlation": 0.0,
+            "rmse": 999.0,
+            "r2_gain_over_best_single": 0.0,
+        }
+        if n < self.n_folds:
+            if dropped_any:
+                bad["n_valid"] = float(n)
+                bad["coverage"] = float(n / n_total) if n_total else 0.0
+            return bad
+
+        # Per-layer baseline R² — serves both the gain term and a warm-start
+        # vector for the temperature grid search below.
+        per_layer_r2 = np.array(
+            [
+                self._single_layer_r2(X_all_layers[:, layer, :], y, groups, n)
+                for layer in range(NUM_LAYERS)
+            ],
+            dtype=float,
+        )
+        best_single_r2 = float(per_layer_r2.max(initial=-np.inf))
+
+        # Grid search over sparsity temperatures — cheap, interpretable, and
+        # avoids the bookkeeping headache of nested-CV L-BFGS. Candidates:
+        #   * uniform: ``softmax(0) = 1/13`` — mean across layers.
+        #   * warm-start: softmax over per-layer R² — tilts toward the
+        #     layers that individually probe well.
+        #   * spike on argmax: guarantees the fused probe matches the best
+        #     single layer as ``tau → 0``.
+        warm_start = np.clip(per_layer_r2, 0.0, None)
+        if not np.any(warm_start > 0):
+            warm_start = np.zeros(NUM_LAYERS)
+        spike = np.zeros(NUM_LAYERS)
+        spike[int(np.argmax(per_layer_r2))] = 1.0
+
+        best_metrics: dict[str, Any] = dict(bad)
+        best_metrics["r2_score"] = -np.inf
+        for tau in (0.1, 0.25, 0.5, 1.0, 2.0, 4.0):
+            for base in (np.zeros(NUM_LAYERS), warm_start, spike):
+                weights = _softmax(base / tau)
+                fused = np.einsum("j,njk->nk", weights, X_all_layers)
+                m = (
+                    self._probe_scalar(fused, y, groups, n)
+                    if y.ndim == 1
+                    else self._probe_curve(fused, y, groups, n)
+                )
+                r2 = float(m.get("r2_score", m.get("r2_mean", -np.inf)))
+                if r2 > best_metrics["r2_score"]:
+                    best_metrics = {
+                        "r2_score": r2,
+                        "layer_weights": [float(w) for w in weights],
+                        "correlation": float(m.get("correlation", 0.0)),
+                        "rmse": float(m.get("rmse", m.get("rmse_mean", 0.0))),
+                    }
+
+        best_metrics["r2_gain_over_best_single"] = float(
+            best_metrics["r2_score"] - best_single_r2
+        )
+        if dropped_any:
+            best_metrics["n_valid"] = float(n)
+            best_metrics["coverage"] = float(n / n_total) if n_total else 0.0
+        return best_metrics
+
+    def discover(
+        self,
+        n_samples: int = 50,
+        probe_mode: ProbeMode | None = None,
+    ) -> dict[Any, dict[str, dict[str, float]]]:
         """
         Run full layer discovery: probe all 13 layers against all proxy targets.
 
         Logs all parameters and metrics to MLflow if a run is active.
 
+        Args:
+            n_samples: Cap on audio files to probe.
+            probe_mode: Override the instance-level :attr:`probe_mode`. When
+                ``"best_layer"`` only the per-layer loop runs; when
+                ``"weighted_sum"`` only the SUPERB-style fused probe runs;
+                ``"both"`` (default) runs both.
+
         Returns:
-            {layer_idx: {target_name: {'r2_score', 'correlation', 'rmse'}}}
+            ``{layer_idx: {target: metrics}, ...}`` with integer layer keys
+            for the per-layer section. When ``probe_mode`` includes
+            ``weighted_sum``, a top-level ``"weighted_sum"`` key is also
+            present with the same target->metrics shape.
         """
+        mode: ProbeMode = probe_mode or getattr(self, "probe_mode", "both")  # type: ignore[assignment]
         audio_files = sorted(str(f) for f in self.dataset.get_audio_files())[:n_samples]
         logger.info(f"Running discovery with up to {len(audio_files)} audio files")
 
@@ -479,54 +734,96 @@ class LayerDiscoverySystem:
                 'n_targets': n_targets,
                 'dataset': self.dataset.name if hasattr(self.dataset, 'name') else 'unknown',
                 'targets': ','.join(sorted(targets.keys())),
+                'probe_mode': mode,
             })
+            try:  # Some mlflow stubs don't support set_tag.
+                mlflow.set_tag("probe_mode", mode)
+            except AttributeError:
+                pass
 
-        results: dict[int, dict[str, dict[str, float]]] = {}
+        results: dict[Any, dict[str, dict[str, float]]] = {}
 
-        for layer in range(NUM_LAYERS):
-            results[layer] = {}
+        run_best_layer = mode in ("best_layer", "both")
+        run_weighted_sum = mode in ("weighted_sum", "both")
+
+        if run_best_layer:
+            for layer in range(NUM_LAYERS):
+                results[layer] = {}
+                for target_name, target_values in targets.items():
+                    metrics = self._probe_single(features[layer], target_values)
+                    n_valid = valid_counts[target_name]
+                    metrics.setdefault('n_valid', float(n_valid))
+                    metrics.setdefault('coverage', float(n_valid / n_tracks))
+                    results[layer][target_name] = metrics
+
+                    r2 = metrics['r2_score']
+                    marker = (
+                        ' ***' if r2 > 0.9 else ' **' if r2 > 0.8 else ' *' if r2 > 0.7 else ''
+                    )
+                    logger.info(
+                        f"  Layer {layer:2d} | {target_name:25s} | "
+                        f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
+                        f"RMSE={metrics['rmse']:8.4f}  "
+                        f"n_valid={n_valid:4d}  cov={metrics['coverage']:.3f}{marker}"
+                    )
+
+                    # Log per-(layer, target) metrics to MLflow
+                    if mlflow.active_run():
+                        prefix = f"L{layer}_{target_name}"
+                        mlflow.log_metrics({
+                            f"{prefix}_r2": metrics['r2_score'],
+                            f"{prefix}_corr": metrics['correlation'],
+                            f"{prefix}_rmse": metrics['rmse'],
+                            f"{prefix}_n_valid": metrics['n_valid'],
+                            f"{prefix}_coverage": metrics['coverage'],
+                        })
+
+            # Log best-layer summary metrics
+            if mlflow.active_run():
+                best = self.best_layers(results)
+                for target_name, info in best.items():
+                    mlflow.log_metric(f"best_r2_{target_name}", info['r2_score'])
+                    mlflow.log_metric(f"best_layer_{target_name}", info['layer'])
+
+        if run_weighted_sum:
+            # Stack per-layer features into (N, 13, 768) for the fused probe.
+            stacked = np.stack(
+                [features[layer] for layer in range(NUM_LAYERS)], axis=1
+            )
+            ws_results: dict[str, dict[str, Any]] = {}
             for target_name, target_values in targets.items():
-                metrics = self._probe_single(features[layer], target_values)
+                metrics = self._probe_weighted_sum(stacked, target_values)
                 n_valid = valid_counts[target_name]
-                metrics['n_valid'] = float(n_valid)
-                metrics['coverage'] = float(n_valid / n_tracks)
-                results[layer][target_name] = metrics
+                metrics.setdefault("n_valid", float(n_valid))
+                metrics.setdefault("coverage", float(n_valid / n_tracks))
+                ws_results[target_name] = metrics
 
-                r2 = metrics['r2_score']
+                r2 = metrics["r2_score"]
                 marker = ' ***' if r2 > 0.9 else ' **' if r2 > 0.8 else ' *' if r2 > 0.7 else ''
                 logger.info(
-                    f"  Layer {layer:2d} | {target_name:25s} | "
-                    f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
-                    f"RMSE={metrics['rmse']:8.4f}  "
+                    f"  WSUM     | {target_name:25s} | "
+                    f"R²={r2:7.4f}  gain={metrics['r2_gain_over_best_single']:+.4f}  "
                     f"n_valid={n_valid:4d}  cov={metrics['coverage']:.3f}{marker}"
                 )
-
-                # Log per-(layer, target) metrics to MLflow
                 if mlflow.active_run():
-                    prefix = f"L{layer}_{target_name}"
+                    prefix = f"WSUM_{target_name}"
                     mlflow.log_metrics({
-                        f"{prefix}_r2": metrics['r2_score'],
-                        f"{prefix}_corr": metrics['correlation'],
-                        f"{prefix}_rmse": metrics['rmse'],
-                        f"{prefix}_n_valid": metrics['n_valid'],
-                        f"{prefix}_coverage": metrics['coverage'],
+                        f"{prefix}_r2": metrics["r2_score"],
+                        f"{prefix}_gain": metrics["r2_gain_over_best_single"],
                     })
-
-        # Log best-layer summary metrics
-        if mlflow.active_run():
-            best = self.best_layers(results)
-            for target_name, info in best.items():
-                mlflow.log_metric(f"best_r2_{target_name}", info['r2_score'])
-                mlflow.log_metric(f"best_layer_{target_name}", info['layer'])
+            results["weighted_sum"] = ws_results
 
         return results
 
     @staticmethod
     def best_layers(
-        results: dict[int, dict[str, dict[str, float]]],
+        results: dict[Any, dict[str, dict[str, float]]],
     ) -> dict[str, dict[str, Any]]:
         """
         Find the best layer for each proxy target from discovery results.
+
+        Ignores non-integer top-level keys (e.g. ``"weighted_sum"``) so the
+        best-single-layer summary only reflects per-layer probes.
 
         Returns:
             {target_name: {'layer': int, 'r2_score': float, 'confidence': str}}
@@ -534,15 +831,19 @@ class LayerDiscoverySystem:
         if not results:
             return {}
 
+        per_layer = {k: v for k, v in results.items() if isinstance(k, int)}
+        if not per_layer:
+            return {}
+
         all_targets: set[str] = set()
-        for layer_results in results.values():
+        for layer_results in per_layer.values():
             all_targets.update(layer_results.keys())
 
         best: dict[str, dict[str, Any]] = {}
         for target in sorted(all_targets):
             best_layer = -1
             best_r2 = -999.0
-            for layer, layer_results in results.items():
+            for layer, layer_results in per_layer.items():
                 if target in layer_results:
                     r2 = layer_results[target]['r2_score']
                     if r2 > best_r2:
@@ -561,7 +862,7 @@ class LayerDiscoverySystem:
                 'r2_score': round(best_r2, 4),
                 'confidence': confidence,
             }
-            sample_metrics = results[best_layer].get(target, {})
+            sample_metrics = per_layer.get(best_layer, {}).get(target, {})
             if 'n_valid' in sample_metrics:
                 best[target]['n_valid'] = int(sample_metrics['n_valid'])
             if 'coverage' in sample_metrics:
@@ -696,16 +997,20 @@ class LayerDiscoverySystem:
         return mess_config.proxy_targets_segments_dir
 
     def discover_segments(
-        self, n_samples: int = 50,
-    ) -> dict[int, dict[str, dict[str, float]]]:
+        self,
+        n_samples: int = 50,
+        probe_mode: ProbeMode | None = None,
+    ) -> dict[Any, dict[str, dict[str, float]]]:
         """Run segment-level discovery: probe layers against segment targets.
 
         Same Ridge regression pipeline as ``discover()`` but uses individual
         5s segment embeddings as samples instead of track-level averages.
 
-        Returns:
-            ``{layer_idx: {target_name: {'r2_score', 'correlation', 'rmse'}}}``
+        When ``probe_mode`` includes ``weighted_sum`` a top-level
+        ``"weighted_sum"`` key is added to the returned dict alongside the
+        per-layer sections.
         """
+        mode: ProbeMode = probe_mode or getattr(self, "probe_mode", "both")  # type: ignore[assignment]
         audio_files = sorted(str(f) for f in self.dataset.get_audio_files())[:n_samples]
         logger.info(f"Running segment discovery with up to {len(audio_files)} audio files")
 
@@ -821,52 +1126,84 @@ class LayerDiscoverySystem:
                 'n_targets': n_targets,
                 'dataset': self.dataset.name if hasattr(self.dataset, 'name') else 'unknown',
                 'targets': ','.join(sorted(aligned_targets.keys())),
+                'probe_mode': mode,
             })
+            try:
+                mlflow.set_tag("probe_mode", mode)
+            except AttributeError:
+                pass
 
-        results: dict[int, dict[str, dict[str, float]]] = {}
+        results: dict[Any, dict[str, dict[str, float]]] = {}
 
-        for layer in range(NUM_LAYERS):
-            results[layer] = {}
+        run_best_layer = mode in ("best_layer", "both")
+        run_weighted_sum = mode in ("weighted_sum", "both")
+
+        if run_best_layer:
+            for layer in range(NUM_LAYERS):
+                results[layer] = {}
+                for target_name, target_values in aligned_targets.items():
+                    metrics = self._probe_single(
+                        aligned_features[layer],
+                        target_values,
+                        groups=segment_groups,
+                    )
+                    n_valid = valid_counts[target_name]
+                    metrics.setdefault('n_valid', float(n_valid))
+                    metrics.setdefault('coverage', float(n_valid / total_segments))
+                    metrics['n_groups'] = float(valid_group_counts[target_name])
+                    metrics['n_tracks'] = float(n_tracks)
+                    results[layer][target_name] = metrics
+
+                    r2 = metrics['r2_score']
+                    marker = (
+                        ' ***' if r2 > 0.9 else ' **' if r2 > 0.8 else ' *' if r2 > 0.7 else ''
+                    )
+                    logger.info(
+                        f"  Layer {layer:2d} | {target_name:25s} | "
+                        f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
+                        f"RMSE={metrics['rmse']:8.4f}  "
+                        f"n_valid={n_valid:5d}  n_trk={n_tracks:3d}  "
+                        f"cov={metrics['coverage']:.3f}{marker}"
+                    )
+
+                    if mlflow.active_run():
+                        prefix = f"seg_L{layer}_{target_name}"
+                        mlflow.log_metrics({
+                            f"{prefix}_r2": metrics['r2_score'],
+                            f"{prefix}_corr": metrics['correlation'],
+                            f"{prefix}_rmse": metrics['rmse'],
+                            f"{prefix}_n_valid": metrics['n_valid'],
+                            f"{prefix}_coverage": metrics['coverage'],
+                            f"{prefix}_n_groups": metrics['n_groups'],
+                        })
+
+            if mlflow.active_run():
+                best = self.best_layers(results)
+                for target_name, info in best.items():
+                    mlflow.log_metric(f"seg_best_r2_{target_name}", info['r2_score'])
+                    mlflow.log_metric(f"seg_best_layer_{target_name}", info['layer'])
+
+        if run_weighted_sum:
+            stacked = np.stack(
+                [aligned_features[layer] for layer in range(NUM_LAYERS)], axis=1
+            )
+            ws_results: dict[str, dict[str, Any]] = {}
             for target_name, target_values in aligned_targets.items():
-                metrics = self._probe_single(
-                    aligned_features[layer],
-                    target_values,
-                    groups=segment_groups,
+                metrics = self._probe_weighted_sum(
+                    stacked, target_values, groups=segment_groups
                 )
                 n_valid = valid_counts[target_name]
-                metrics['n_valid'] = float(n_valid)
-                metrics['coverage'] = float(n_valid / total_segments)
-                metrics['n_groups'] = float(valid_group_counts[target_name])
-                metrics['n_tracks'] = float(n_tracks)
-                results[layer][target_name] = metrics
-
-                r2 = metrics['r2_score']
-                marker = ' ***' if r2 > 0.9 else ' **' if r2 > 0.8 else ' *' if r2 > 0.7 else ''
-                logger.info(
-                    f"  Layer {layer:2d} | {target_name:25s} | "
-                    f"R²={r2:7.4f}  corr={metrics['correlation']:6.3f}  "
-                    f"RMSE={metrics['rmse']:8.4f}  "
-                    f"n_valid={n_valid:5d}  n_trk={n_tracks:3d}  "
-                    f"cov={metrics['coverage']:.3f}{marker}"
-                )
+                metrics.setdefault('n_valid', float(n_valid))
+                metrics.setdefault('coverage', float(n_valid / total_segments))
+                ws_results[target_name] = metrics
 
                 if mlflow.active_run():
-                    prefix = f"seg_L{layer}_{target_name}"
+                    prefix = f"seg_WSUM_{target_name}"
                     mlflow.log_metrics({
-                        f"{prefix}_r2": metrics['r2_score'],
-                        f"{prefix}_corr": metrics['correlation'],
-                        f"{prefix}_rmse": metrics['rmse'],
-                        f"{prefix}_n_valid": metrics['n_valid'],
-                        f"{prefix}_coverage": metrics['coverage'],
-                        f"{prefix}_n_groups": metrics['n_groups'],
+                        f"{prefix}_r2": metrics["r2_score"],
+                        f"{prefix}_gain": metrics["r2_gain_over_best_single"],
                     })
-
-        # Log best-layer summary
-        if mlflow.active_run():
-            best = self.best_layers(results)
-            for target_name, info in best.items():
-                mlflow.log_metric(f"seg_best_r2_{target_name}", info['r2_score'])
-                mlflow.log_metric(f"seg_best_layer_{target_name}", info['layer'])
+            results["weighted_sum"] = ws_results
 
         return results
 
@@ -994,8 +1331,16 @@ def resolve_aspects(
     with open(results_path) as f:
         raw = json.load(f)
 
-    # JSON keys are strings, convert back to int
-    results = {int(layer): targets for layer, targets in raw.items()}
+    # JSON keys are strings. Convert per-layer keys back to int; silently
+    # ignore the top-level ``"weighted_sum"`` section (phase 3 / I1 extends
+    # this resolver to consume dense layer weights).
+    results: dict[int, dict[str, dict[str, float]]] = {}
+    for key, targets in raw.items():
+        try:
+            layer_idx = int(key)
+        except ValueError:
+            continue
+        results[layer_idx] = targets
 
     resolved: dict[str, dict[str, Any]] = {}
 

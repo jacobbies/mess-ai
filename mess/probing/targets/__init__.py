@@ -22,6 +22,7 @@ from . import (  # noqa: F401
     _local_tempo,
     _midi_articulation,
     _midi_expressivity,
+    _midi_perf_tempo,
     _novelty,
     _tis_tension,
 )

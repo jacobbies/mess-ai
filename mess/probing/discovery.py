@@ -307,7 +307,7 @@ class LayerDiscoverySystem:
         return features, loaded
 
     def load_targets(self, audio_files: list[str]) -> tuple[dict[str, np.ndarray], list[str]]:
-        """Load scalar proxy targets from npz files for probing."""
+        """Load proxy targets (legacy scalars + registered curve/MIDI) for probing."""
         collectors: dict[str, list[float]] = {name: [] for name in self.SCALAR_TARGETS}
         loaded: list[str] = []
 
@@ -355,8 +355,77 @@ class LayerDiscoverySystem:
             elif len(arr) > 0:
                 logger.warning(f"Skipping target '{name}': constant values")
 
+        # Layer on registered curve/MIDI targets (Phase 2). Missing fields
+        # become NaN rows and get dropped per-track by ``_row_valid_mask``.
+        registered = self._load_registered_targets(loaded)
+        targets.update(registered)
+
         logger.info(f"Loaded {len(targets)} targets for {len(loaded)} files")
         return targets, loaded
+
+    def _load_registered_targets(
+        self, audio_files: list[str],
+    ) -> dict[str, np.ndarray]:
+        """Load every descriptor-registered target for the given tracks.
+
+        Iterates ``mess.probing.targets._registry.all_names()``; each entry
+        dispatches through ``_schema.load_target_field`` which handles
+        SCALAR / CURVE / MIDI_SCALAR / MIDI_CURVE types uniformly.
+
+        Missing fields (no ``.npz``, missing key, shape mismatch, MIDI
+        unavailable) produce NaN rows that ``_row_valid_mask`` drops at
+        probe time. Targets with zero valid rows are skipped entirely.
+        """
+        from ._schema import TargetType, load_target_field
+        from .targets._registry import _GENERATORS, all_names
+
+        out: dict[str, np.ndarray] = {}
+        names = all_names()
+        if not names:
+            return out
+
+        n_folds = getattr(self, "n_folds", 5)
+        for name in names:
+            descriptor = _GENERATORS[name][0]
+            rows: list[np.ndarray | None] = []
+            for path in audio_files:
+                npz_path = self.targets_dir / f"{Path(path).stem}_targets.npz"
+                rows.append(load_target_field(npz_path, descriptor))
+
+            n_frames = (
+                descriptor.curve_spec.n_frames
+                if descriptor.curve_spec is not None
+                else 1
+            )
+            is_curve = descriptor.type in (TargetType.CURVE, TargetType.MIDI_CURVE)
+
+            if is_curve:
+                matrix = np.full((len(audio_files), n_frames), np.nan, dtype=float)
+                for i, row in enumerate(rows):
+                    if row is not None and row.shape == (n_frames,):
+                        matrix[i] = row
+                n_valid = int(np.sum(~np.all(np.isnan(matrix), axis=1)))
+                if n_valid >= n_folds:
+                    out[name] = matrix
+                else:
+                    logger.warning(
+                        f"Skipping registered target '{name}': only "
+                        f"{n_valid} valid rows (need >= {n_folds})"
+                    )
+            else:
+                vector = np.full(len(audio_files), np.nan, dtype=float)
+                for i, row in enumerate(rows):
+                    if row is not None and row.size > 0:
+                        vector[i] = float(row.flat[0])
+                valid = vector[~np.isnan(vector)]
+                if valid.size >= n_folds and np.std(valid) > 1e-10:
+                    out[name] = vector
+                else:
+                    logger.warning(
+                        f"Skipping registered target '{name}': "
+                        f"{valid.size} valid, std={np.std(valid):.3g}"
+                    )
+        return out
 
     def _row_valid_mask(self, y: np.ndarray) -> np.ndarray:
         """Return a row-level valid mask for scalar or curve targets."""
@@ -1242,6 +1311,8 @@ class LayerDiscoverySystem:
 # Maps user-facing aspect name → probing target(s) that validate it.
 # When multiple targets are listed, the one with highest R² is used.
 ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
+    # -- Legacy scalar aspects (kept for back-compat; some have low R² and --
+    # -- will naturally fall below the ``min_r2`` filter in resolve_aspects) --
     'brightness': {
         'targets': ['spectral_centroid'],
         'description': 'Timbral brightness or darkness of the sound',
@@ -1256,7 +1327,7 @@ ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
     },
     'tempo': {
         'targets': ['tempo'],
-        'description': 'Speed and BPM similarity',
+        'description': 'Speed and BPM similarity (scalar; see rhythmic_flow for curve)',
     },
     'rhythmic_energy': {
         'targets': ['onset_density'],
@@ -1266,61 +1337,100 @@ ASPECT_REGISTRY: dict[str, dict[str, Any]] = {
         'targets': ['dynamic_range', 'dynamic_variance'],
         'description': 'Loudness variation and dynamic contrast',
     },
-    'crescendo': {
-        'targets': ['crescendo_strength', 'diminuendo_strength'],
-        'description': 'Building or fading intensity',
-    },
     'harmonic_richness': {
         'targets': ['harmonic_complexity'],
-        'description': 'Harmonic content and tonal complexity',
+        'description': 'Harmonic content and tonal complexity (scalar; see tension for curve)',
     },
     'articulation': {
         'targets': ['attack_slopes', 'attack_sharpness'],
-        'description': 'Legato vs staccato character',
+        'description': (
+            'Legato vs staccato (audio-derived; see micro_articulation for MIDI)'
+        ),
     },
     'phrasing': {
         'targets': ['phrase_regularity', 'num_phrases'],
         'description': 'Musical sentence structure and regularity',
     },
-    # Expression aspects (MIDI-derived, available when MIDI data exists)
-    'rubato': {
-        'targets': ['rubato', 'onset_timing_std'],
-        'description': 'Timing flexibility and rhythmic freedom in performance',
+    # -- New curve-valued aspects (Phase 2: T1-T5) --
+    'tension': {
+        'targets': ['tis_tension'],
+        'description': 'Harmonic tension trajectory (Tonal Interval Space, Bernardes et al.)',
     },
-    'expressiveness': {
-        'targets': ['velocity_std', 'velocity_range'],
-        'description': 'Dynamic expressiveness and velocity contrast',
+    'dynamic_arc': {
+        'targets': ['dynamic_arc'],
+        'description': 'Shape of loudness over the passage (crescendo/diminuendo contour)',
     },
-    'legato': {
-        'targets': ['articulation_ratio'],
-        'description': 'Note connectivity: staccato vs legato character from MIDI',
+    'rhythmic_flow': {
+        'targets': ['local_tempo'],
+        'description': 'Local tempo curve from tempogram (captures rubato/expressive timing)',
     },
+    'brightness_trajectory': {
+        'targets': ['centroid_trajectory'],
+        'description': 'Relative brightness evolution (z-scored spectral centroid)',
+    },
+    'structure': {
+        'targets': ['novelty'],
+        'description': 'Structural novelty / boundary strength (Foote 1999)',
+    },
+    # -- New MIDI-ground-truth aspects (Phase 2: T6-T7) --
+    'micro_articulation': {
+        'targets': ['midi_articulation_hist'],
+        'description': 'Distribution of articulation ratios (staccato↔legato) from MIDI',
+    },
+    'performance_expression': {
+        'targets': ['midi_velocity_std', 'midi_ioi_std', 'midi_pedal_ratio'],
+        'description': 'MIDI-ground-truth velocity variation, rubato proxy, and pedaling ratio',
+    },
+    # Removed in the 2026-04 rework:
+    #   - ``crescendo`` — backed by crescendo_strength/diminuendo_strength (R² < 0);
+    #     replaced by ``dynamic_arc`` curve.
+    #   - ``rubato``, ``expressiveness``, ``legato`` — advertised MIDI-derived
+    #     features that were never actually computed; replaced by the real
+    #     MIDI-ground-truth aspects above.
 }
+
+
+def _confidence_label(r2: float) -> str:
+    if r2 > 0.8:
+        return 'high'
+    if r2 > 0.5:
+        return 'medium'
+    return 'low'
 
 
 def resolve_aspects(
     min_r2: float = 0.5,
     results_path: Path | None = None,
+    probe_mode: Literal['best_layer', 'weighted_sum', 'auto'] = 'auto',
+    gain_threshold: float = 0.02,
 ) -> dict[str, dict[str, Any]]:
     """
-    Resolve each aspect in the registry to its best validated MERT layer.
+    Resolve each aspect in the registry to its best validated MERT probe.
 
-    Loads discovery results and for each aspect, finds the probing target
-    with the highest R² score, then returns which layer to use.
+    Loads discovery results and for each aspect, picks the probing target
+    and probe mode that maximize R². Supports single-layer mappings
+    (backwards compatible) and SUPERB-style weighted-sum layer fusion.
 
     Args:
-        min_r2: Minimum R² to consider a layer validated for an aspect.
+        min_r2: Minimum R² to consider an aspect validated.
         results_path: Path to discovery results JSON. Defaults to config.
+        probe_mode:
+            * ``"best_layer"`` — always return single-layer mapping
+              (``{"layer": int, ...}``). Matches pre-I1 behavior.
+            * ``"weighted_sum"`` — always return dense layer weights
+              (``{"layer_weights": list[13 floats], ...}``) when the
+              ``"weighted_sum"`` section is present for the chosen target.
+            * ``"auto"`` (default) — prefer weighted-sum when its R²
+              exceeds the best-single-layer R² by at least ``gain_threshold``;
+              otherwise fall back to best-single-layer.
+        gain_threshold: Minimum R² gain of weighted-sum over best-single
+            required to switch modes under ``probe_mode="auto"``.
 
     Returns:
-        {aspect_name: {
-            'layer': int,
-            'target': str,        # which probing target matched
-            'r2_score': float,
-            'description': str,
-            'confidence': str,    # 'high' (>0.8), 'medium' (>0.5), 'low'
-        }}
-        Only includes aspects that meet the min_r2 threshold.
+        ``{aspect_name: {target, r2_score, description, confidence, ...}}``
+        where each entry additionally carries EITHER ``layer: int`` OR
+        ``layer_weights: list[float]`` (mutually exclusive) depending on
+        the chosen probe mode. Only aspects meeting ``min_r2`` are returned.
     """
     # Load discovery results
     results_path = results_path or mess_config.probing_results_file
@@ -1331,57 +1441,95 @@ def resolve_aspects(
     with open(results_path) as f:
         raw = json.load(f)
 
-    # JSON keys are strings. Convert per-layer keys back to int; silently
-    # ignore the top-level ``"weighted_sum"`` section (phase 3 / I1 extends
-    # this resolver to consume dense layer weights).
-    results: dict[int, dict[str, dict[str, float]]] = {}
+    # Split per-layer (integer keys) and weighted-sum sections.
+    per_layer: dict[int, dict[str, dict[str, Any]]] = {}
+    ws_raw = raw.get('weighted_sum', {})
+    weighted_sum: dict[str, dict[str, Any]] = ws_raw if isinstance(ws_raw, dict) else {}
     for key, targets in raw.items():
+        if key == 'weighted_sum':
+            continue
         try:
             layer_idx = int(key)
         except ValueError:
             continue
-        results[layer_idx] = targets
+        per_layer[layer_idx] = targets
 
     resolved: dict[str, dict[str, Any]] = {}
 
     for aspect_name, aspect_info in ASPECT_REGISTRY.items():
-        best_layer = -1
-        best_r2 = -999.0
-        best_target = ''
+        # For each candidate target under this aspect, collect best-single-layer
+        # R² and (if available) weighted-sum R². Pick the (target, mode) pair
+        # that maximizes R² subject to ``probe_mode``.
+        best: dict[str, Any] = {'r2': -999.0, 'mode': None, 'target': None}
 
         for target_name in aspect_info['targets']:
-            for layer, layer_results in results.items():
+            single_layer = -1
+            single_r2 = -np.inf
+            for layer, layer_results in per_layer.items():
                 if target_name in layer_results:
-                    r2 = layer_results[target_name]['r2_score']
-                    if r2 > best_r2:
-                        best_r2 = r2
-                        best_layer = layer
-                        best_target = target_name
+                    r2 = layer_results[target_name].get('r2_score', -np.inf)
+                    if r2 > single_r2:
+                        single_r2 = r2
+                        single_layer = layer
 
-        if best_r2 >= min_r2:
-            if best_r2 > 0.8:
-                confidence = 'high'
-            elif best_r2 > 0.5:
-                confidence = 'medium'
-            else:
-                confidence = 'low'
+            ws = weighted_sum.get(target_name)
+            ws_r2 = float(ws['r2_score']) if ws and 'r2_score' in ws else -np.inf
 
-            best_metrics = results[best_layer][best_target]
-            resolved[aspect_name] = {
-                'layer': best_layer,
-                'target': best_target,
-                'r2_score': round(best_r2, 4),
-                'description': aspect_info['description'],
-                'confidence': confidence,
-            }
-            if 'n_valid' in best_metrics:
-                resolved[aspect_name]['n_valid'] = int(best_metrics['n_valid'])
-            if 'coverage' in best_metrics:
-                resolved[aspect_name]['coverage'] = float(best_metrics['coverage'])
-        else:
+            if probe_mode == 'best_layer':
+                candidate_r2 = single_r2
+                candidate_mode = 'best_layer'
+            elif probe_mode == 'weighted_sum':
+                candidate_r2 = ws_r2
+                candidate_mode = 'weighted_sum'
+            else:  # auto
+                if ws_r2 > single_r2 + gain_threshold:
+                    candidate_r2 = ws_r2
+                    candidate_mode = 'weighted_sum'
+                else:
+                    candidate_r2 = single_r2
+                    candidate_mode = 'best_layer'
+
+            if candidate_r2 > best['r2']:
+                best = {
+                    'r2': candidate_r2,
+                    'mode': candidate_mode,
+                    'target': target_name,
+                    'single_layer': single_layer,
+                    'weighted_sum_entry': ws,
+                    'single_metrics': (
+                        per_layer[single_layer].get(target_name, {})
+                        if single_layer >= 0 else {}
+                    ),
+                }
+
+        if best['r2'] < min_r2 or best['mode'] is None:
             logger.debug(
-                f"Aspect '{aspect_name}' not validated: best R²={best_r2:.4f} < {min_r2}"
+                f"Aspect '{aspect_name}' not validated: best R²={best['r2']:.4f} < {min_r2}"
             )
+            continue
+
+        entry: dict[str, Any] = {
+            'target': best['target'],
+            'r2_score': round(float(best['r2']), 4),
+            'description': aspect_info['description'],
+            'confidence': _confidence_label(float(best['r2'])),
+        }
+        if best['mode'] == 'weighted_sum':
+            ws_entry = best['weighted_sum_entry']
+            entry['layer_weights'] = [float(w) for w in ws_entry['layer_weights']]
+            if 'r2_gain_over_best_single' in ws_entry:
+                entry['r2_gain'] = float(ws_entry['r2_gain_over_best_single'])
+            source_metrics = ws_entry
+        else:
+            entry['layer'] = int(best['single_layer'])
+            source_metrics = best['single_metrics']
+
+        if 'n_valid' in source_metrics:
+            entry['n_valid'] = int(source_metrics['n_valid'])
+        if 'coverage' in source_metrics:
+            entry['coverage'] = float(source_metrics['coverage'])
+
+        resolved[aspect_name] = entry
 
     logger.info(f"Resolved {len(resolved)}/{len(ASPECT_REGISTRY)} aspects from discovery results")
     return resolved

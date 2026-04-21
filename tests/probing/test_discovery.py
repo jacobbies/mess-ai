@@ -257,25 +257,41 @@ class TestResolveAspects:
 
 
 class TestAspectRegistry:
-    def test_has_13_aspects(self):
-        assert len(ASPECT_REGISTRY) == 13
+    def test_registry_populated(self):
+        # After the 2026-04 rework: 9 legacy audio-scalar aspects,
+        # 5 new curve aspects (T1-T5), 2 new MIDI aspects (T6-T7).
+        assert len(ASPECT_REGISTRY) == 16
 
     def test_expected_aspects_present(self):
         expected = {
+            # Legacy audio-scalar aspects retained for back-compat
             "brightness", "texture", "warmth", "tempo", "rhythmic_energy",
-            "dynamics", "crescendo", "harmonic_richness", "articulation", "phrasing",
-            "rubato", "expressiveness", "legato",
+            "dynamics", "harmonic_richness", "articulation", "phrasing",
+            # New curve-valued aspects (T1-T5)
+            "tension", "dynamic_arc", "rhythmic_flow",
+            "brightness_trajectory", "structure",
+            # New MIDI-ground-truth aspects (T6-T7)
+            "micro_articulation", "performance_expression",
         }
         assert set(ASPECT_REGISTRY.keys()) == expected
 
-    def test_all_targets_in_scalar_targets(self):
-        """Every target referenced by ASPECT_REGISTRY must exist in SCALAR_TARGETS."""
+    def test_dead_aspects_removed(self):
+        """The false-promise MIDI aspects and R²<0 ``crescendo`` are gone."""
+        dead = {"rubato", "expressiveness", "legato", "crescendo"}
+        assert dead.isdisjoint(ASPECT_REGISTRY.keys())
+
+    def test_every_target_is_known(self):
+        """Each target either lives in SCALAR_TARGETS or the Phase-2 registry."""
+        import mess.probing.targets  # noqa: F401 — populate Phase-2 registry
+        from mess.probing.targets._registry import all_names
         scalar_targets = set(LayerDiscoverySystem.SCALAR_TARGETS.keys())
+        registered = set(all_names())
+        known = scalar_targets | registered
         for aspect_name, aspect_info in ASPECT_REGISTRY.items():
             for target in aspect_info["targets"]:
-                assert target in scalar_targets, (
-                    f"Aspect '{aspect_name}' references target '{target}' "
-                    f"not found in SCALAR_TARGETS"
+                assert target in known, (
+                    f"Aspect {aspect_name!r} references target {target!r} "
+                    f"not found in SCALAR_TARGETS or registry"
                 )
 
 

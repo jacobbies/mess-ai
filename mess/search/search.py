@@ -716,7 +716,16 @@ def search_by_aspects(
     for aspect_name, user_weight in aspect_weights.items():
         mapping = aspect_mappings[aspect_name]
         weight = user_weight * mapping["r2_score"] if scale_by_r2 else user_weight
-        layer_weights[mapping["layer"]] += float(weight)
+        if "layer_weights" in mapping:
+            dense = np.asarray(mapping["layer_weights"], dtype="float32")
+            if dense.shape != (NUM_LAYERS,):
+                raise ValueError(
+                    f"Aspect '{aspect_name}' has layer_weights of shape "
+                    f"{dense.shape}, expected ({NUM_LAYERS},)"
+                )
+            layer_weights += float(weight) * dense
+        else:
+            layer_weights[mapping["layer"]] += float(weight)
 
     if layer_weights.sum() <= 0:
         raise ValueError("Combined aspect weights must sum to > 0")

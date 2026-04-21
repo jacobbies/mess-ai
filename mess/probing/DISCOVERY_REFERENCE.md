@@ -3,6 +3,27 @@
 ## Goal
 Find which MERT layer(s) best linearly predict each musical proxy target.
 
+## Registered targets
+
+Importing `mess.probing.targets` populates the descriptor registry with
+audio-curve and MIDI targets introduced in the 2026-04 rework:
+
+| Target | Type | Aspect(s) |
+|---|---|---|
+| `tis_tension` | CURVE | `tension` |
+| `dynamic_arc` | CURVE | `dynamic_arc` |
+| `local_tempo` | CURVE | `rhythmic_flow` |
+| `centroid_trajectory` | CURVE | `brightness_trajectory` |
+| `novelty` | CURVE | `structure` |
+| `midi_articulation_hist` | MIDI_CURVE | `micro_articulation` |
+| `midi_velocity_std`, `midi_ioi_std`, `midi_pedal_ratio` | MIDI_SCALAR | `performance_expression` |
+
+Legacy audio scalars (`spectral_centroid`, `tempo`, `dynamic_range`, …)
+remain loadable via `SCALAR_TARGETS` for back-compat. Aspects that
+relied on never-computed MIDI features (`rubato`, `expressiveness`,
+`legato`) and `crescendo` (R² < 0) were removed; their replacements are
+in the table above.
+
 ## Inputs
 - Audio files: `data/audio/<dataset>/*.wav`
 - Precomputed embeddings: `data/embeddings/<dataset>-emb/raw/<track>.npy`
@@ -93,9 +114,13 @@ Curve targets swap the scalar keys for `r2_mean`, `r2_pc1`, `rmse_mean`.
 MIDI-masked targets add `n_valid` and `coverage` fields at the
 per-target level.
 
-`resolve_aspects()` currently reads only the top-level integer keys and
-silently ignores `"weighted_sum"`. Phase 3 / Unit I1 extends the resolver
-to consume dense layer weights.
+`resolve_aspects()` now consumes both sections. Pass
+`probe_mode="auto"` (default) to pick weighted-sum when its R² beats
+the best-single-layer R² by `gain_threshold` (default 0.02), otherwise
+fall back to single-layer. Return shape is mutually exclusive:
+`{..., layer: int}` for single-layer, `{..., layer_weights: list[float]}`
+for weighted-sum. Callers can also force `probe_mode="best_layer"` (legacy
+behavior) or `probe_mode="weighted_sum"` (always dense).
 
 ## Best-Layer Summary
 
